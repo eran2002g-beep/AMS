@@ -11,11 +11,23 @@ require('dotenv').config();
 
 // Import models so sequelize.sync() knows to create their tables
 const Employee = require('./src/models/Employee');
+// Service to handle employee business logic
+const employeeService = require('./src/services/Employeeservice');
 
 const app = express();
 
 // Parses incoming JSON request bodies - needed so req.body works in controllers
 app.use(express.json());
+
+// Create employee  API endpoint
+app.post('/employees', async (req, res) => {
+    try {
+        const employee = await employeeService.createEmployee(req.body);
+        return res.status(201).json(employee);
+    } catch (err) {
+        return res.status(400).json({ error: err.message });
+    }
+});
 
 // Use PORT from .env or fall back to 3000
 const PORT = process.env.PORT || 3000;
