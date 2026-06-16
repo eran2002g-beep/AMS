@@ -16,23 +16,24 @@ const Employee = sequelize.define('Employee', {
         autoIncrement: true,
     },
 
-    // employeeId - public-facing ID shown in the UI and printed on punch cards e.g. "EMP-0001"
+    // employeeId - public-facing ID, auto-generated as EMP001, EMP002, EMP003...
+    // generated automatically in the beforeCreate hook below, never set manually
     employeeId: {
         type: DataTypes.STRING,
-        allowNull: false, // required
-        unique: true,     // no two employees can share the same ID
+        allowNull: false,
+        unique: true,
     },
 
     // firstName - employee's first name
     firstName: {
         type: DataTypes.STRING,
-        allowNull: false, // required
+        allowNull: false,
     },
 
     // lastName - stored separately so we can sort/search by last name
     lastName: {
         type: DataTypes.STRING,
-        allowNull: false, // required
+        allowNull: false,
     },
 
     // email - used for login (Epic 3) and must be unique across all employees
@@ -48,13 +49,13 @@ const Employee = sequelize.define('Employee', {
     // phone - optional contact number for HR use
     phone: {
         type: DataTypes.STRING,
-        allowNull: true, // optional
+        allowNull: true,
     },
 
     // department - used for filtering reports and managing rosters in Epic 4
     department: {
         type: DataTypes.STRING,
-        allowNull: true, // optional, can be assigned later
+        allowNull: true,
     },
 
     // role - controls what the user can access (Epic 3 RBAC)
@@ -67,15 +68,32 @@ const Employee = sequelize.define('Employee', {
     // isActive - false = soft deleted, keeps attendance history intact
     isActive: {
         type: DataTypes.BOOLEAN,
-        defaultValue: true, // active by default when created
+        defaultValue: true,
     },
 
 }, {
-    // Sets the actual PostgreSQL table name - without this Sequelize uses "Employees"
+    // Sets the actual PostgreSQL table name
     tableName: 'employees',
 
     // Auto-adds createdAt and updatedAt columns to track when records change
     timestamps: true,
+
+    // hooks run automatically at specific points in a record's lifecycle
+    hooks: {
+
+        // beforeCreate runs just before a new employee is saved to the database
+        // we use this to generate the employeeId so it is always set automatically
+        beforeCreate: async (employee) => {
+
+            // Count how many employees already exist in the table
+            const count = await Employee.count();
+
+            // Build the ID: pad the next number to 3 digits, prefix with EMP
+            // e.g. count=0 -> EMP001, count=1 -> EMP002, count=99 -> EMP100
+            const padded = String(count + 1).padStart(3, '0');
+            employee.employeeId = `EMP${padded}`;
+        },
+    },
 });
 
 // Export so the controller can call Employee.create(), findAll(), update(), destroy(), etc.
