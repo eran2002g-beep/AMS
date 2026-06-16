@@ -1,0 +1,45 @@
+// server.js - entry point, connects to the database then starts the Express server
+
+// Express handles incoming HTTP requests and routes them to the right controller
+const express = require('express');
+
+// Import the shared DB connection
+const sequelize = require('./config/db');
+
+// Must run before any process.env usage - loads values from .env
+require('dotenv').config();
+
+// Import models so sequelize.sync() knows to create their tables
+const Employee = require('./src/models/Employee');
+
+const app = express();
+
+// Parses incoming JSON request bodies - needed so req.body works in controllers
+app.use(express.json());
+
+// Use PORT from .env or fall back to 3000
+const PORT = process.env.PORT || 3000;
+
+// Step 1 - test the database connection
+sequelize.authenticate()
+
+    // Step 2 - create or update tables to match model definitions
+    // alter: true updates existing tables safely without deleting data
+    .then(() => {
+        console.log('Neon database connected successfully.');
+        return sequelize.sync({ alter: true });
+    })
+
+    // Step 3 - start the server only after the database is ready
+    .then(() => {
+        console.log('Models synced with the database.');
+        app.listen(PORT, () => {
+            console.log(`Server running on http://localhost:${PORT}`);
+        });
+    })
+
+    // If connection or sync fails, log the error and stop the process
+    .catch((err) => {
+        console.error('Database connection failed:', err);
+        process.exit(1); // exit with error code - no point running without a database
+    });
