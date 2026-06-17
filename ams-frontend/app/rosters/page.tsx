@@ -2,10 +2,10 @@
 "use client";
 import { useState, useRef } from "react";
 import {
-  Box, Button, Typography, Paper, Stack,
+  Box, Button, Typography, Paper,
   Table, TableHead, TableRow, TableCell,
   TableBody, TableContainer, IconButton,
-  Chip, Alert, Tooltip
+  Chip, Alert, Tooltip,
 } from "@mui/material";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -13,18 +13,17 @@ import DeleteIcon from "@mui/icons-material/Delete";
 type Roster = { id: number; filename: string; uploadedOn: string; status: string };
 
 const DUMMY_ROSTERS: Roster[] = [
-  { id: 1, filename: "june_roster.csv",  uploadedOn: "2024-06-01", status: "Active" },
-  { id: 2, filename: "may_roster.xlsx",  uploadedOn: "2024-05-01", status: "Archived" },
+  { id: 1, filename: "june_roster.csv", uploadedOn: "2024-06-01", status: "Active" },
+  { id: 2, filename: "may_roster.xlsx", uploadedOn: "2024-05-01", status: "Archived" },
 ];
 
 export default function RostersPage() {
-  const [rosters, setRosters]   = useState<Roster[]>(DUMMY_ROSTERS);
-  const [file, setFile]         = useState<File | null>(null);
-  const [error, setError]       = useState("");
-  const [success, setSuccess]   = useState("");
-  const inputRef                = useRef<HTMLInputElement>(null);
+  const [rosters, setRosters] = useState<Roster[]>(DUMMY_ROSTERS);
+  const [file, setFile] = useState<File | null>(null);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // ── Validation ──────────────────────────────────────────
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
     setError("");
@@ -66,16 +65,15 @@ export default function RostersPage() {
 
   return (
     <Box>
-      {/* Header */}
       <Paper sx={{ p: 2, mb: 3, borderRadius: 2 }} elevation={1}>
         <Typography variant="h5" sx={{ fontWeight: 700, color: "#1e293b", mb: 2 }}>
           Roster Management
         </Typography>
 
-        {error   && <Alert severity="error"   sx={{ mb: 2 }}>{error}</Alert>}
+        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
         {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
 
-        <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2, alignItems: 'center' }}>
+        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, alignItems: "center" }}>
           <input
             ref={inputRef}
             type="file"
@@ -107,14 +105,15 @@ export default function RostersPage() {
         </Typography>
       </Paper>
 
-      {/* Roster Table */}
       <TableContainer component={Paper} sx={{ borderRadius: 2, boxShadow: 2 }}>
         <Table>
           <TableHead>
             <TableRow sx={{ backgroundColor: "#1e293b" }}>
               {["File Name", "Uploaded On", "Status", "Actions"].map((col) => (
-                <TableCell key={col}
-                  sx={{ color: "#fff", fontWeight: 700, fontSize: "0.8rem", textTransform: "uppercase" }}>
+                <TableCell
+                  key={col}
+                  sx={{ color: "#fff", fontWeight: 700, fontSize: "0.8rem", textTransform: "uppercase" }}
+                >
                   {col}
                 </TableCell>
               ))}
@@ -144,8 +143,11 @@ export default function RostersPage() {
                   </TableCell>
                   <TableCell>
                     <Tooltip title="Delete Roster">
-                      <IconButton size="small" onClick={() => handleDelete(r.id)}
-                        sx={{ color: "#ef4444" }}>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleDelete(r.id)}
+                        sx={{ color: "#ef4444" }}
+                      >
                         <DeleteIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>

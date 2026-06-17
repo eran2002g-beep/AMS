@@ -3,20 +3,11 @@
 import {
   Table, TableHead, TableRow, TableCell,
   TableBody, TableContainer, Paper,
-  IconButton, Chip, Tooltip
+  IconButton, Chip, Tooltip,
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
-
-type Employee = {
-  id: number;
-  name: string;
-  email: string;
-  phone: string;
-  department: string;
-  role: string;
-  joinDate: string;
-};
+import type { Employee } from "@/lib/api";
 
 type Props = {
   employees: Employee[];
@@ -24,7 +15,9 @@ type Props = {
   onDelete: (id: number) => void;
 };
 
-const COLUMNS = ["Name", "Email", "Phone", "Department", "Role", "Join Date", "Actions"];
+const COLUMNS = ["Name", "Email", "Phone", "Department", "Employee ID", "Actions"];
+
+const display = (value: string | null) => value || "—";
 
 export default function EmployeeTable({ employees, onEdit, onDelete }: Props) {
   return (
@@ -50,25 +43,30 @@ export default function EmployeeTable({ employees, onEdit, onDelete }: Props) {
         <TableBody>
           {employees.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={7} align="center" sx={{ color: "#94a3b8", py: 4 }}>
+              <TableCell colSpan={6} align="center" sx={{ color: "#94a3b8", py: 4 }}>
                 No employees found. Add one to get started.
               </TableCell>
             </TableRow>
           ) : (
             employees.map((emp) => (
               <TableRow key={emp.id} hover>
-                <TableCell sx={{ fontWeight: 600 }}>{emp.name}</TableCell>
-                <TableCell>{emp.email}</TableCell>
-                <TableCell>{emp.phone}</TableCell>
-                <TableCell>
-                  <Chip
-                    label={emp.department}
-                    size="small"
-                    sx={{ backgroundColor: "#e0f2fe", color: "#0369a1" }}
-                  />
+                <TableCell sx={{ fontWeight: 600 }}>
+                  {emp.firstName} {emp.lastName}
                 </TableCell>
-                <TableCell>{emp.role}</TableCell>
-                <TableCell>{emp.joinDate}</TableCell>
+                <TableCell>{emp.email}</TableCell>
+                <TableCell>{display(emp.phone)}</TableCell>
+                <TableCell>
+                  {emp.department ? (
+                    <Chip
+                      label={emp.department}
+                      size="small"
+                      sx={{ backgroundColor: "#e0f2fe", color: "#0369a1" }}
+                    />
+                  ) : (
+                    "—"
+                  )}
+                </TableCell>
+                <TableCell>{emp.employeeId}</TableCell>
                 <TableCell>
                   <Tooltip title="Edit">
                     <IconButton

@@ -1,11 +1,17 @@
 import axios from "axios";
 
-// Backend API base URL - change this if your backend runs on a different port
-export const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000";
-
 export const api = axios.create({
-  baseURL: apiBaseUrl,
+  baseURL: "",
 });
+
+export function getErrorMessage(err: unknown): string {
+  if (axios.isAxiosError(err)) {
+    const data = err.response?.data as { error?: string } | undefined;
+    return data?.error ?? err.message;
+  }
+  if (err instanceof Error) return err.message;
+  return "Something went wrong";
+}
 
 // ─────────────────────────────────── Types ───────────────────────────────────
 
@@ -27,7 +33,6 @@ export type EmployeeFormData = {
   email: string;
   phone: string;
   department: string;
-  role: "admin" | "employee";
 };
 
 export type Roster = {
