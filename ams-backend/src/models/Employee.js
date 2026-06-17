@@ -17,7 +17,7 @@ const Employee = sequelize.define('Employee', {
     },
 
     // employeeId - public-facing ID, auto-generated as EMP001, EMP002, EMP003...
-    // generated automatically in the beforeCreate hook below, never set manually
+    // generated automatically in the beforeValidate hook below, never set manually
     employeeId: {
         type: DataTypes.STRING,
         allowNull: false,
@@ -81,15 +81,11 @@ const Employee = sequelize.define('Employee', {
     // hooks run automatically at specific points in a record's lifecycle
     hooks: {
 
-        // beforeCreate runs just before a new employee is saved to the database
-        // we use this to generate the employeeId so it is always set automatically
-        beforeCreate: async (employee) => {
+        // beforeValidate runs before allowNull checks — must run here, not beforeCreate
+        beforeValidate: async (employee) => {
+            if (!employee.isNewRecord || employee.employeeId) return;
 
-            // Count how many employees already exist in the table
             const count = await Employee.count();
-
-            // Build the ID: pad the next number to 3 digits, prefix with EMP
-            // e.g. count=0 -> EMP001, count=1 -> EMP002, count=99 -> EMP100
             const padded = String(count + 1).padStart(3, '0');
             employee.employeeId = `EMP${padded}`;
         },
