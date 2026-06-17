@@ -9,9 +9,14 @@ const sequelize = require('./config/db');
 // Must run before any process.env usage - loads values from .env
 require('dotenv').config();
 
-// Import models so sequelize.sync() knows to create their tables
+// ----------------------- Model Imports -----------------------
+// Import all models here so sequelize.sync() creates their tables
+// Every new model you add must be registered here
+
 const Employee = require('./src/models/Employee');
-// Employee routes
+const Roster   = require('./src/models/Roster');
+
+// ----------------------- Model Routes -----------------------
 const employeeRoutes = require('./src/routes/employeeRoute');
 
 const app = express();
