@@ -9,18 +9,19 @@ const sequelize = require('./config/db');
 // Must run before any process.env usage - loads values from .env
 require('dotenv').config();
 
-// Import models so sequelize.sync() knows to create their tables
+// --- Model Imports ------------------------------------------
+// Import all models here so sequelize.sync() creates their tables
+// Every new model you add must be registered here
+
 const Employee = require('./src/models/Employee');
-// Employee routes
-const employeeRoutes = require('./src/routes/employeeRoute');
+const Roster   = require('./src/models/Roster');
+
+// -----------------------------------------------------------
 
 const app = express();
 
 // Parses incoming JSON request bodies - needed so req.body works in controllers
 app.use(express.json());
-
-// Mount employee routes under /employee
-app.use('/employee', employeeRoutes);
 
 // Use PORT from .env or fall back to 3000
 const PORT = process.env.PORT || 3000;
