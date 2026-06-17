@@ -2,10 +2,29 @@
 const express = require('express');
 const router = express.Router();
 
-const employeeService = require('../services/Employeeservice');
+const employeeService = require('../services/employeeService');
 
-// POST /employee/create
-router.post('/employee/create', async (req, res) => {
+// -----------------------------------------------------------------------
+// employee - Retrieve all employee records API
+// -----------------------------------------------------------------------
+router.get('/', async (req, res) => {
+    try {
+        const employees = await employeeService.getAllEmployees();
+        return res.status(200).json({
+            success: true,
+            count: employees.length,
+            data: employees
+        });
+    } catch (err) {
+        return res.status(500).json({ 
+            success: false, 
+            error: err.message 
+        });
+    }
+});
+
+// POST /employee/create - Create a new employee record
+router.post('/create', async (req, res) => {
     try {
         const employee = await employeeService.createEmployee(req.body);
         return res.status(201).json(employee);

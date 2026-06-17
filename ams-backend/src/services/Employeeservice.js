@@ -45,7 +45,25 @@ const createEmployee = async (data) => {
     return employee;
 };
 
+// -----------------------------------------------------------------------
+//  getAllEmployees - Fetches all active employee records from Neon DB
+// -----------------------------------------------------------------------
+const getAllEmployees = async () => {
+    try {
+        
+        const employees = await Employee.findAll({
+            where: {
+                isActive: true
+            }
+        });
+        return employees;
+    } catch (error) {
+        throw new Error("Database Retrieval Error: " + error.message);
+    }
+};
+
 // Export all service functions - add new ones here as we build more features
 module.exports = {
     createEmployee,
+    getAllEmployees, 
 };
