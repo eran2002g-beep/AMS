@@ -80,7 +80,7 @@ const upload = multer({
 
 // ----------------------- COLUMN VALIDATION -----------------------
 // validateColumns - checks that all required columns exist in the parsed file
-// returns an error message string if any column is missing, or null if all present
+// returns an error message string if columns are missing, or null if all present
 const validateColumns = (headers) => {
     const missing = REQUIRED_COLUMNS.filter(col => !headers.includes(col));
 
@@ -92,9 +92,47 @@ const validateColumns = (headers) => {
     return null;
 };
 
+// ----------------------- MONTH/YEAR EXTRACTOR -----------------------
+// extractMonthYear - pulls month and year out of a date string
+// called for every row so we can store month and year as separate columns
+// e.g. "2025-06-01" → { month: 6, year: 2025 }
+const extractMonthYear = (dateString) => {
+
+    // Parse the date string into a JS Date object
+    const date = new Date(dateString);
+
+    // Check if the date is valid - Invalid Date means the format was wrong
+    if (isNaN(date.getTime())) {
+        throw new Error(`Invalid date format: "${dateString}". Expected format: YYYY-MM-DD`);
+    }
+
+    // getMonth() returns 0-11 so we add 1 to get the real month number (1-12)
+    const month = date.getMonth() + 1;
+
+    // getFullYear() returns the 4-digit year e.g. 2025
+    const year  = date.getFullYear();
+
+    return { month, year };
+};
+
+// ----------------------- ROW ENRICHER -----------------------
+// enrichRow - adds month and year fields to each parsed row
+// called on every row after parsing so the service can save them directly to RosterEntry
+const enrichRow = (row) => {
+
+    // Extract month and year from the date value in this row
+    const { month, year } = extractMonthYear(row.date);
+
+    // Return the original row plus the two new fields
+    return {
+        ...row,    // spread keeps all original fields: employeeId, date, shiftStart, shiftEnd
+        month,     // e.g. 6
+        year,      // e.g. 2025
+    };
+};
+
 // ----------------------- CSV PARSER -----------------------
-// parseCSV - reads a CSV file from disk and returns an array of row objects
-// uses a Promise so we can use async/await in the service
+// parseCSV - reads a CSV file from disk and returns an enriched array of row objects
 const parseCSV = (filePath) => {
     return new Promise((resolve, reject) => {
         const rows = [];
@@ -107,8 +145,12 @@ const parseCSV = (filePath) => {
                 if (error) reject(new Error(error));
             })
             .on('data', (row) => {
-                // Each row is pushed as a plain object e.g. { employeeId: 'EMP001', date: '2025-06-01', ... }
-                rows.push(row);
+                // Enrich each row with month and year before collecting it
+                try {
+                    rows.push(enrichRow(row));
+                } catch (err) {
+                    reject(err);
+                }
             })
             .on('end', () => {
                 // Reject empty files - no rows means nothing to process
@@ -123,7 +165,7 @@ const parseCSV = (filePath) => {
 };
 
 // ----------------------- EXCEL PARSER -----------------------
-// parseExcel - reads an .xlsx or .xls file from disk and returns an array of row objects
+// parseExcel - reads an .xlsx or .xls file and returns an enriched array of row objects
 const parseExcel = (filePath) => {
 
     // Read the workbook from the saved file path
@@ -133,25 +175,28 @@ const parseExcel = (filePath) => {
     const firstSheetName = workbook.SheetNames[0];
     const worksheet      = workbook.Sheets[firstSheetName];
 
-    // sheet_to_json converts each row into a plain JS object using the header row as keys
-    const rows = xlsx.utils.sheet_to_json(worksheet);
+    // sheet_to_json converts the sheet into an array of plain JS objects
+    // raw: false tells xlsx to return formatted strings instead of raw serial numbers
+    // this ensures dates come out as readable strings not Excel serial numbers e.g. 45443
+    const rows = xlsx.utils.sheet_to_json(worksheet, { raw: false });
 
     // Reject empty files
     if (rows.length === 0) {
         throw new Error('The uploaded Excel file is empty.');
     }
 
-    // Validate that all required columns exist using the keys of the first row
+    // Validate required columns using keys of the first row
     const headers = Object.keys(rows[0]);
     const error   = validateColumns(headers);
     if (error) throw new Error(error);
 
-    return rows;
+    // Enrich every row with month and year before returning
+    return rows.map(enrichRow);
 };
 
 // ----------------------- MAIN PARSE FUNCTION -----------------------
 // parseRosterFile - decides which parser to use based on file extension
-// called by the roster service after multer saves the file to disk
+// returns enriched rows ready to be bulk inserted into the roster_entries table
 const parseRosterFile = async (filePath, originalName) => {
     const ext = path.extname(originalName).toLowerCase();
 
@@ -163,13 +208,11 @@ const parseRosterFile = async (filePath, originalName) => {
         return parseExcel(filePath);
     }
 
-    // Should never reach here because multer fileFilter already blocks invalid formats
-    // but kept as a safety net
+    // Safety net - multer fileFilter already blocks invalid formats before reaching here
     throw new Error('Unsupported file format.');
 };
 
-// Export upload middleware and the parser for use in routes and services
 module.exports = {
     upload,          // used in the route: router.post('/upload', upload.single('file'), ...)
-    parseRosterFile, // used in the service after the file is saved
+    parseRosterFile, // used in the service to get enriched rows after file is saved
 };
