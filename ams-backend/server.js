@@ -18,6 +18,7 @@ const Roster   = require('./src/models/Roster');
 
 // ----------------------- Model Routes -----------------------
 const employeeRoutes = require('./src/routes/employeeRoute');
+const rosterRoutes = require('./src/routes/rosterRoute');
 
 const app = express();
 
@@ -26,6 +27,9 @@ app.use(express.json());
 
 // Mount employee routes under /employee
 app.use('/employee', employeeRoutes);
+
+// Mount roster routes under /roster
+app.use('/roster', rosterRoutes);
 
 // Use PORT from .env or fall back to 3000
 const PORT = process.env.PORT || 3000;
