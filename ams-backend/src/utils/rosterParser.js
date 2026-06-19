@@ -80,7 +80,7 @@ const upload = multer({
 
 // ----------------------- COLUMN VALIDATION -----------------------
 // validateColumns - checks that all required columns exist in the parsed file
-// returns an error message string if any column is missing, or null if all present
+// returns an error message string if columns are missing, or null if all present
 const validateColumns = (headers) => {
     const missing = REQUIRED_COLUMNS.filter(col => !headers.includes(col));
 
@@ -92,9 +92,66 @@ const validateColumns = (headers) => {
     return null;
 };
 
+// ----------------------- MONTH/YEAR EXTRACTOR -----------------------
+// extractMonthYear - pulls month, year and a normalised YYYY-MM-DD date string out of a date string
+// supports two formats:
+//   DD-MM-YY   e.g. "01-06-25"  → month: 6, year: 2025, normalizedDate: "2025-06-01"
+//   YYYY-MM-DD e.g. "2025-06-01" → month: 6, year: 2025, normalizedDate: "2025-06-01"
+const extractMonthYear = (dateString) => {
+
+    // ---- Format 1: DD-MM-YY (used in the CSV, e.g. 01-06-25) ----
+    // Match exactly two digits, a dash, two digits, a dash, two digits
+    const ddmmyyMatch = dateString.match(/^(\d{2})-(\d{2})-(\d{2})$/);
+    if (ddmmyyMatch) {
+        const day   = parseInt(ddmmyyMatch[1], 10);  // e.g. 01
+        const month = parseInt(ddmmyyMatch[2], 10);  // e.g. 06
+        // Two-digit year: 00-99 → 2000-2099
+        const year  = 2000 + parseInt(ddmmyyMatch[3], 10); // e.g. 25 → 2025
+
+        // Rebuild as YYYY-MM-DD so Sequelize's DATEONLY column gets a clean ISO string
+        const normalizedDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+        return { month, year, normalizedDate };
+    }
+
+    // ---- Format 2: YYYY-MM-DD fallback ----
+    const date = new Date(dateString);
+
+    // Check if the date is valid - Invalid Date means the format was wrong
+    if (isNaN(date.getTime())) {
+        throw new Error(`Invalid date format: "${dateString}". Expected DD-MM-YY or YYYY-MM-DD.`);
+    }
+
+    // getMonth() returns 0-11 so we add 1 to get the real month number (1-12)
+    const month = date.getMonth() + 1;
+
+    // getFullYear() returns the 4-digit year e.g. 2025
+    const year  = date.getFullYear();
+
+    return { month, year, normalizedDate: dateString };
+};
+
+// ----------------------- ROW ENRICHER -----------------------
+// enrichRow - normalises the date to YYYY-MM-DD and adds month + year fields to each row
+// called on every row after parsing so the service can bulk-insert directly into Roster
+const enrichRow = (row) => {
+
+    // Extract month, year and the normalised date from the raw date value in this row
+    const { month, year, normalizedDate } = extractMonthYear(row.date);
+
+    // Return the original row with:
+    //   date overwritten with the normalised YYYY-MM-DD string (safe for DATEONLY column)
+    //   month and year added as separate integer fields
+    return {
+        ...row,
+        date:  normalizedDate, // e.g. "2025-06-01" (replaces raw "01-06-25")
+        month,                  // e.g. 6
+        year,                   // e.g. 2025
+    };
+};
+
 // ----------------------- CSV PARSER -----------------------
-// parseCSV - reads a CSV file from disk and returns an array of row objects
-// uses a Promise so we can use async/await in the service
+// parseCSV - reads a CSV file from disk and returns an enriched array of row objects
 const parseCSV = (filePath) => {
     return new Promise((resolve, reject) => {
         const rows = [];
@@ -107,8 +164,12 @@ const parseCSV = (filePath) => {
                 if (error) reject(new Error(error));
             })
             .on('data', (row) => {
-                // Each row is pushed as a plain object e.g. { employeeId: 'EMP001', date: '2025-06-01', ... }
-                rows.push(row);
+                // Enrich each row with month and year before collecting it
+                try {
+                    rows.push(enrichRow(row));
+                } catch (err) {
+                    reject(err);
+                }
             })
             .on('end', () => {
                 // Reject empty files - no rows means nothing to process
@@ -123,7 +184,7 @@ const parseCSV = (filePath) => {
 };
 
 // ----------------------- EXCEL PARSER -----------------------
-// parseExcel - reads an .xlsx or .xls file from disk and returns an array of row objects
+// parseExcel - reads an .xlsx or .xls file and returns an enriched array of row objects
 const parseExcel = (filePath) => {
 
     // Read the workbook from the saved file path
@@ -133,25 +194,28 @@ const parseExcel = (filePath) => {
     const firstSheetName = workbook.SheetNames[0];
     const worksheet      = workbook.Sheets[firstSheetName];
 
-    // sheet_to_json converts each row into a plain JS object using the header row as keys
-    const rows = xlsx.utils.sheet_to_json(worksheet);
+    // sheet_to_json converts the sheet into an array of plain JS objects
+    // raw: false tells xlsx to return formatted strings instead of raw serial numbers
+    // this ensures dates come out as readable strings not Excel serial numbers e.g. 45443
+    const rows = xlsx.utils.sheet_to_json(worksheet, { raw: false });
 
     // Reject empty files
     if (rows.length === 0) {
         throw new Error('The uploaded Excel file is empty.');
     }
 
-    // Validate that all required columns exist using the keys of the first row
+    // Validate required columns using keys of the first row
     const headers = Object.keys(rows[0]);
     const error   = validateColumns(headers);
     if (error) throw new Error(error);
 
-    return rows;
+    // Enrich every row with month and year before returning
+    return rows.map(enrichRow);
 };
 
 // ----------------------- MAIN PARSE FUNCTION -----------------------
 // parseRosterFile - decides which parser to use based on file extension
-// called by the roster service after multer saves the file to disk
+// returns enriched rows ready to be bulk inserted into the roster_entries table
 const parseRosterFile = async (filePath, originalName) => {
     const ext = path.extname(originalName).toLowerCase();
 
@@ -163,13 +227,11 @@ const parseRosterFile = async (filePath, originalName) => {
         return parseExcel(filePath);
     }
 
-    // Should never reach here because multer fileFilter already blocks invalid formats
-    // but kept as a safety net
+    // Safety net - multer fileFilter already blocks invalid formats before reaching here
     throw new Error('Unsupported file format.');
 };
 
-// Export upload middleware and the parser for use in routes and services
 module.exports = {
     upload,          // used in the route: router.post('/upload', upload.single('file'), ...)
-    parseRosterFile, // used in the service after the file is saved
+    parseRosterFile, // used in the service to get enriched rows after file is saved
 };
