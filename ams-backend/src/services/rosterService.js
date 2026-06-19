@@ -1,74 +1,55 @@
-// src/services/rosterService.js - handles roster upload, parsing, and mapping to employees
-const fs = require('fs');
-const path = require('path');
-const Roster = require('../models/Roster');
-const Employee = require('../models/Employee');
+// src/services/rosterService.js - parses an uploaded roster file and saves every row to the DB
+const Roster          = require('../models/Roster');
 const { parseRosterFile } = require('../utils/rosterParser');
 
-const uploadRoster = async (metadata, file) => {
+// uploadRoster - called by POST /roster/upload
+// Accepts the multer file object, parses it, then bulk-inserts all rows into the roster table.
+// Each row in the file becomes one record in the Roster table.
+const uploadRoster = async (file) => {
+
+    // Guard: multer should always attach the file, but double-check
     if (!file) {
         throw new Error('Roster file is required.');
     }
 
-    const { rosterName, startDate, endDate, department, uploadedBy } = metadata;
-
-    if (!rosterName || !startDate || !endDate || !uploadedBy) {
-        throw new Error('rosterName, startDate, endDate and uploadedBy are required.');
-    }
-
-    if (new Date(startDate) > new Date(endDate)) {
-        throw new Error('startDate must be on or before endDate.');
-    }
-
-    const ext = path.extname(file.originalname).toLowerCase().replace('.', '');
+    // ---------------------------- Step 1: Parse the file ----------------------------
+    // parseRosterFile returns an array of enriched row objects, each with:
+    //   employeeId  e.g. "EMP001"
+    //   date        normalised YYYY-MM-DD string, e.g. "2025-06-01"
+    //   month       integer, e.g. 6
+    //   year        integer, e.g. 2025
+    //   shiftStart  e.g. "08:00"
+    //   shiftEnd    e.g. "17:00"
     const rosterRows = await parseRosterFile(file.path, file.originalname);
 
-    // Create roster metadata record first so the upload is tracked.
-    const roster = await Roster.create({
-        rosterName,
-        fileName: file.originalname,
-        filePath: file.path,
-        fileFormat: ext,
-        startDate,
-        endDate,
-        department,
-        uploadedBy,
-    });
+    // ---------------------------- Step 2: Generate a unique rosterId for this batch ----------------------------
+    // rosterId groups all rows from one upload together.
+    // We find the current highest rosterId in the table and add 1.
+    // If the table is empty, we start at 1.
+    const latestEntry = await Roster.findOne({ order: [['rosterId', 'DESC']] });
+    const rosterId    = latestEntry ? latestEntry.rosterId + 1 : 1;
 
-    // Build a single lookup map for employee records to avoid repeated DB queries.
-    const employeeIds = [...new Set(rosterRows.map((row) => row.employeeId))];
-    const employees = await Employee.findAll({
-        where: { employeeId: employeeIds },
-    });
-    const employeeMap = new Map(
-        employees.map((emp) => [emp.employeeId, emp])
-    );
+    // ---------------------------- Step 3: Build insert payload matching the Roster model exactly ----------------------------
+    // Only include the columns that exist in the Roster model:
+    // id (auto), rosterId, employeeId, date, month, year, shiftStart, shiftEnd
+    const entriesToInsert = rosterRows.map((row) => ({
+        rosterId,
+        employeeId: row.employeeId,
+        date:       row.date,
+        month:      row.month,
+        year:       row.year,
+        shiftStart: row.shiftStart,
+        shiftEnd:   row.shiftEnd,
+    }));
 
-    const mappedRows = rosterRows.map((row) => {
-        const employee = employeeMap.get(row.employeeId);
-        return {
-            rosterRow: row,
-            employee: employee
-                ? {
-                      id: employee.id,
-                      employeeId: employee.employeeId,
-                      firstName: employee.firstName,
-                      lastName: employee.lastName,
-                      email: employee.email,
-                  }
-                : null,
-        };
-    });
+    // ---------------------------- Step 4: Bulk insert all entries in a single DB call ----------------------------
+    const insertedRecords = await Roster.bulkCreate(entriesToInsert);
 
-    const missingEmployeeIds = mappedRows
-        .filter((item) => !item.employee)
-        .map((item) => item.rosterRow.employeeId);
-
+    // Return the batch ID, total count, and the inserted rows for the API response
     return {
-        roster,
-        mappedRows,
-        matchedCount: mappedRows.filter((item) => item.employee).length,
-        missingEmployeeIds,
+        rosterId,
+        totalInserted: insertedRecords.length,
+        insertedRows:  insertedRecords.map((r) => r.toJSON()),
     };
 };
 

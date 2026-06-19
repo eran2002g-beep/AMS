@@ -93,17 +93,33 @@ const validateColumns = (headers) => {
 };
 
 // ----------------------- MONTH/YEAR EXTRACTOR -----------------------
-// extractMonthYear - pulls month and year out of a date string
-// called for every row so we can store month and year as separate columns
-// e.g. "2025-06-01" → { month: 6, year: 2025 }
+// extractMonthYear - pulls month, year and a normalised YYYY-MM-DD date string out of a date string
+// supports two formats:
+//   DD-MM-YY   e.g. "01-06-25"  → month: 6, year: 2025, normalizedDate: "2025-06-01"
+//   YYYY-MM-DD e.g. "2025-06-01" → month: 6, year: 2025, normalizedDate: "2025-06-01"
 const extractMonthYear = (dateString) => {
 
-    // Parse the date string into a JS Date object
+    // ---- Format 1: DD-MM-YY (used in the CSV, e.g. 01-06-25) ----
+    // Match exactly two digits, a dash, two digits, a dash, two digits
+    const ddmmyyMatch = dateString.match(/^(\d{2})-(\d{2})-(\d{2})$/);
+    if (ddmmyyMatch) {
+        const day   = parseInt(ddmmyyMatch[1], 10);  // e.g. 01
+        const month = parseInt(ddmmyyMatch[2], 10);  // e.g. 06
+        // Two-digit year: 00-99 → 2000-2099
+        const year  = 2000 + parseInt(ddmmyyMatch[3], 10); // e.g. 25 → 2025
+
+        // Rebuild as YYYY-MM-DD so Sequelize's DATEONLY column gets a clean ISO string
+        const normalizedDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+        return { month, year, normalizedDate };
+    }
+
+    // ---- Format 2: YYYY-MM-DD fallback ----
     const date = new Date(dateString);
 
     // Check if the date is valid - Invalid Date means the format was wrong
     if (isNaN(date.getTime())) {
-        throw new Error(`Invalid date format: "${dateString}". Expected format: YYYY-MM-DD`);
+        throw new Error(`Invalid date format: "${dateString}". Expected DD-MM-YY or YYYY-MM-DD.`);
     }
 
     // getMonth() returns 0-11 so we add 1 to get the real month number (1-12)
@@ -112,22 +128,25 @@ const extractMonthYear = (dateString) => {
     // getFullYear() returns the 4-digit year e.g. 2025
     const year  = date.getFullYear();
 
-    return { month, year };
+    return { month, year, normalizedDate: dateString };
 };
 
 // ----------------------- ROW ENRICHER -----------------------
-// enrichRow - adds month and year fields to each parsed row
-// called on every row after parsing so the service can save them directly to RosterEntry
+// enrichRow - normalises the date to YYYY-MM-DD and adds month + year fields to each row
+// called on every row after parsing so the service can bulk-insert directly into Roster
 const enrichRow = (row) => {
 
-    // Extract month and year from the date value in this row
-    const { month, year } = extractMonthYear(row.date);
+    // Extract month, year and the normalised date from the raw date value in this row
+    const { month, year, normalizedDate } = extractMonthYear(row.date);
 
-    // Return the original row plus the two new fields
+    // Return the original row with:
+    //   date overwritten with the normalised YYYY-MM-DD string (safe for DATEONLY column)
+    //   month and year added as separate integer fields
     return {
-        ...row,    // spread keeps all original fields: employeeId, date, shiftStart, shiftEnd
-        month,     // e.g. 6
-        year,      // e.g. 2025
+        ...row,
+        date:  normalizedDate, // e.g. "2025-06-01" (replaces raw "01-06-25")
+        month,                  // e.g. 6
+        year,                   // e.g. 2025
     };
 };
 
