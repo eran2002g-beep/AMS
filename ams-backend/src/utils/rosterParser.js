@@ -232,6 +232,7 @@ const parseRosterFile = async (filePath, originalName) => {
 };
 
 module.exports = {
-    upload,          // used in the route: router.post('/upload', upload.single('file'), ...)
-    parseRosterFile, // used in the service to get enriched rows after file is saved
+    upload,            // used in the route: router.post('/upload', upload.single('file'), ...)
+    parseRosterFile,   // used in the service to get enriched rows after file is saved
+    extractMonthYear,  // used by roster view to normalise date query params
 };

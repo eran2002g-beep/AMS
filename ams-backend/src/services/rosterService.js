@@ -1,6 +1,6 @@
-// src/services/rosterService.js - parses an uploaded roster file and saves every row to the DB
-const Roster          = require('../models/Roster');
-const { parseRosterFile } = require('../utils/rosterParser');
+// src/services/rosterService.js - roster upload and view operations
+const Roster = require('../models/Roster');
+const { parseRosterFile, extractMonthYear } = require('../utils/rosterParser');
 
 // uploadRoster - called by POST /roster/upload
 // Accepts the multer file object, parses it, then bulk-inserts all rows into the roster table.
@@ -53,6 +53,61 @@ const uploadRoster = async (file) => {
     };
 };
 
+// buildRosterViewFilters - validates query params and returns a Sequelize where clause
+// At least one of date, year, or month must be provided.
+const buildRosterViewFilters = ({ date, year, month }) => {
+    const hasDate  = date  !== undefined && date  !== '';
+    const hasYear  = year  !== undefined && year  !== '';
+    const hasMonth = month !== undefined && month !== '';
+
+    if (!hasDate && !hasYear && !hasMonth) {
+        throw new Error('At least one filter is required: date, year, or month.');
+    }
+
+    const applied = {};
+    const where   = {};
+
+    if (hasDate) {
+        const { normalizedDate } = extractMonthYear(String(date).trim());
+        where.date = normalizedDate;
+        applied.date = normalizedDate;
+        return { where, applied };
+    }
+
+    if (hasYear) {
+        const parsedYear = parseInt(year, 10);
+        if (isNaN(parsedYear) || parsedYear < 2000 || parsedYear > 2099) {
+            throw new Error('Invalid year. Expected a value between 2000 and 2099.');
+        }
+        where.year = parsedYear;
+        applied.year = parsedYear;
+    }
+
+    if (hasMonth) {
+        const parsedMonth = parseInt(month, 10);
+        if (isNaN(parsedMonth) || parsedMonth < 1 || parsedMonth > 12) {
+            throw new Error('Invalid month. Expected a value between 1 and 12.');
+        }
+        where.month = parsedMonth;
+        applied.month = parsedMonth;
+    }
+
+    return { where, applied };
+};
+
+// getRosterView - fetch roster entries filtered by date, year, month, or year + month
+const getRosterView = async (filters) => {
+    const { where, applied } = buildRosterViewFilters(filters);
+
+    const entries = await Roster.findAll({
+        where,
+        order: [['date', 'ASC'], ['employeeId', 'ASC']],
+    });
+
+    return { entries, applied };
+};
+
 module.exports = {
     uploadRoster,
+    getRosterView,
 };

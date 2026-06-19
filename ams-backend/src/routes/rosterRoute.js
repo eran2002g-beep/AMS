@@ -20,6 +20,30 @@ const rosterService = require('../services/rosterService');
 
 // Middleware 2 - runs the service logic inside a try/catch for all other errors.
 
+// GET /roster/view - fetch roster entries filtered by date, year, month, or year + month
+// Query params (at least one required):
+//   date  - exact day, e.g. 2025-06-01 or 01-06-25
+//   year  - e.g. 2025
+//   month - e.g. 6
+//   year + month together - e.g. ?year=2025&month=6
+router.get('/view', async (req, res) => {
+    try {
+        const { entries, applied } = await rosterService.getRosterView(req.query);
+
+        return res.status(200).json({
+            success: true,
+            count:   entries.length,
+            filters: applied,
+            data:    entries,
+        });
+    } catch (err) {
+        return res.status(400).json({
+            success: false,
+            error:   err.message,
+        });
+    }
+});
+
 router.post(
     '/upload',
 
