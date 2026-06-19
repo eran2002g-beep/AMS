@@ -1,7 +1,9 @@
 import axios from "axios";
 
+export const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000";
+
 export const api = axios.create({
-  baseURL: "",
+  baseURL: apiBaseUrl,
 });
 
 export function getErrorMessage(err: unknown): string {
@@ -48,6 +50,13 @@ export type Roster = {
   isProcessed: boolean;
   isActive: boolean;
   createdAt: string;
+};
+
+export type RosterRecord = {
+  employeeId: string;
+  date: string;
+  shiftStart: string;
+  shiftEnd: string;
 };
 
 // ─────────────────────────────────── Employee API ───────────────────────────────────
