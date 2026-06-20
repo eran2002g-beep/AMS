@@ -3,23 +3,19 @@
 import {
   Table, TableHead, TableRow, TableCell,
   TableBody, TableContainer, Paper,
-  IconButton, Chip, Tooltip,
+  Chip,
 } from "@mui/material";
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
 import type { Employee } from "@/lib/api";
 
 type Props = {
   employees: Employee[];
-  onEdit: (emp: Employee) => void;
-  onDelete: (id: number) => void;
 };
 
-const COLUMNS = ["Name", "Email", "Phone", "Department", "Employee ID", "Actions"];
+const COLUMNS = ["Name", "Email", "Phone", "Department", "Employee ID", "Role"];
 
 const display = (value: string | null) => value || "—";
 
-export default function EmployeeTable({ employees, onEdit, onDelete }: Props) {
+export default function EmployeeTable({ employees }: Props) {
   return (
     <TableContainer component={Paper} sx={{ borderRadius: 2, boxShadow: 2 }}>
       <Table>
@@ -68,24 +64,15 @@ export default function EmployeeTable({ employees, onEdit, onDelete }: Props) {
                 </TableCell>
                 <TableCell>{emp.employeeId}</TableCell>
                 <TableCell>
-                  <Tooltip title="Edit">
-                    <IconButton
-                      size="small"
-                      onClick={() => onEdit(emp)}
-                      sx={{ color: "#2563eb", mr: 1 }}
-                    >
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="Delete">
-                    <IconButton
-                      size="small"
-                      onClick={() => onDelete(emp.id)}
-                      sx={{ color: "#ef4444" }}
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
+                  <Chip
+                    label={emp.role}
+                    size="small"
+                    sx={{
+                      backgroundColor: emp.role === "admin" ? "#fef3c7" : "#f1f5f9",
+                      color: emp.role === "admin" ? "#b45309" : "#64748b",
+                      textTransform: "capitalize",
+                    }}
+                  />
                 </TableCell>
               </TableRow>
             ))

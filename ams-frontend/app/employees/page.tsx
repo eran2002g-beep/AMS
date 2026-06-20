@@ -18,7 +18,6 @@ import { employeeApi, getErrorMessage, type Employee, type EmployeeFormData } fr
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [formOpen, setFormOpen] = useState(false);
-  const [editing, setEditing] = useState<Employee | null>(null);
   const [filters, setFilters] = useState<EmployeeFilters>(EMPTY_FILTERS);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -58,58 +57,12 @@ export default function EmployeesPage() {
     }
   };
 
-  const handleUpdate = async (data: EmployeeFormData) => {
-    if (!editing) return;
-    setSubmitting(true);
-    setError("");
-    setSuccess("");
-    try {
-      const updated = await employeeApi.update(editing.id, data);
-      setEmployees((prev) => prev.map((e) => (e.id === editing.id ? updated : e)));
-      setEditing(null);
-      setSuccess("Employee updated successfully.");
-    } catch (err) {
-      setError(getErrorMessage(err));
-      throw err;
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleDelete = async (id: number) => {
-    if (!window.confirm("Remove this employee?")) return;
-    setError("");
-    setSuccess("");
-    try {
-      await employeeApi.remove(id);
-      setEmployees((prev) => prev.filter((e) => e.id !== id));
-      setSuccess("Employee removed successfully.");
-    } catch (err) {
-      setError(getErrorMessage(err));
-    }
-  };
-
-  const openEdit = (emp: Employee) => {
-    setEditing(emp);
-    setFormOpen(true);
-  };
-
   const filtered = useMemo(
     () => filterEmployees(employees, filters),
     [employees, filters],
   );
 
   const departments = useMemo(() => getDepartments(employees), [employees]);
-
-  const editingFormData: EmployeeFormData | null = editing
-    ? {
-        firstName: editing.firstName,
-        lastName: editing.lastName,
-        email: editing.email,
-        phone: editing.phone ?? "",
-        department: editing.department ?? "",
-      }
-    : null;
 
   return (
     <Box>
@@ -130,7 +83,7 @@ export default function EmployeesPage() {
           <Button
             variant="contained"
             startIcon={<AddIcon />}
-            onClick={() => { setEditing(null); setFormOpen(true); }}
+            onClick={() => setFormOpen(true)}
             sx={{ backgroundColor: "#2563eb", whiteSpace: "nowrap", alignSelf: { xs: "flex-start", md: "center" } }}
           >
             Add Employee
@@ -153,18 +106,13 @@ export default function EmployeesPage() {
           <CircularProgress />
         </Box>
       ) : (
-        <EmployeeTable
-          employees={filtered}
-          onEdit={openEdit}
-          onDelete={handleDelete}
-        />
+        <EmployeeTable employees={filtered} />
       )}
 
       <EmployeeForm
         open={formOpen}
-        onClose={() => { setFormOpen(false); setEditing(null); }}
-        onSubmit={editing ? handleUpdate : handleAdd}
-        initialData={editingFormData}
+        onClose={() => setFormOpen(false)}
+        onSubmit={handleAdd}
         submitting={submitting}
       />
     </Box>

@@ -1,15 +1,23 @@
 import axios from "axios";
 
-export const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000";
+// Empty base URL uses Next.js rewrites (same origin) to avoid CORS issues.
+export const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
 
 export const api = axios.create({
   baseURL: apiBaseUrl,
 });
 
+type ApiErrorBody = {
+  error?: string;
+  success?: boolean;
+  status?: string;
+};
+
 export function getErrorMessage(err: unknown): string {
   if (axios.isAxiosError(err)) {
-    const data = err.response?.data as { error?: string } | undefined;
-    return data?.error ?? err.message;
+    const data = err.response?.data as ApiErrorBody | undefined;
+    if (data?.error) return data.error;
+    return err.message;
   }
   if (err instanceof Error) return err.message;
   return "Something went wrong";
@@ -27,6 +35,8 @@ export type Employee = {
   department: string | null;
   role: "admin" | "employee";
   isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type EmployeeFormData = {
@@ -37,78 +47,84 @@ export type EmployeeFormData = {
   department: string;
 };
 
-export type Roster = {
+export type RosterEntry = {
   id: number;
-  rosterId: string;
-  rosterName: string;
-  fileName: string;
-  fileFormat: "csv" | "xlsx" | "xls";
-  startDate: string;
-  endDate: string;
-  department: string | null;
-  uploadedBy: number;
-  isProcessed: boolean;
-  isActive: boolean;
-  createdAt: string;
-};
-
-export type RosterRecord = {
+  rosterId: number;
   employeeId: string;
   date: string;
+  month: number;
+  year: number;
   shiftStart: string;
   shiftEnd: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type RosterViewFilters = {
+  date?: string;
+  year?: number;
+  month?: number;
+};
+
+export type RosterViewResponse = {
+  success: boolean;
+  count: number;
+  filters: RosterViewFilters;
+  data: RosterEntry[];
+};
+
+export type RosterUploadResponse = {
+  status: "success";
+  rosterId: number;
+  totalInserted: number;
+  insertedRows: RosterEntry[];
 };
 
 // ─────────────────────────────────── Employee API ───────────────────────────────────
 
 export const employeeApi = {
-  // Get all employees
   async list() {
-    const response = await api.get("/employee");
-    return response.data.data as Employee[];
+    const response = await api.get<{ success: boolean; count: number; data: Employee[] }>("/employee");
+    return response.data.data;
   },
 
-  // Create a new employee
   async create(payload: EmployeeFormData) {
-    const response = await api.post("/employee/create", payload);
-    return response.data as Employee;
-  },
-
-  // Update an existing employee
-  async update(id: number, payload: EmployeeFormData) {
-    const response = await api.put(`/employee/${id}`, payload);
-    return response.data.data as Employee;
-  },
-
-  // Delete (soft delete) an employee
-  async remove(id: number) {
-    await api.delete(`/employee/${id}`);
+    const body = {
+      firstName: payload.firstName,
+      lastName: payload.lastName,
+      email: payload.email,
+      ...(payload.phone ? { phone: payload.phone } : {}),
+      ...(payload.department ? { department: payload.department } : {}),
+    };
+    const response = await api.post<Employee>("/employee/create", body);
+    return response.data;
   },
 };
 
 // ─────────────────────────────────── Roster API ───────────────────────────────────
 
 export const rosterApi = {
-  // Get all rosters
-  async list() {
-    const response = await api.get("/roster");
-    return response.data.data as Roster[];
+  async view(filters: RosterViewFilters) {
+    const params: Record<string, string | number> = {};
+    if (filters.date) {
+      params.date = filters.date;
+    } else {
+      if (filters.year != null) params.year = filters.year;
+      if (filters.month != null) params.month = filters.month;
+    }
+
+    const response = await api.get<RosterViewResponse>("/roster/view", { params });
+    return response.data;
   },
 
-  // Upload a roster file
   async upload(file: File) {
     const formData = new FormData();
     formData.append("file", file);
 
-    const response = await api.post("/roster/upload", formData, {
+    const response = await api.post<RosterUploadResponse>("/roster/upload", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
-    return response.data.data as Roster;
-  },
-
-  // Delete a roster
-  async remove(id: number) {
-    await api.delete(`/roster/${id}`);
+    return response.data;
   },
 };

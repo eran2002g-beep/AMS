@@ -52,8 +52,8 @@ export default function RosterUpload({ onUploadSuccess, onError }: RosterUploadP
 
     try {
       setUploading(true);
-      await rosterApi.upload(file);
-      setSuccess(`"${file.name}" uploaded successfully!`);
+      const result = await rosterApi.upload(file);
+      setSuccess(`"${file.name}" uploaded — ${result.totalInserted} shift(s) added (batch #${result.rosterId}).`);
       setFile(null);
       if (inputRef.current) inputRef.current.value = "";
       setTimeout(() => setSuccess(""), 4000);

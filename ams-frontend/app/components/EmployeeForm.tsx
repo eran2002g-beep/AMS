@@ -23,18 +23,19 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onSubmit: (data: EmployeeFormData) => Promise<void>;
-  initialData?: EmployeeFormData | null;
   submitting?: boolean;
 };
 
-export default function EmployeeForm({ open, onClose, onSubmit, initialData, submitting }: Props) {
+export default function EmployeeForm({ open, onClose, onSubmit, submitting }: Props) {
   const [form, setForm] = useState<EmployeeFormData>(EMPTY);
   const [errors, setErrors] = useState<Partial<Record<keyof EmployeeFormData, string>>>({});
 
   useEffect(() => {
-    setForm(initialData || EMPTY);
-    setErrors({});
-  }, [initialData, open]);
+    if (open) {
+      setForm(EMPTY);
+      setErrors({});
+    }
+  }, [open]);
 
   const handle = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -74,8 +75,6 @@ export default function EmployeeForm({ open, onClose, onSubmit, initialData, sub
     }
   };
 
-  const isEdit = !!initialData;
-
   return (
     <Dialog
       open={open}
@@ -85,7 +84,7 @@ export default function EmployeeForm({ open, onClose, onSubmit, initialData, sub
       slotProps={{ paper: { sx: { overflow: "visible" } } }}
     >
       <DialogTitle sx={{ backgroundColor: "#1e293b", color: "#fff", py: 1.5 }}>
-        {isEdit ? "✏️ Edit Employee" : "➕ Add Employee"}
+        Add Employee
       </DialogTitle>
 
       <DialogContent
@@ -140,7 +139,7 @@ export default function EmployeeForm({ open, onClose, onSubmit, initialData, sub
           sx={{ backgroundColor: "#2563eb" }}
           startIcon={submitting ? <CircularProgress size={16} color="inherit" /> : undefined}
         >
-          {isEdit ? "Save Changes" : "Add Employee"}
+          Add Employee
         </Button>
       </DialogActions>
     </Dialog>
