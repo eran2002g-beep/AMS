@@ -92,61 +92,128 @@ const validateColumns = (headers) => {
     return null;
 };
 
+// ----------------------- DATE/TIME VALIDATION -----------------------
+// isValidCalendarDate - confirms day/month/year form a real calendar date
+const isValidCalendarDate = (year, month, day) => {
+    if (month < 1 || month > 12 || day < 1 || day > 31) {
+        return false;
+    }
+
+    const date = new Date(Date.UTC(year, month - 1, day));
+
+    return date.getUTCFullYear() === year &&
+           date.getUTCMonth() === month - 1 &&
+           date.getUTCDate() === day;
+};
+
+// validateTime - checks shift times are valid 24-hour HH:mm values
+const validateTime = (timeString, fieldName) => {
+    const trimmed = String(timeString ?? '').trim();
+
+    if (!trimmed) {
+        throw new Error(`${fieldName} is required. Expected HH:mm (24-hour), e.g. 08:00.`);
+    }
+
+    const match = trimmed.match(/^(\d{1,2}):([0-5]\d)$/);
+    if (!match) {
+        throw new Error(`Invalid ${fieldName} time "${timeString}". Expected HH:mm (24-hour), e.g. 08:00.`);
+    }
+
+    const hours = parseInt(match[1], 10);
+    if (hours > 23) {
+        throw new Error(`Invalid ${fieldName} time "${timeString}". Hour must be between 00 and 23.`);
+    }
+
+    return `${String(hours).padStart(2, '0')}:${match[2]}`;
+};
+
 // ----------------------- MONTH/YEAR EXTRACTOR -----------------------
 // extractMonthYear - pulls month, year and a normalised YYYY-MM-DD date string out of a date string
 // supports two formats:
 //   DD-MM-YY   e.g. "01-06-25"  → month: 6, year: 2025, normalizedDate: "2025-06-01"
 //   YYYY-MM-DD e.g. "2025-06-01" → month: 6, year: 2025, normalizedDate: "2025-06-01"
 const extractMonthYear = (dateString) => {
+    const trimmed = String(dateString ?? '').trim();
+
+    if (!trimmed) {
+        throw new Error('Date is required. Expected DD-MM-YY or YYYY-MM-DD.');
+    }
 
     // ---- Format 1: DD-MM-YY (used in the CSV, e.g. 01-06-25) ----
-    // Match exactly two digits, a dash, two digits, a dash, two digits
-    const ddmmyyMatch = dateString.match(/^(\d{2})-(\d{2})-(\d{2})$/);
+    const ddmmyyMatch = trimmed.match(/^(\d{2})-(\d{2})-(\d{2})$/);
     if (ddmmyyMatch) {
-        const day   = parseInt(ddmmyyMatch[1], 10);  // e.g. 01
-        const month = parseInt(ddmmyyMatch[2], 10);  // e.g. 06
-        // Two-digit year: 00-99 → 2000-2099
-        const year  = 2000 + parseInt(ddmmyyMatch[3], 10); // e.g. 25 → 2025
+        const day   = parseInt(ddmmyyMatch[1], 10);
+        const month = parseInt(ddmmyyMatch[2], 10);
+        const year  = 2000 + parseInt(ddmmyyMatch[3], 10);
 
-        // Rebuild as YYYY-MM-DD so Sequelize's DATEONLY column gets a clean ISO string
+        if (!isValidCalendarDate(year, month, day)) {
+            throw new Error(`Invalid date "${trimmed}". Expected a valid calendar date in DD-MM-YY format.`);
+        }
+
         const normalizedDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
         return { month, year, normalizedDate };
     }
 
-    // ---- Format 2: YYYY-MM-DD fallback ----
-    const date = new Date(dateString);
+    // ---- Format 2: YYYY-MM-DD ----
+    const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (isoMatch) {
+        const year  = parseInt(isoMatch[1], 10);
+        const month = parseInt(isoMatch[2], 10);
+        const day   = parseInt(isoMatch[3], 10);
 
-    // Check if the date is valid - Invalid Date means the format was wrong
-    if (isNaN(date.getTime())) {
-        throw new Error(`Invalid date format: "${dateString}". Expected DD-MM-YY or YYYY-MM-DD.`);
+        if (!isValidCalendarDate(year, month, day)) {
+            throw new Error(`Invalid date "${trimmed}". Expected a valid calendar date in YYYY-MM-DD format.`);
+        }
+
+        const normalizedDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+        return { month, year, normalizedDate };
     }
 
-    // getMonth() returns 0-11 so we add 1 to get the real month number (1-12)
-    const month = date.getMonth() + 1;
-
-    // getFullYear() returns the 4-digit year e.g. 2025
-    const year  = date.getFullYear();
-
-    return { month, year, normalizedDate: dateString };
+    throw new Error(`Invalid date format "${trimmed}". Expected DD-MM-YY or YYYY-MM-DD.`);
 };
 
 // ----------------------- ROW ENRICHER -----------------------
-// enrichRow - normalises the date to YYYY-MM-DD and adds month + year fields to each row
-// called on every row after parsing so the service can bulk-insert directly into Roster
-const enrichRow = (row) => {
+// enrichRow - validates and normalises each row before bulk insert
+// if any row is invalid the whole upload is rejected (all-or-nothing)
+const enrichRow = (row, rowNumber) => {
+    const employeeId = String(row.employeeId ?? '').trim();
 
-    // Extract month, year and the normalised date from the raw date value in this row
-    const { month, year, normalizedDate } = extractMonthYear(row.date);
+    if (!employeeId) {
+        throw new Error(`Row ${rowNumber}: employeeId is required.`);
+    }
 
-    // Return the original row with:
-    //   date overwritten with the normalised YYYY-MM-DD string (safe for DATEONLY column)
-    //   month and year added as separate integer fields
+    const rowLabel = `Row ${rowNumber} (employeeId ${employeeId})`;
+
+    let month;
+    let year;
+    let normalizedDate;
+
+    try {
+        ({ month, year, normalizedDate } = extractMonthYear(row.date));
+    } catch (err) {
+        throw new Error(`${rowLabel}: ${err.message}`);
+    }
+
+    let shiftStart;
+    let shiftEnd;
+
+    try {
+        shiftStart = validateTime(row.shiftStart, 'shiftStart');
+        shiftEnd   = validateTime(row.shiftEnd, 'shiftEnd');
+    } catch (err) {
+        throw new Error(`${rowLabel}: ${err.message}`);
+    }
+
     return {
         ...row,
-        date:  normalizedDate, // e.g. "2025-06-01" (replaces raw "01-06-25")
-        month,                  // e.g. 6
-        year,                   // e.g. 2025
+        employeeId,
+        date:       normalizedDate,
+        month,
+        year,
+        shiftStart,
+        shiftEnd,
     };
 };
 
@@ -155,6 +222,7 @@ const enrichRow = (row) => {
 const parseCSV = (filePath) => {
     return new Promise((resolve, reject) => {
         const rows = [];
+        let rowNumber = 2; // row 1 is the header
 
         fs.createReadStream(filePath)
             .pipe(csv())
@@ -164,9 +232,9 @@ const parseCSV = (filePath) => {
                 if (error) reject(new Error(error));
             })
             .on('data', (row) => {
-                // Enrich each row with month and year before collecting it
                 try {
-                    rows.push(enrichRow(row));
+                    rows.push(enrichRow(row, rowNumber));
+                    rowNumber += 1;
                 } catch (err) {
                     reject(err);
                 }
@@ -209,8 +277,8 @@ const parseExcel = (filePath) => {
     const error   = validateColumns(headers);
     if (error) throw new Error(error);
 
-    // Enrich every row with month and year before returning
-    return rows.map(enrichRow);
+    // Validate and enrich every row before returning
+    return rows.map((row, index) => enrichRow(row, index + 2));
 };
 
 // ----------------------- MAIN PARSE FUNCTION -----------------------
