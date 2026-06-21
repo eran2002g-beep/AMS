@@ -4,11 +4,12 @@ import { useState, useEffect } from "react";
 import {
   Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Button, Box, CircularProgress,
+  FormControlLabel, Checkbox,
 } from "@mui/material";
 import type { EmployeeFormData } from "@/lib/api";
 
 const EMPTY: EmployeeFormData = {
-  firstName: "", lastName: "", email: "", phone: "", department: "",
+  firstName: "", lastName: "", email: "", phone: "", department: "", roster: false,
 };
 
 const FIELDS = [
@@ -65,6 +66,7 @@ export default function EmployeeForm({ open, onClose, onSubmit, submitting }: Pr
       email: form.email.trim(),
       phone: form.phone.trim(),
       department: form.department.trim(),
+      roster: form.roster,
     };
 
     try {
@@ -127,6 +129,16 @@ export default function EmployeeForm({ open, onClose, onSubmit, submitting }: Pr
               }}
             />
           ))}
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={form.roster}
+                onChange={(e) => setForm({ ...form, roster: e.target.checked })}
+              />
+            }
+            label="On roster"
+            sx={{ gridColumn: { xs: "1", sm: "1 / -1" } }}
+          />
         </Box>
       </DialogContent>
 

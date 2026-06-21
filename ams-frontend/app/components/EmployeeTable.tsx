@@ -11,7 +11,7 @@ type Props = {
   employees: Employee[];
 };
 
-const COLUMNS = ["Name", "Email", "Phone", "Department", "Employee ID", "Role"];
+const COLUMNS = ["Name", "Email", "Phone", "Department", "Roster", "Employee ID", "Role"];
 
 const display = (value: string | null) => value || "—";
 
@@ -39,7 +39,7 @@ export default function EmployeeTable({ employees }: Props) {
         <TableBody>
           {employees.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={6} align="center" sx={{ color: "#94a3b8", py: 4 }}>
+              <TableCell colSpan={7} align="center" sx={{ color: "#94a3b8", py: 4 }}>
                 No employees found. Add one to get started.
               </TableCell>
             </TableRow>
@@ -61,6 +61,16 @@ export default function EmployeeTable({ employees }: Props) {
                   ) : (
                     "—"
                   )}
+                </TableCell>
+                <TableCell>
+                  <Chip
+                    label={emp.roster ? "Yes" : "No"}
+                    size="small"
+                    sx={{
+                      backgroundColor: emp.roster ? "#dcfce7" : "#f1f5f9",
+                      color: emp.roster ? "#15803d" : "#64748b",
+                    }}
+                  />
                 </TableCell>
                 <TableCell>{emp.employeeId}</TableCell>
                 <TableCell>

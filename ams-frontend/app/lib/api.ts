@@ -34,6 +34,7 @@ export type Employee = {
   phone: string | null;
   department: string | null;
   role: "admin" | "employee";
+  roster: boolean;
   isActive: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -45,6 +46,7 @@ export type EmployeeFormData = {
   email: string;
   phone: string;
   department: string;
+  roster: boolean;
 };
 
 export type RosterEntry = {
@@ -93,6 +95,7 @@ export const employeeApi = {
       firstName: payload.firstName,
       lastName: payload.lastName,
       email: payload.email,
+      roster: payload.roster,
       ...(payload.phone ? { phone: payload.phone } : {}),
       ...(payload.department ? { department: payload.department } : {}),
     };
