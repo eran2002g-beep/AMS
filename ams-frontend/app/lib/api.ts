@@ -47,7 +47,40 @@ export type EmployeeFormData = {
   phone: string;
   department: string;
   roster: boolean;
+  role?: "admin" | "employee";
 };
+
+export type EmployeeUpdatePayload = Partial<{
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string | null;
+  department: string | null;
+  role: "admin" | "employee";
+  roster: boolean;
+}>;
+
+export function buildEmployeeUpdatePayload(
+  original: Employee,
+  form: EmployeeFormData,
+): EmployeeUpdatePayload {
+  const changes: EmployeeUpdatePayload = {};
+  const firstName = form.firstName.trim();
+  const lastName = form.lastName.trim();
+  const email = form.email.trim();
+  const phone = form.phone.trim();
+  const department = form.department.trim();
+
+  if (firstName !== original.firstName) changes.firstName = firstName;
+  if (lastName !== original.lastName) changes.lastName = lastName;
+  if (email !== original.email) changes.email = email;
+  if (phone !== (original.phone ?? "")) changes.phone = phone || null;
+  if (department !== (original.department ?? "")) changes.department = department || null;
+  if (form.roster !== original.roster) changes.roster = form.roster;
+  if (form.role && form.role !== original.role) changes.role = form.role;
+
+  return changes;
+}
 
 export type RosterEntry = {
   id: number;
@@ -101,6 +134,14 @@ export const employeeApi = {
     };
     const response = await api.post<Employee>("/employee/create", body);
     return response.data;
+  },
+
+  async update(employeeId: string, changes: EmployeeUpdatePayload) {
+    const response = await api.patch<{ success: boolean; message: string; data: Employee }>(
+      `/employee/${employeeId}`,
+      changes,
+    );
+    return response.data.data;
   },
 };
 

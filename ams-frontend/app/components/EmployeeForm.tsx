@@ -4,9 +4,9 @@ import { useState, useEffect } from "react";
 import {
   Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Button, Box, CircularProgress,
-  FormControlLabel, Checkbox,
+  FormControlLabel, Checkbox, FormControl, InputLabel, Select, MenuItem,
 } from "@mui/material";
-import type { EmployeeFormData } from "@/lib/api";
+import type { Employee, EmployeeFormData } from "@/lib/api";
 
 const EMPTY: EmployeeFormData = {
   firstName: "", lastName: "", email: "", phone: "", department: "", roster: false,
@@ -20,23 +20,37 @@ const FIELDS = [
   { name: "department", label: "Department", type: "text" },
 ] as const;
 
+function employeeToForm(employee: Employee): EmployeeFormData {
+  return {
+    firstName: employee.firstName,
+    lastName: employee.lastName,
+    email: employee.email,
+    phone: employee.phone ?? "",
+    department: employee.department ?? "",
+    roster: employee.roster,
+    role: employee.role,
+  };
+}
+
 type Props = {
   open: boolean;
   onClose: () => void;
   onSubmit: (data: EmployeeFormData) => Promise<void>;
   submitting?: boolean;
+  employee?: Employee | null;
 };
 
-export default function EmployeeForm({ open, onClose, onSubmit, submitting }: Props) {
+export default function EmployeeForm({ open, onClose, onSubmit, submitting, employee }: Props) {
+  const isEdit = !!employee;
   const [form, setForm] = useState<EmployeeFormData>(EMPTY);
   const [errors, setErrors] = useState<Partial<Record<keyof EmployeeFormData, string>>>({});
 
   useEffect(() => {
     if (open) {
-      setForm(EMPTY);
+      setForm(employee ? employeeToForm(employee) : EMPTY);
       setErrors({});
     }
-  }, [open]);
+  }, [open, employee]);
 
   const handle = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -67,6 +81,7 @@ export default function EmployeeForm({ open, onClose, onSubmit, submitting }: Pr
       phone: form.phone.trim(),
       department: form.department.trim(),
       roster: form.roster,
+      ...(isEdit && form.role ? { role: form.role } : {}),
     };
 
     try {
@@ -86,7 +101,7 @@ export default function EmployeeForm({ open, onClose, onSubmit, submitting }: Pr
       slotProps={{ paper: { sx: { overflow: "visible" } } }}
     >
       <DialogTitle sx={{ backgroundColor: "#1e293b", color: "#fff", py: 1.5 }}>
-        Add Employee
+        {isEdit ? "Edit Employee" : "Add Employee"}
       </DialogTitle>
 
       <DialogContent
@@ -129,6 +144,21 @@ export default function EmployeeForm({ open, onClose, onSubmit, submitting }: Pr
               }}
             />
           ))}
+          {isEdit && (
+            <FormControl fullWidth size="small" sx={{ gridColumn: { xs: "1", sm: "1 / -1" } }}>
+              <InputLabel>Role</InputLabel>
+              <Select
+                label="Role"
+                value={form.role ?? "employee"}
+                onChange={(e) =>
+                  setForm({ ...form, role: e.target.value as EmployeeFormData["role"] })
+                }
+              >
+                <MenuItem value="employee">Employee</MenuItem>
+                <MenuItem value="admin">Admin</MenuItem>
+              </Select>
+            </FormControl>
+          )}
           <FormControlLabel
             control={
               <Checkbox
@@ -151,7 +181,7 @@ export default function EmployeeForm({ open, onClose, onSubmit, submitting }: Pr
           sx={{ backgroundColor: "#2563eb" }}
           startIcon={submitting ? <CircularProgress size={16} color="inherit" /> : undefined}
         >
-          Add Employee
+          {isEdit ? "Save Changes" : "Add Employee"}
         </Button>
       </DialogActions>
     </Dialog>

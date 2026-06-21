@@ -3,19 +3,21 @@
 import {
   Table, TableHead, TableRow, TableCell,
   TableBody, TableContainer, Paper,
-  Chip,
+  Chip, IconButton, Tooltip,
 } from "@mui/material";
+import EditIcon from "@mui/icons-material/Edit";
 import type { Employee } from "@/lib/api";
 
 type Props = {
   employees: Employee[];
+  onEdit?: (employee: Employee) => void;
 };
 
-const COLUMNS = ["Name", "Email", "Phone", "Department", "Roster", "Employee ID", "Role"];
+const COLUMNS = ["Name", "Email", "Phone", "Department", "Roster", "Employee ID", "Role", "Actions"];
 
 const display = (value: string | null) => value || "—";
 
-export default function EmployeeTable({ employees }: Props) {
+export default function EmployeeTable({ employees, onEdit }: Props) {
   return (
     <TableContainer component={Paper} sx={{ borderRadius: 2, boxShadow: 2 }}>
       <Table>
@@ -39,7 +41,7 @@ export default function EmployeeTable({ employees }: Props) {
         <TableBody>
           {employees.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={7} align="center" sx={{ color: "#94a3b8", py: 4 }}>
+              <TableCell colSpan={8} align="center" sx={{ color: "#94a3b8", py: 4 }}>
                 No employees found. Add one to get started.
               </TableCell>
             </TableRow>
@@ -83,6 +85,19 @@ export default function EmployeeTable({ employees }: Props) {
                       textTransform: "capitalize",
                     }}
                   />
+                </TableCell>
+                <TableCell>
+                  {onEdit && (
+                    <Tooltip title="Edit employee">
+                      <IconButton
+                        size="small"
+                        onClick={() => onEdit(emp)}
+                        aria-label={`Edit ${emp.firstName} ${emp.lastName}`}
+                      >
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  )}
                 </TableCell>
               </TableRow>
             ))
