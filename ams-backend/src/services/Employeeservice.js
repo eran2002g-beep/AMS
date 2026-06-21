@@ -9,7 +9,7 @@ const Employee = require('../models/Employee');
 const createEmployee = async (data) => {
 
     // Destructure only the fields we accept - ignores any extra fields sent in the request
-    const { firstName, lastName, email, phone, department, role } = data;
+    const { firstName, lastName, email, phone, department, role, roster } = data;
 
     // ---------------------------- Validation ----------------------------
 
@@ -39,6 +39,7 @@ const createEmployee = async (data) => {
         phone,
         department,
         role,
+        roster,
     });
 
     // Return the newly created employee object back to the controller
