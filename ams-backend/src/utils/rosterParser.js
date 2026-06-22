@@ -80,7 +80,7 @@ const upload = multer({
 
 // ----------------------- COLUMN VALIDATION -----------------------
 // validateColumns - checks that all required columns exist in the parsed file
-// returns an error message string if any column is missing, or null if all present
+// returns an error message string if columns are missing, or null if all present
 const validateColumns = (headers) => {
     const missing = REQUIRED_COLUMNS.filter(col => !headers.includes(col));
 
@@ -92,12 +92,137 @@ const validateColumns = (headers) => {
     return null;
 };
 
+// ----------------------- DATE/TIME VALIDATION -----------------------
+// isValidCalendarDate - confirms day/month/year form a real calendar date
+const isValidCalendarDate = (year, month, day) => {
+    if (month < 1 || month > 12 || day < 1 || day > 31) {
+        return false;
+    }
+
+    const date = new Date(Date.UTC(year, month - 1, day));
+
+    return date.getUTCFullYear() === year &&
+           date.getUTCMonth() === month - 1 &&
+           date.getUTCDate() === day;
+};
+
+// validateTime - checks shift times are valid 24-hour HH:mm values
+const validateTime = (timeString, fieldName) => {
+    const trimmed = String(timeString ?? '').trim();
+
+    if (!trimmed) {
+        throw new Error(`${fieldName} is required. Expected HH:mm (24-hour), e.g. 08:00.`);
+    }
+
+    const match = trimmed.match(/^(\d{1,2}):([0-5]\d)$/);
+    if (!match) {
+        throw new Error(`Invalid ${fieldName} time "${timeString}". Expected HH:mm (24-hour), e.g. 08:00.`);
+    }
+
+    const hours = parseInt(match[1], 10);
+    if (hours > 23) {
+        throw new Error(`Invalid ${fieldName} time "${timeString}". Hour must be between 00 and 23.`);
+    }
+
+    return `${String(hours).padStart(2, '0')}:${match[2]}`;
+};
+
+// ----------------------- MONTH/YEAR EXTRACTOR -----------------------
+// extractMonthYear - pulls month, year and a normalised YYYY-MM-DD date string out of a date string
+// supports two formats:
+//   DD-MM-YY   e.g. "01-06-25"  → month: 6, year: 2025, normalizedDate: "2025-06-01"
+//   YYYY-MM-DD e.g. "2025-06-01" → month: 6, year: 2025, normalizedDate: "2025-06-01"
+const extractMonthYear = (dateString) => {
+    const trimmed = String(dateString ?? '').trim();
+
+    if (!trimmed) {
+        throw new Error('Date is required. Expected DD-MM-YY or YYYY-MM-DD.');
+    }
+
+    // ---- Format 1: DD-MM-YY (used in the CSV, e.g. 01-06-25) ----
+    const ddmmyyMatch = trimmed.match(/^(\d{2})-(\d{2})-(\d{2})$/);
+    if (ddmmyyMatch) {
+        const day   = parseInt(ddmmyyMatch[1], 10);
+        const month = parseInt(ddmmyyMatch[2], 10);
+        const year  = 2000 + parseInt(ddmmyyMatch[3], 10);
+
+        if (!isValidCalendarDate(year, month, day)) {
+            throw new Error(`Invalid date "${trimmed}". Expected a valid calendar date in DD-MM-YY format.`);
+        }
+
+        const normalizedDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+        return { month, year, normalizedDate };
+    }
+
+    // ---- Format 2: YYYY-MM-DD ----
+    const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (isoMatch) {
+        const year  = parseInt(isoMatch[1], 10);
+        const month = parseInt(isoMatch[2], 10);
+        const day   = parseInt(isoMatch[3], 10);
+
+        if (!isValidCalendarDate(year, month, day)) {
+            throw new Error(`Invalid date "${trimmed}". Expected a valid calendar date in YYYY-MM-DD format.`);
+        }
+
+        const normalizedDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+        return { month, year, normalizedDate };
+    }
+
+    throw new Error(`Invalid date format "${trimmed}". Expected DD-MM-YY or YYYY-MM-DD.`);
+};
+
+// ----------------------- ROW ENRICHER -----------------------
+// enrichRow - validates and normalises each row before bulk insert
+// if any row is invalid the whole upload is rejected (all-or-nothing)
+const enrichRow = (row, rowNumber) => {
+    const employeeId = String(row.employeeId ?? '').trim();
+
+    if (!employeeId) {
+        throw new Error(`Row ${rowNumber}: employeeId is required.`);
+    }
+
+    const rowLabel = `Row ${rowNumber} (employeeId ${employeeId})`;
+
+    let month;
+    let year;
+    let normalizedDate;
+
+    try {
+        ({ month, year, normalizedDate } = extractMonthYear(row.date));
+    } catch (err) {
+        throw new Error(`${rowLabel}: ${err.message}`);
+    }
+
+    let shiftStart;
+    let shiftEnd;
+
+    try {
+        shiftStart = validateTime(row.shiftStart, 'shiftStart');
+        shiftEnd   = validateTime(row.shiftEnd, 'shiftEnd');
+    } catch (err) {
+        throw new Error(`${rowLabel}: ${err.message}`);
+    }
+
+    return {
+        ...row,
+        employeeId,
+        date:       normalizedDate,
+        month,
+        year,
+        shiftStart,
+        shiftEnd,
+    };
+};
+
 // ----------------------- CSV PARSER -----------------------
-// parseCSV - reads a CSV file from disk and returns an array of row objects
-// uses a Promise so we can use async/await in the service
+// parseCSV - reads a CSV file from disk and returns an enriched array of row objects
 const parseCSV = (filePath) => {
     return new Promise((resolve, reject) => {
         const rows = [];
+        let rowNumber = 2; // row 1 is the header
 
         fs.createReadStream(filePath)
             .pipe(csv())
@@ -107,8 +232,12 @@ const parseCSV = (filePath) => {
                 if (error) reject(new Error(error));
             })
             .on('data', (row) => {
-                // Each row is pushed as a plain object e.g. { employeeId: 'EMP001', date: '2025-06-01', ... }
-                rows.push(row);
+                try {
+                    rows.push(enrichRow(row, rowNumber));
+                    rowNumber += 1;
+                } catch (err) {
+                    reject(err);
+                }
             })
             .on('end', () => {
                 // Reject empty files - no rows means nothing to process
@@ -123,7 +252,7 @@ const parseCSV = (filePath) => {
 };
 
 // ----------------------- EXCEL PARSER -----------------------
-// parseExcel - reads an .xlsx or .xls file from disk and returns an array of row objects
+// parseExcel - reads an .xlsx or .xls file and returns an enriched array of row objects
 const parseExcel = (filePath) => {
 
     // Read the workbook from the saved file path
@@ -133,25 +262,28 @@ const parseExcel = (filePath) => {
     const firstSheetName = workbook.SheetNames[0];
     const worksheet      = workbook.Sheets[firstSheetName];
 
-    // sheet_to_json converts each row into a plain JS object using the header row as keys
-    const rows = xlsx.utils.sheet_to_json(worksheet);
+    // sheet_to_json converts the sheet into an array of plain JS objects
+    // raw: false tells xlsx to return formatted strings instead of raw serial numbers
+    // this ensures dates come out as readable strings not Excel serial numbers e.g. 45443
+    const rows = xlsx.utils.sheet_to_json(worksheet, { raw: false });
 
     // Reject empty files
     if (rows.length === 0) {
         throw new Error('The uploaded Excel file is empty.');
     }
 
-    // Validate that all required columns exist using the keys of the first row
+    // Validate required columns using keys of the first row
     const headers = Object.keys(rows[0]);
     const error   = validateColumns(headers);
     if (error) throw new Error(error);
 
-    return rows;
+    // Validate and enrich every row before returning
+    return rows.map((row, index) => enrichRow(row, index + 2));
 };
 
 // ----------------------- MAIN PARSE FUNCTION -----------------------
 // parseRosterFile - decides which parser to use based on file extension
-// called by the roster service after multer saves the file to disk
+// returns enriched rows ready to be bulk inserted into the roster_entries table
 const parseRosterFile = async (filePath, originalName) => {
     const ext = path.extname(originalName).toLowerCase();
 
@@ -163,13 +295,12 @@ const parseRosterFile = async (filePath, originalName) => {
         return parseExcel(filePath);
     }
 
-    // Should never reach here because multer fileFilter already blocks invalid formats
-    // but kept as a safety net
+    // Safety net - multer fileFilter already blocks invalid formats before reaching here
     throw new Error('Unsupported file format.');
 };
 
-// Export upload middleware and the parser for use in routes and services
 module.exports = {
-    upload,          // used in the route: router.post('/upload', upload.single('file'), ...)
-    parseRosterFile, // used in the service after the file is saved
+    upload,            // used in the route: router.post('/upload', upload.single('file'), ...)
+    parseRosterFile,   // used in the service to get enriched rows after file is saved
+    extractMonthYear,  // used by roster view to normalise date query params
 };
