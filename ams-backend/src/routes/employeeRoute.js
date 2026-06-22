@@ -36,7 +36,7 @@ router.post('/create', async (req, res) => {
 });
 
 // -----------------------------------------------------------------------
-// DELETE /employee/:employeeId - Soft delete an employee record
+// DELETE /employee/:employeeId - delete an employee record
 // -----------------------------------------------------------------------
 router.delete('/:employeeId', async (req, res) => {
     try {
