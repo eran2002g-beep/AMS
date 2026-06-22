@@ -143,6 +143,13 @@ export const employeeApi = {
     );
     return response.data.data;
   },
+
+  async delete(employeeId: string) {
+    const response = await api.delete<{ success: boolean; message: string }>(
+      `/employee/${employeeId}`,
+    );
+    return response.data;
+  },
 };
 
 // ─────────────────────────────────── Roster API ───────────────────────────────────

@@ -22,6 +22,7 @@ export default function EmployeesPage() {
   const [filters, setFilters] = useState<EmployeeFilters>(EMPTY_FILTERS);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [deletingEmployeeId, setDeletingEmployeeId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -81,6 +82,22 @@ export default function EmployeesPage() {
       throw err;
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (employee: Employee) => {
+    setDeletingEmployeeId(employee.employeeId);
+    setError("");
+    setSuccess("");
+    try {
+      const result = await employeeApi.delete(employee.employeeId);
+      setEmployees((prev) => prev.filter((emp) => emp.employeeId !== employee.employeeId));
+      setSuccess(result.message);
+    } catch (err) {
+      setError(getErrorMessage(err));
+      throw err;
+    } finally {
+      setDeletingEmployeeId(null);
     }
   };
 
@@ -148,7 +165,12 @@ export default function EmployeesPage() {
           <CircularProgress />
         </Box>
       ) : (
-        <EmployeeTable employees={filtered} onEdit={openEditForm} />
+        <EmployeeTable
+          employees={filtered}
+          onEdit={openEditForm}
+          onDelete={handleDelete}
+          deletingEmployeeId={deletingEmployeeId}
+        />
       )}
 
       <EmployeeForm
