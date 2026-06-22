@@ -9,11 +9,15 @@ const employeeService = require('../services/employeeService');
 // -----------------------------------------------------------------------
 router.get('/', async (req, res) => {
     try {
-        const employees = await employeeService.getAllEmployees();
+        const { q, department, role, page, limit } = req.query;
+
+        const result = await employeeService.searchEmployees({ q, department, role, page, limit });
+
         return res.status(200).json({
             success: true,
-            count: employees.length,
-            data: employees
+            meta: result.meta,
+            count: result.meta.total,
+            data: result.employees
         });
     } catch (err) {
         return res.status(500).json({ 

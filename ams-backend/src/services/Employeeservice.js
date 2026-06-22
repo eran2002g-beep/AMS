@@ -47,17 +47,49 @@ const createEmployee = async (data) => {
 };
 
 // -----------------------------------------------------------------------
-//  getAllEmployees - Fetches all active employee records from Neon DB
+//  searchEmployees - Fetches active employee records with optional filters
+//  Supports: q (search across firstName,lastName,email,employeeId), department, role, pagination
 // -----------------------------------------------------------------------
-const getAllEmployees = async () => {
+const { Op } = require('sequelize');
+
+const searchEmployees = async (opts = {}) => {
     try {
-        
-        const employees = await Employee.findAll({
-            where: {
-                isActive: true
-            }
+        const {
+            q, // search text
+            department,
+            role,
+            page = 1,
+            limit = 50,
+        } = opts;
+
+        const where = { isActive: true };
+
+        if (department) where.department = department;
+        if (role) where.role = role;
+
+        if (q) {
+            const like = { [Op.iLike]: `%${q}%` };
+            where[Op.or] = [
+                { firstName: like },
+                { lastName: like },
+                { email: like },
+                { employeeId: like },
+            ];
+        }
+
+        const offset = (Math.max(parseInt(page, 10) || 1, 1) - 1) * (parseInt(limit, 10) || 50);
+
+        const { rows: employees, count: total } = await Employee.findAndCountAll({
+            where,
+            limit: parseInt(limit, 10) || 50,
+            offset,
+            order: [['lastName', 'ASC'], ['firstName', 'ASC']],
         });
-        return employees;
+
+        return {
+            employees,
+            meta: { total, page: parseInt(page, 10) || 1, limit: parseInt(limit, 10) || 50 }
+        };
     } catch (error) {
         throw new Error("Database Retrieval Error: " + error.message);
     }
@@ -69,7 +101,7 @@ const getAllEmployees = async () => {
 // returns the updated employee object
 // -----------------------------------------------------------------------
 const updateEmployee = async (employeeId, updateData) => {
-    
+
     // Check that the employee exists first
     const employee = await Employee.findOne({ where: { employeeId } });
     
@@ -104,9 +136,16 @@ const updateEmployee = async (employeeId, updateData) => {
     return updatedEmployee;
 };
 
+// getAllEmployees - backward-compatible wrapper that returns only the list
+const getAllEmployees = async () => {
+    const result = await searchEmployees();
+    return result.employees;
+};
+
 // Export all service functions - add new ones here as we build more features
 module.exports = {
     createEmployee,
     getAllEmployees,
-    updateEmployee, 
+    searchEmployees,
+    updateEmployee,
 };
