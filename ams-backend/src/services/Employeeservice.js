@@ -54,6 +54,7 @@ const { Op } = require('sequelize');
 
 const searchEmployees = async (opts = {}) => {
     try {
+<<<<<<< HEAD
         const {
             q, // search text
             department,
@@ -84,6 +85,12 @@ const searchEmployees = async (opts = {}) => {
             limit: parseInt(limit, 10) || 50,
             offset,
             order: [['lastName', 'ASC'], ['firstName', 'ASC']],
+=======
+        const employees = await Employee.findAll({
+            where: {
+                isActive: true
+            }
+>>>>>>> 4a917d44f0b6dfbb6ec36a5e3dc7b02bade504eb
         });
 
         return {
@@ -96,7 +103,33 @@ const searchEmployees = async (opts = {}) => {
 };
 
 // -----------------------------------------------------------------------
-// updateEmployee - updates an existing employee record
+// Soft Delete Employee - Sets isActive to false using employeeId
+// -----------------------------------------------------------------------
+const deleteEmployeeById = async (employeeId) => {
+    // Check if employeeId is provided
+    if (!employeeId) {
+        throw new Error('Employee ID is required to perform deletion.');
+    }
+
+    // 1. Find the active employee with the given employeeId
+    const employee = await Employee.findOne({ 
+        where: { employeeId, isActive: true } 
+    });
+
+    // 2. If no active employee is found, throw a 404-specific error message
+    if (!employee) {
+        throw new Error(`Active employee with ID ${employeeId} not found.`);
+    }
+
+    // 3. Perform a soft delete by setting isActive status to false
+    employee.isActive = false;
+    await employee.save();
+
+    return employee;
+};
+
+// -----------------------------------------------------------------------
+// updates an existing employee record
 // accepts employeeId and a data object with fields to update
 // returns the updated employee object
 // -----------------------------------------------------------------------
@@ -145,7 +178,13 @@ const getAllEmployees = async () => {
 // Export all service functions - add new ones here as we build more features
 module.exports = {
     createEmployee,
+<<<<<<< HEAD
     getAllEmployees,
     searchEmployees,
     updateEmployee,
+=======
+    getAllEmployees, 
+    deleteEmployeeById, // Retained soft delete functionality
+    updateEmployee,     // Retained update functionality
+>>>>>>> 4a917d44f0b6dfbb6ec36a5e3dc7b02bade504eb
 };
