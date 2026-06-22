@@ -48,7 +48,7 @@ router.delete('/:employeeId', async (req, res) => {
         
         return res.status(200).json({
             success: true,
-            message: `Employee ${employeeId} has been successfully deactivated (Soft Deleted).`
+            message: `Employee ${employeeId} has been successfully deleted.`
         });
     } catch (err) {
         // Return 404 if employee was not found, otherwise default to 500 server error
