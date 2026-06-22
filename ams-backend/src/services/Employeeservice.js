@@ -54,7 +54,6 @@ const { Op } = require('sequelize');
 
 const searchEmployees = async (opts = {}) => {
     try {
-<<<<<<< HEAD
         const {
             q, // search text
             department,
@@ -85,12 +84,6 @@ const searchEmployees = async (opts = {}) => {
             limit: parseInt(limit, 10) || 50,
             offset,
             order: [['lastName', 'ASC'], ['firstName', 'ASC']],
-=======
-        const employees = await Employee.findAll({
-            where: {
-                isActive: true
-            }
->>>>>>> 4a917d44f0b6dfbb6ec36a5e3dc7b02bade504eb
         });
 
         return {
@@ -178,13 +171,7 @@ const getAllEmployees = async () => {
 // Export all service functions - add new ones here as we build more features
 module.exports = {
     createEmployee,
-<<<<<<< HEAD
     getAllEmployees,
     searchEmployees,
     updateEmployee,
-=======
-    getAllEmployees, 
-    deleteEmployeeById, // Retained soft delete functionality
-    updateEmployee,     // Retained update functionality
->>>>>>> 4a917d44f0b6dfbb6ec36a5e3dc7b02bade504eb
 };
