@@ -89,7 +89,7 @@ const deleteEmployeeById = async (employeeId) => {
 };
 
 // -----------------------------------------------------------------------
-// updateEmployee - updates an existing employee record
+// updates an existing employee record
 // accepts employeeId and a data object with fields to update
 // returns the updated employee object
 // -----------------------------------------------------------------------
