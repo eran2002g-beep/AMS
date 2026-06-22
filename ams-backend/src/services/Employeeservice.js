@@ -50,7 +50,6 @@ const createEmployee = async (data) => {
 // -----------------------------------------------------------------------
 const getAllEmployees = async () => {
     try {
-        
         const employees = await Employee.findAll({
             where: {
                 isActive: true
@@ -62,8 +61,35 @@ const getAllEmployees = async () => {
     }
 };
 
+// -----------------------------------------------------------------------
+// Soft Delete Employee - Sets isActive to false using employeeId
+// -----------------------------------------------------------------------
+const deleteEmployeeById = async (employeeId) => {
+    // Check if employeeId is provided
+    if (!employeeId) {
+        throw new Error('Employee ID is required to perform deletion.');
+    }
+
+    // 1. Find the active employee with the given employeeId
+    const employee = await Employee.findOne({ 
+        where: { employeeId, isActive: true } 
+    });
+
+    // 2. If no active employee is found, throw a 404-specific error message
+    if (!employee) {
+        throw new Error(`Active employee with ID ${employeeId} not found.`);
+    }
+
+    // 3. Perform a soft delete by setting isActive status to false
+    employee.isActive = false;
+    await employee.save();
+
+    return employee;
+};
+
 // Export all service functions - add new ones here as we build more features
 module.exports = {
     createEmployee,
     getAllEmployees, 
+    deleteEmployeeById, // Added for soft delete functionality
 };
