@@ -2,51 +2,26 @@
 import {
   Box, TextField, FormControl, InputLabel, Select, MenuItem, Button,
 } from "@mui/material";
-import type { Employee } from "@/lib/api";
 
 export type EmployeeFilters = {
   search: string;
   department: string;
-  roster: "" | "yes" | "no";
+  role: "" | "admin" | "employee";
 };
 
 export const EMPTY_FILTERS: EmployeeFilters = {
   search: "",
   department: "",
-  roster: "",
+  role: "",
 };
 
 export function hasActiveFilters(filters: EmployeeFilters): boolean {
-  return filters.search.trim() !== "" || filters.department !== "" || filters.roster !== "";
+  return filters.search.trim() !== "" || filters.department !== "" || filters.role !== "";
 }
 
-export function filterEmployees(employees: Employee[], filters: EmployeeFilters): Employee[] {
-  const query = filters.search.trim().toLowerCase();
-
-  return employees.filter((emp) => {
-    if (filters.department && emp.department !== filters.department) return false;
-    if (filters.roster === "yes" && emp.roster !== true) return false;
-    if (filters.roster === "no" && emp.roster === true) return false;
-
-    if (!query) return true;
-
-    const haystack = [
-      emp.firstName,
-      emp.lastName,
-      `${emp.firstName} ${emp.lastName}`,
-      emp.email,
-      emp.phone ?? "",
-      emp.department ?? "",
-      emp.employeeId,
-    ]
-      .join(" ")
-      .toLowerCase();
-
-    return haystack.includes(query);
-  });
-}
-
-export function getDepartments(employees: Employee[]): string[] {
+export function getDepartmentsFromEmployees(
+  employees: { department: string | null }[],
+): string[] {
   const set = new Set<string>();
   for (const emp of employees) {
     if (emp.department) set.add(emp.department);
@@ -70,10 +45,10 @@ export default function EmployeeFilterBar({ filters, departments, onChange, onCl
     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, alignItems: "center" }}>
       <TextField
         size="small"
-        placeholder="Search employees…"
+        placeholder="Search name, email, or ID…"
         value={filters.search}
         onChange={(e) => update({ search: e.target.value })}
-        sx={{ width: { xs: "100%", sm: 220 } }}
+        sx={{ width: { xs: "100%", sm: 260 } }}
       />
 
       <FormControl size="small" sx={{ minWidth: 160 }}>
@@ -92,16 +67,16 @@ export default function EmployeeFilterBar({ filters, departments, onChange, onCl
       </FormControl>
 
       <FormControl size="small" sx={{ minWidth: 160 }}>
-        <InputLabel id="roster-filter-label">Roster</InputLabel>
+        <InputLabel id="role-filter-label">Role</InputLabel>
         <Select
-          labelId="roster-filter-label"
-          label="Roster"
-          value={filters.roster}
-          onChange={(e) => update({ roster: e.target.value as EmployeeFilters["roster"] })}
+          labelId="role-filter-label"
+          label="Role"
+          value={filters.role}
+          onChange={(e) => update({ role: e.target.value as EmployeeFilters["role"] })}
         >
           <MenuItem value="">All</MenuItem>
-          <MenuItem value="yes">On roster</MenuItem>
-          <MenuItem value="no">Not on roster</MenuItem>
+          <MenuItem value="admin">Admin</MenuItem>
+          <MenuItem value="employee">Employee</MenuItem>
         </Select>
       </FormControl>
 

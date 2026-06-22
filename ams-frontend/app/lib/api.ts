@@ -115,12 +115,45 @@ export type RosterUploadResponse = {
   insertedRows: RosterEntry[];
 };
 
+export type EmployeeListParams = {
+  q?: string;
+  department?: string;
+  role?: "admin" | "employee";
+  page?: number;
+  limit?: number;
+};
+
+export type EmployeeListMeta = {
+  total: number;
+  page: number;
+  limit: number;
+};
+
+export type EmployeeListResponse = {
+  success: boolean;
+  meta: EmployeeListMeta;
+  count: number;
+  data: Employee[];
+};
+
 // ─────────────────────────────────── Employee API ───────────────────────────────────
 
 export const employeeApi = {
-  async list() {
-    const response = await api.get<{ success: boolean; count: number; data: Employee[] }>("/employee");
-    return response.data.data;
+  async list(params: EmployeeListParams = {}) {
+    const query: Record<string, string | number> = {
+      page: params.page ?? 1,
+      limit: params.limit ?? 20,
+    };
+    if (params.q) query.q = params.q;
+    if (params.department) query.department = params.department;
+    if (params.role) query.role = params.role;
+
+    const response = await api.get<EmployeeListResponse>("/employee", { params: query });
+    const body = response.data;
+    if (!body.success) {
+      throw new Error("Failed to load employees");
+    }
+    return { employees: body.data, meta: body.meta };
   },
 
   async create(payload: EmployeeFormData) {
