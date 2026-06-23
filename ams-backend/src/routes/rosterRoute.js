@@ -4,6 +4,21 @@ const router  = express.Router();
 const { upload } = require('../utils/rosterParser');
 const rosterService = require('../services/rosterService');
 
+//Roster dlete implementation by Ahamed..
+const isAdmin = require("../middleware/isAdmin");
+const {
+  deleteRosterByDate,
+  deleteRostersByMonth,
+} = require("../controllers/rosterController");
+
+// dlete bydDate=YYYY-MM-DD....
+router.delete("/by-date", isAdmin, deleteRosterByDate);
+
+// dlete byMonth=MM&year=YYYY.....
+router.delete("/by-month", isAdmin, deleteRostersByMonth);
+
+
+
 // POST /roster/upload - upload a roster CSV/Excel file, parse it, and save all entries to the DB
 
 // Request: multipart/form-data - file (required) : the roster file (.csv, .xlsx, .xls)
