@@ -1,4 +1,4 @@
-const sql = require("../db/neon");
+const rosterService = require("../services/rosterService");
 
 // DELETE /roster/by-date?date=YYYY-MM-DD
 const deleteRosterByDate = async (req, res) => {
@@ -20,30 +20,20 @@ const deleteRosterByDate = async (req, res) => {
   }
 
   try {
-    const existing = await sql`
-      SELECT id FROM roster
-      WHERE date = ${date}::date
-      LIMIT 1
-    `;
+    const result = await rosterService.deleteRosterByDate(date);
 
-    if (existing.length === 0) {
+    if (!result) {
       return res.status(404).json({
         success: false,
         message: `No roster found for date ${date}.`,
       });
     }
 
-    const deleted = await sql`
-      DELETE FROM roster
-      WHERE date = ${date}::date
-      RETURNING *
-    `;
-
     return res.status(200).json({
       success: true,
       message: `Roster for ${date} deleted successfully.`,
-      deletedCount: deleted.length,
-      deletedRosters: deleted,
+      deletedCount: result.deletedCount,
+      deletedRosters: result.deletedRosters,
     });
   } catch (error) {
     console.error("Error deleting roster by date:", error);
@@ -74,33 +64,20 @@ const deleteRostersByMonth = async (req, res) => {
   }
 
   try {
-    const existing = await sql`
-      SELECT COUNT(*) AS count FROM roster
-      WHERE EXTRACT(MONTH FROM date) = ${parseInt(month)}
-        AND EXTRACT(YEAR  FROM date) = ${parseInt(year)}
-    `;
+    const result = await rosterService.deleteRostersByMonth(month, year);
 
-    const count = parseInt(existing[0].count);
-
-    if (count === 0) {
+    if (!result) {
       return res.status(404).json({
         success: false,
         message: `No rosters found for ${month}/${year}.`,
       });
     }
 
-    const deleted = await sql`
-      DELETE FROM roster
-      WHERE EXTRACT(MONTH FROM date) = ${parseInt(month)}
-        AND EXTRACT(YEAR  FROM date) = ${parseInt(year)}
-      RETURNING *
-    `;
-
     return res.status(200).json({
       success: true,
-      message: `${deleted.length} roster(s) for ${month}/${year} deleted successfully.`,
-      deletedCount: deleted.length,
-      deletedRosters: deleted,
+      message: `${result.deletedCount} roster(s) for ${month}/${year} deleted successfully.`,
+      deletedCount: result.deletedCount,
+      deletedRosters: result.deletedRosters,
     });
   } catch (error) {
     console.error("Error deleting rosters by month/year:", error);

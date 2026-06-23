@@ -107,7 +107,40 @@ const getRosterView = async (filters) => {
     return { entries, applied };
 };
 
+// deleteRosterByDate - remove all roster entries for a single date
+const deleteRosterByDate = async (date) => {
+    const existing = await Roster.findAll({ where: { date } });
+    if (existing.length === 0) {
+        return null;
+    }
+
+    await Roster.destroy({ where: { date } });
+
+    return {
+        deletedCount: existing.length,
+        deletedRosters: existing.map((r) => r.toJSON()),
+    };
+};
+
+// deleteRostersByMonth - remove all roster entries for a given month and year
+const deleteRostersByMonth = async (month, year) => {
+    const where = { month: parseInt(month, 10), year: parseInt(year, 10) };
+    const existing = await Roster.findAll({ where });
+    if (existing.length === 0) {
+        return null;
+    }
+
+    await Roster.destroy({ where });
+
+    return {
+        deletedCount: existing.length,
+        deletedRosters: existing.map((r) => r.toJSON()),
+    };
+};
+
 module.exports = {
     uploadRoster,
     getRosterView,
+    deleteRosterByDate,
+    deleteRostersByMonth,
 };

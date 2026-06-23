@@ -174,4 +174,5 @@ module.exports = {
     getAllEmployees,
     searchEmployees,
     updateEmployee,
+    deleteEmployeeById,
 };

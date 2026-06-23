@@ -37,14 +37,20 @@ const PORT = process.env.PORT || 3000;
 // Step 1 - test the database connection
 sequelize.authenticate()
 
-    // Step 2 - create or update tables to match model definitions
-    // alter: true updates existing tables safely without deleting data
+    // Step 2 - apply known schema patches (sync alter alone is unreliable on PostgreSQL)
     .then(() => {
         console.log('Neon database connected successfully.');
-        return sequelize.sync({ alter: true });
+        return sequelize.query(`
+            ALTER TABLE employees
+            ADD COLUMN IF NOT EXISTS roster BOOLEAN NOT NULL DEFAULT false;
+        `);
     })
 
-    // Step 3 - start the server only after the database is ready
+    // Step 3 - create or update tables to match model definitions
+    // alter: true updates existing tables safely without deleting data
+    .then(() => sequelize.sync({ alter: true }))
+
+    // Step 4 - start the server only after the database is ready
     .then(() => {
         console.log('Models synced with the database.');
         app.listen(PORT, () => {
