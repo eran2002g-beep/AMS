@@ -7,15 +7,34 @@ import {
   TableBody, TableContainer,
   Alert, CircularProgress,
   TextField, MenuItem,
+  IconButton, Tooltip,
+  Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions,
 } from "@mui/material";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import SearchIcon from "@mui/icons-material/Search";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { rosterApi, type RosterEntry, type RosterViewFilters, getErrorMessage } from "@/lib/api";
 
 const now = new Date();
 
 function defaultFilters(): RosterViewFilters {
   return { year: now.getFullYear(), month: now.getMonth() + 1 };
+}
+
+function parseMonthYear(yearStr: string, monthStr: string): { year: number; month: number } | string {
+  const parsedYear = Number(yearStr);
+  const parsedMonth = Number(monthStr);
+  if (!Number.isInteger(parsedYear) || parsedYear < 2000 || parsedYear > 2099) {
+    return "Year must be between 2000 and 2099.";
+  }
+  if (!Number.isInteger(parsedMonth) || parsedMonth < 1 || parsedMonth > 12) {
+    return "Month must be between 1 and 12.";
+  }
+  return { year: parsedYear, month: parsedMonth };
+}
+
+function monthName(month: number): string {
+  return new Date(2000, month - 1, 1).toLocaleString("default", { month: "long" });
 }
 
 export default function RostersPage() {
@@ -31,6 +50,10 @@ export default function RostersPage() {
   const [success, setSuccess] = useState("");
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [confirmDeleteMonth, setConfirmDeleteMonth] = useState(false);
+  const [deletingMonth, setDeletingMonth] = useState(false);
+  const [confirmDeleteDate, setConfirmDeleteDate] = useState<string | null>(null);
+  const [deletingDate, setDeletingDate] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const loadRoster = useCallback(async (filters: { date?: string; year?: number; month?: number }) => {
@@ -59,19 +82,65 @@ export default function RostersPage() {
       }
       setAppliedFilters({ date: date.trim() });
     } else {
-      const parsedYear = Number(year);
-      const parsedMonth = Number(month);
-      if (!Number.isInteger(parsedYear) || parsedYear < 2000 || parsedYear > 2099) {
-        setError("Year must be between 2000 and 2099.");
+      const parsed = parseMonthYear(year, month);
+      if (typeof parsed === "string") {
+        setError(parsed);
         return;
       }
-      if (!Number.isInteger(parsedMonth) || parsedMonth < 1 || parsedMonth > 12) {
-        setError("Month must be between 1 and 12.");
-        return;
-      }
-      setAppliedFilters({ year: parsedYear, month: parsedMonth });
+      setAppliedFilters({ year: parsed.year, month: parsed.month });
     }
     setError("");
+  };
+
+  const handleDeleteMonthClick = () => {
+    const parsed = parseMonthYear(year, month);
+    if (typeof parsed === "string") {
+      setError(parsed);
+      return;
+    }
+    setError("");
+    setConfirmDeleteMonth(true);
+  };
+
+  const handleConfirmDeleteMonth = async () => {
+    const parsed = parseMonthYear(year, month);
+    if (typeof parsed === "string") {
+      setError(parsed);
+      setConfirmDeleteMonth(false);
+      return;
+    }
+
+    setDeletingMonth(true);
+    setError("");
+    setSuccess("");
+    try {
+      const result = await rosterApi.deleteByMonth(parsed.month, parsed.year);
+      setSuccess(result.message);
+      setConfirmDeleteMonth(false);
+      await loadRoster(appliedFilters);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setDeletingMonth(false);
+    }
+  };
+
+  const handleConfirmDeleteDate = async () => {
+    if (!confirmDeleteDate) return;
+
+    setDeletingDate(confirmDeleteDate);
+    setError("");
+    setSuccess("");
+    try {
+      const result = await rosterApi.deleteByDate(confirmDeleteDate);
+      setSuccess(result.message);
+      setConfirmDeleteDate(null);
+      await loadRoster(appliedFilters);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setDeletingDate(null);
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -123,6 +192,12 @@ export default function RostersPage() {
   const filterLabel = appliedFilters.date
     ? `Date: ${appliedFilters.date}`
     : `Year: ${appliedFilters.year}, Month: ${appliedFilters.month}`;
+
+  const parsedMonthYear = parseMonthYear(year, month);
+  const deleteMonthLabel =
+    typeof parsedMonthYear === "string"
+      ? "Delete Month"
+      : `Delete ${monthName(parsedMonthYear.month)} ${parsedMonthYear.year}`;
 
   return (
     <Box>
@@ -237,6 +312,18 @@ export default function RostersPage() {
           >
             Search
           </Button>
+
+          {filterMode === "month" && (
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<DeleteIcon />}
+              onClick={handleDeleteMonthClick}
+              disabled={deletingMonth}
+            >
+              Delete Month
+            </Button>
+          )}
         </Box>
       </Paper>
 
@@ -255,7 +342,7 @@ export default function RostersPage() {
           <Table>
             <TableHead>
               <TableRow sx={{ backgroundColor: "#1e293b" }}>
-                {["Employee ID", "Date", "Shift Start", "Shift End", "Batch ID"].map((col) => (
+                {["Employee ID", "Date", "Shift Start", "Shift End", "Batch ID", "Actions"].map((col) => (
                   <TableCell
                     key={col}
                     sx={{ color: "#fff", fontWeight: 700, fontSize: "0.8rem", textTransform: "uppercase" }}
@@ -268,7 +355,7 @@ export default function RostersPage() {
             <TableBody>
               {entries.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} align="center" sx={{ color: "#94a3b8", py: 4 }}>
+                  <TableCell colSpan={6} align="center" sx={{ color: "#94a3b8", py: 4 }}>
                     No roster shifts found for the selected period.
                   </TableCell>
                 </TableRow>
@@ -280,6 +367,19 @@ export default function RostersPage() {
                     <TableCell>{entry.shiftStart}</TableCell>
                     <TableCell>{entry.shiftEnd}</TableCell>
                     <TableCell>{entry.rosterId}</TableCell>
+                    <TableCell>
+                      <Tooltip title="Delete all shifts for this date">
+                        <IconButton
+                          size="small"
+                          onClick={() => setConfirmDeleteDate(entry.date)}
+                          disabled={deletingDate !== null}
+                          aria-label={`Delete roster for ${entry.date}`}
+                          sx={{ color: "#dc2626" }}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
                   </TableRow>
                 ))
               )}
@@ -287,6 +387,74 @@ export default function RostersPage() {
           </Table>
         )}
       </TableContainer>
+
+      <Dialog
+        open={confirmDeleteMonth}
+        onClose={() => !deletingMonth && setConfirmDeleteMonth(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ backgroundColor: "#1e293b", color: "#fff", py: 1.5 }}>
+          Delete Month
+        </DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          <DialogContentText>
+            {typeof parsedMonthYear !== "string" && (
+              <>
+                Delete all roster shifts for <strong>{monthName(parsedMonthYear.month)} {parsedMonthYear.year}</strong>?
+                This cannot be undone.
+              </>
+            )}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 1.5 }}>
+          <Button onClick={() => setConfirmDeleteMonth(false)} disabled={deletingMonth}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleConfirmDeleteMonth}
+            disabled={deletingMonth}
+          >
+            {deletingMonth ? "Deleting…" : deleteMonthLabel}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={confirmDeleteDate !== null}
+        onClose={() => !deletingDate && setConfirmDeleteDate(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ backgroundColor: "#1e293b", color: "#fff", py: 1.5 }}>
+          Delete Roster by Date
+        </DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          <DialogContentText>
+            {confirmDeleteDate && (
+              <>
+                Delete all roster shifts for <strong>{confirmDeleteDate}</strong>?
+                This removes every employee&apos;s shift on that day.
+              </>
+            )}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 1.5 }}>
+          <Button onClick={() => setConfirmDeleteDate(null)} disabled={!!deletingDate}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleConfirmDeleteDate}
+            disabled={!!deletingDate}
+          >
+            {deletingDate ? "Deleting…" : "Delete"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

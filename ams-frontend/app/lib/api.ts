@@ -9,6 +9,7 @@ export const api = axios.create({
 
 type ApiErrorBody = {
   error?: string;
+  message?: string;
   success?: boolean;
   status?: string;
 };
@@ -16,6 +17,7 @@ type ApiErrorBody = {
 export function getErrorMessage(err: unknown): string {
   if (axios.isAxiosError(err)) {
     const data = err.response?.data as ApiErrorBody | undefined;
+    if (data?.message) return data.message;
     if (data?.error) return data.error;
     return err.message;
   }
@@ -115,6 +117,13 @@ export type RosterUploadResponse = {
   insertedRows: RosterEntry[];
 };
 
+export type RosterDeleteResponse = {
+  success: boolean;
+  message: string;
+  deletedCount?: number;
+  deletedRosters?: RosterEntry[];
+};
+
 export type EmployeeListParams = {
   q?: string;
   department?: string;
@@ -210,5 +219,27 @@ export const rosterApi = {
     });
 
     return response.data;
+  },
+
+  async deleteByMonth(month: number, year: number) {
+    const response = await api.delete<RosterDeleteResponse>("/roster/by-month", {
+      params: { month, year },
+    });
+    const body = response.data;
+    if (!body.success) {
+      throw new Error(body.message || "Delete failed");
+    }
+    return body;
+  },
+
+  async deleteByDate(date: string) {
+    const response = await api.delete<RosterDeleteResponse>("/roster/by-date", {
+      params: { date },
+    });
+    const body = response.data;
+    if (!body.success) {
+      throw new Error(body.message || "Delete failed");
+    }
+    return body;
   },
 };
