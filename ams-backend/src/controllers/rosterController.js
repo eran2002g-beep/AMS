@@ -1,16 +1,13 @@
 const sql = require("../db/neon");
 
-// ─────────────────────────────────────────────
-// DELETE /api/rosters/by-date?date=YYYY-MM-DD
-// Delete a single roster by exact date
-// ─────────────────────────────────────────────
+// DELETE /roster/by-date?date=YYYY-MM-DD
 const deleteRosterByDate = async (req, res) => {
   const { date } = req.query;
 
   if (!date) {
     return res.status(400).json({
       success: false,
-      message: "Query parameter 'date' is required (e.g., 2024-06-15).",
+      message: "Query parameter 'date' is required (e.g., 2025-06-01).",
     });
   }
 
@@ -23,10 +20,9 @@ const deleteRosterByDate = async (req, res) => {
   }
 
   try {
-    // Check if roster exists for this date
     const existing = await sql`
-      SELECT id, name FROM rosters
-      WHERE schedule_date = ${date}::date
+      SELECT id FROM roster
+      WHERE date = ${date}::date
       LIMIT 1
     `;
 
@@ -37,31 +33,29 @@ const deleteRosterByDate = async (req, res) => {
       });
     }
 
-    // Delete the roster
     const deleted = await sql`
-      DELETE FROM rosters
-      WHERE schedule_date = ${date}::date
-      RETURNING id, name, schedule_date
+      DELETE FROM roster
+      WHERE date = ${date}::date
+      RETURNING *
     `;
 
     return res.status(200).json({
       success: true,
-      message: `Roster for ${date} deleted successfully..`,
-      deletedRoster: deleted[0],
+      message: `Roster for ${date} deleted successfully.`,
+      deletedCount: deleted.length,
+      deletedRosters: deleted,
     });
   } catch (error) {
     console.error("Error deleting roster by date:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error. Failed to delete roster.",
+      error: error.message,
     });
   }
 };
 
-// ─────────────────────────────────────────────
-// DELETE /api/rosters/by-month?month=MM&year=YYYY
-// Delete all rosters matching a specific month and year
-// ─────────────────────────────────────────────
+// DELETE /roster/by-month?month=MM&year=YYYY
 const deleteRostersByMonth = async (req, res) => {
   const { month, year } = req.query;
 
@@ -75,16 +69,15 @@ const deleteRostersByMonth = async (req, res) => {
   if (!year || isNaN(year) || year.toString().length !== 4) {
     return res.status(400).json({
       success: false,
-      message: "Valid query parameter 'year' is required (e.g., 2024).",
+      message: "Valid query parameter 'year' is required (e.g., 2025).",
     });
   }
 
   try {
-    // Check if any rosters exist for this month/year
     const existing = await sql`
-      SELECT COUNT(*) AS count FROM rosters
-      WHERE EXTRACT(MONTH FROM schedule_date) = ${parseInt(month)}
-        AND EXTRACT(YEAR  FROM schedule_date) = ${parseInt(year)}
+      SELECT COUNT(*) AS count FROM roster
+      WHERE EXTRACT(MONTH FROM date) = ${parseInt(month)}
+        AND EXTRACT(YEAR  FROM date) = ${parseInt(year)}
     `;
 
     const count = parseInt(existing[0].count);
@@ -96,12 +89,11 @@ const deleteRostersByMonth = async (req, res) => {
       });
     }
 
-    // Delete all rosters for that month and year
     const deleted = await sql`
-      DELETE FROM rosters
-      WHERE EXTRACT(MONTH FROM schedule_date) = ${parseInt(month)}
-        AND EXTRACT(YEAR  FROM schedule_date) = ${parseInt(year)}
-      RETURNING id, name, schedule_date
+      DELETE FROM roster
+      WHERE EXTRACT(MONTH FROM date) = ${parseInt(month)}
+        AND EXTRACT(YEAR  FROM date) = ${parseInt(year)}
+      RETURNING *
     `;
 
     return res.status(200).json({
@@ -115,6 +107,7 @@ const deleteRostersByMonth = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error. Failed to delete rosters.",
+      error: error.message,
     });
   }
 };
