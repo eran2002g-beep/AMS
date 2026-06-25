@@ -58,6 +58,12 @@ const Employee = sequelize.define('Employee', {
         allowNull: true,
     },
 
+    // roster - whether this employee is assigned to a roster
+    roster: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+    },
+
     // role - controls what the user can access (Epic 3 RBAC)
     // ENUM restricts the value to only these two options, enforced by the database
     role: {

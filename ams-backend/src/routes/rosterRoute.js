@@ -4,6 +4,23 @@ const router  = express.Router();
 const { upload } = require('../utils/rosterParser');
 const rosterService = require('../services/rosterService');
 
+
+//Ahamed's Updates............*****
+//Roster dlete implementation by Ahamed..
+const isAdmin = require("../middleware/isAdmin");
+const {
+  deleteRosterByDate,
+  deleteRostersByMonth,
+} = require("../controllers/rosterController");
+
+// dlete bydDate=YYYY-MM-DD....
+router.delete("/by-date", isAdmin, deleteRosterByDate);
+
+// dlete byMonth=MM&year=YYYY.....
+router.delete("/by-month", isAdmin, deleteRostersByMonth);
+
+
+
 // POST /roster/upload - upload a roster CSV/Excel file, parse it, and save all entries to the DB
 
 // Request: multipart/form-data - file (required) : the roster file (.csv, .xlsx, .xls)
@@ -19,6 +36,30 @@ const rosterService = require('../services/rosterService');
         // A plain try/catch CANNOT catch multer errors because multer signals errors through its own callback, not by throwing.
 
 // Middleware 2 - runs the service logic inside a try/catch for all other errors.
+
+// GET /roster/view - fetch roster entries filtered by date, year, month, or year + month
+// Query params (at least one required):
+//   date  - exact day, e.g. 2025-06-01 or 01-06-25
+//   year  - e.g. 2025
+//   month - e.g. 6
+//   year + month together - e.g. ?year=2025&month=6
+router.get('/view', async (req, res) => {
+    try {
+        const { entries, applied } = await rosterService.getRosterView(req.query);
+
+        return res.status(200).json({
+            success: true,
+            count:   entries.length,
+            filters: applied,
+            data:    entries,
+        });
+    } catch (err) {
+        return res.status(400).json({
+            success: false,
+            error:   err.message,
+        });
+    }
+});
 
 router.post(
     '/upload',
