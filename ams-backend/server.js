@@ -21,6 +21,9 @@ const Roster   = require('./src/models/Roster');
 const employeeRoutes = require('./src/routes/employeeRoute');
 const rosterRoutes = require('./src/routes/rosterRoute');
 
+// ----------------------- Error Logging Middleware -----------------------
+const { errorLogger, notFoundLogger } = require('./src/middleware/errorLogger');
+
 const app = express();
 
 // ----------------------- Middleware -----------------------
@@ -43,6 +46,11 @@ app.use('/employee', employeeRoutes);
 // Mount roster routes under /roster
 app.use('/roster', rosterRoutes);
 
+// ----------------------- Error Handlers -----------------------
+// Must be registered AFTER all routes so they only catch unmatched/errored requests
+app.use(notFoundLogger);  // 404 - route not found
+app.use(errorLogger);     // 500 - unhandled errors from controllers
+
 // Use PORT from .env or fallback
 const PORT = process.env.PORT || 5000;
 
@@ -51,6 +59,8 @@ sequelize.authenticate()
 
     // Step 2 - apply known schema patches (sync alter alone is unreliable on PostgreSQL)
     .then(() => {
+        console.log('');
+        console.log('-------------------------------------------------------');
         console.log('Neon database connected successfully.');
         return sequelize.query(`
             ALTER TABLE employees
@@ -64,8 +74,10 @@ sequelize.authenticate()
 
     // Step 4 - start the server only after the database is ready
     .then(() => {
+        console.log('-------------------------------------------------------');
         console.log('Models synced with the database.');
         app.listen(PORT, () => {
+            console.log('-------------------------------------------------------');
             console.log(`Server running on http://localhost:${PORT}`);
         });
     })
