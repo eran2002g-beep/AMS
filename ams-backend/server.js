@@ -16,6 +16,7 @@ require('dotenv').config();
 
 const Employee = require('./src/models/Employee');
 const Roster   = require('./src/models/Roster');
+const AttendanceLog = require('./src/models/AttendanceLog'); // Each punch card swipe from IoT or manual entry
 
 // ----------------------- Model Routes -----------------------
 const employeeRoutes = require('./src/routes/employeeRoute');
