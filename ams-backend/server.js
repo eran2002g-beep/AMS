@@ -2,6 +2,7 @@
 
 // Express handles incoming HTTP requests and routes them to the right controller
 const express = require('express');
+const cors = require('cors'); // FIX: import CORS middleware
 
 // Import the shared DB connection
 const sequelize = require('./config/db');
@@ -22,8 +23,19 @@ const rosterRoutes = require('./src/routes/rosterRoute');
 
 const app = express();
 
+// ----------------------- Middleware -----------------------
+
 // Parses incoming JSON request bodies - needed so req.body works in controllers
 app.use(express.json());
+
+// FIX: Enable CORS BEFORE routes
+app.use(cors({
+    origin: 'http://localhost:3000',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    credentials: true
+}));
+
+// ----------------------- Routes -----------------------
 
 // Mount employee routes under /employee
 app.use('/employee', employeeRoutes);
@@ -31,8 +43,8 @@ app.use('/employee', employeeRoutes);
 // Mount roster routes under /roster
 app.use('/roster', rosterRoutes);
 
-// Use PORT from .env or fall back to 3000
-const PORT = process.env.PORT || 3000;
+// Use PORT from .env or fallback
+const PORT = process.env.PORT || 5000;
 
 // Step 1 - test the database connection
 sequelize.authenticate()
