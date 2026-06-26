@@ -45,7 +45,7 @@ const AttendanceLog = sequelize.define('AttendanceLog', {
     // ENUM restricts to only these two values - every punch must be one or the other
     punchType: {
         type: DataTypes.ENUM('in', 'out'),
-        allowNull: false,
+        allowNull: true,
     },
 
     // attendanceStatus - the calculated status of this attendance record
@@ -95,9 +95,9 @@ const AttendanceLog = sequelize.define('AttendanceLog', {
 
     hooks: {
 
-        // beforeCreate - auto-generates logId like LOG001, LOG002...
-        // same pattern used in Employee (EMP001) and Roster (RST001)
-        beforeCreate: async (log) => {
+        // beforeValidate runs before allowNull checks — must run here, not beforeCreate
+        beforeValidate: async (log) => {
+            if (!log.isNewRecord || log.logId) return;
 
             const count  = await AttendanceLog.count();
             const padded = String(count + 1).padStart(3, '0');

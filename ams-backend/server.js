@@ -21,6 +21,7 @@ const AttendanceLog = require('./src/models/AttendanceLog'); // Each punch card 
 // ----------------------- Model Routes -----------------------
 const employeeRoutes = require('./src/routes/employeeRoute');
 const rosterRoutes = require('./src/routes/rosterRoute');
+const attendanceLogRoutes = require('./src/routes/attendanceLogRoute');
 
 // ----------------------- Error Logging Middleware -----------------------
 const { errorLogger, notFoundLogger } = require('./src/middleware/errorLogger');
@@ -46,6 +47,9 @@ app.use('/employee', employeeRoutes);
 
 // Mount roster routes under /roster
 app.use('/roster', rosterRoutes);
+
+// Mount attendance log routes under /attendance-log
+app.use('/attendance-log', attendanceLogRoutes);
 
 // ----------------------- Error Handlers -----------------------
 // Must be registered AFTER all routes so they only catch unmatched/errored requests

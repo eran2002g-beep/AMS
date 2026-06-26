@@ -145,6 +145,30 @@ export type EmployeeListResponse = {
   data: Employee[];
 };
 
+export type AttendanceLog = {
+  id: number;
+  logId: string;
+  employeeId: string;
+  punchDate: string;
+  punchTime: string;
+  punchType: "in" | "out" | null;
+  attendanceStatus: string;
+  source: "iot" | "manual";
+  rosterId: number | null;
+  notes: string | null;
+  syncError: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AttendanceLogCreatePayload = {
+  employeeId: string;
+  punchDate: string;
+  punchTime: string;
+  punchType?: "in" | "out";
+  source?: "iot" | "manual";
+};
+
 // ─────────────────────────────────── Employee API ───────────────────────────────────
 
 export const employeeApi = {
@@ -241,5 +265,14 @@ export const rosterApi = {
       throw new Error(body.message || "Delete failed");
     }
     return body;
+  },
+};
+
+// ─────────────────────────────────── Attendance Log API ───────────────────────────────────
+
+export const attendanceLogApi = {
+  async create(payload: AttendanceLogCreatePayload) {
+    const response = await api.post<AttendanceLog>("/attendance-log/create", payload);
+    return response.data;
   },
 };
