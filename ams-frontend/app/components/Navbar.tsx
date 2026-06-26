@@ -19,10 +19,7 @@ export default function Navbar() {
   return (
     <AppBar position="static" sx={{ backgroundColor: "#1e293b" }}>
       <Toolbar>
-        <Typography
-          variant="h6"
-          sx={{ flexGrow: 1, fontWeight: 700 }}
-        >
+        <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 700 }}>
           🏢 AMS Admin
         </Typography>
         <Box>
@@ -33,8 +30,7 @@ export default function Navbar() {
               sx={{
                 color: pathname === item.path ? "#38bdf8" : "#fff",
                 fontWeight: pathname === item.path ? 700 : 400,
-                borderBottom:
-                  pathname === item.path ? "2px solid #38bdf8" : "none",
+                borderBottom: pathname === item.path ? "2px solid #38bdf8" : "none",
                 borderRadius: 0,
                 mx: 1,
               }}

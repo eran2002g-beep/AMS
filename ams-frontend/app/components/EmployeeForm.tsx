@@ -3,107 +3,184 @@
 import { useState, useEffect } from "react";
 import {
   Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, Button, Box
+  TextField, Button, Box, CircularProgress,
+  FormControlLabel, Checkbox, FormControl, InputLabel, Select, MenuItem,
 } from "@mui/material";
+import type { Employee, EmployeeFormData } from "@/lib/api";
 
-const EMPTY = {
-  name: "", email: "", phone: "", department: "", role: "", joinDate: "",
+const EMPTY: EmployeeFormData = {
+  firstName: "", lastName: "", email: "", phone: "", department: "", roster: false,
 };
 
-type Employee = typeof EMPTY & { id?: number };
+const FIELDS = [
+  { name: "firstName",  label: "First Name", type: "text" },
+  { name: "lastName",   label: "Last Name",  type: "text" },
+  { name: "email",      label: "Email",      type: "email" },
+  { name: "phone",      label: "Phone",      type: "text" },
+  { name: "department", label: "Department", type: "text" },
+] as const;
+
+function employeeToForm(employee: Employee): EmployeeFormData {
+  return {
+    firstName: employee.firstName,
+    lastName: employee.lastName,
+    email: employee.email,
+    phone: employee.phone ?? "",
+    department: employee.department ?? "",
+    roster: employee.roster,
+    role: employee.role,
+  };
+}
 
 type Props = {
   open: boolean;
   onClose: () => void;
-  onSubmit: (data: Employee) => void;
-  initialData?: Employee | null;
+  onSubmit: (data: EmployeeFormData) => Promise<void>;
+  submitting?: boolean;
+  employee?: Employee | null;
 };
 
-export default function EmployeeForm({ open, onClose, onSubmit, initialData }: Props) {
-  const [form, setForm] = useState<Employee>(EMPTY);
-  const [errors, setErrors] = useState<Partial<Employee>>({});
+export default function EmployeeForm({ open, onClose, onSubmit, submitting, employee }: Props) {
+  const isEdit = !!employee;
+  const [form, setForm] = useState<EmployeeFormData>(EMPTY);
+  const [errors, setErrors] = useState<Partial<Record<keyof EmployeeFormData, string>>>({});
 
   useEffect(() => {
-    setForm(initialData || EMPTY);
-    setErrors({});
-  }, [initialData, open]);
+    if (open) {
+      setForm(employee ? employeeToForm(employee) : EMPTY);
+      setErrors({});
+    }
+  }, [open, employee]);
 
   const handle = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
-    setErrors({ ...errors, [e.target.name]: "" }); // clear error on type
+    setErrors({ ...errors, [e.target.name]: "" });
   };
 
-  // ── Validation ──────────────────────────────────────────
   const validate = () => {
-    const newErrors: Partial<Employee> = {};
+    const newErrors: Partial<Record<keyof EmployeeFormData, string>> = {};
 
-    if (!form.name.trim()) newErrors.name = "Full name is required";
-    else if (form.name.trim().length < 2) newErrors.name = "Name must be at least 2 characters";
+    if (!form.firstName.trim()) newErrors.firstName = "First name is required";
+    if (!form.lastName.trim()) newErrors.lastName = "Last name is required";
 
     if (!form.email.trim()) newErrors.email = "Email is required";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
       newErrors.email = "Enter a valid email address";
 
-    if (!form.phone.trim()) newErrors.phone = "Phone is required";
-    else if (!/^\d{10}$/.test(form.phone.replace(/\s/g, "")))
-      newErrors.phone = "Phone must be 10 digits";
-
-    if (!form.department.trim()) newErrors.department = "Department is required";
-    if (!form.role.trim()) newErrors.role = "Role is required";
-    if (!form.joinDate) newErrors.joinDate = "Join date is required";
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validate()) return;
-    onSubmit(form);
-    onClose();
+
+    const payload: EmployeeFormData = {
+      firstName: form.firstName.trim(),
+      lastName: form.lastName.trim(),
+      email: form.email.trim(),
+      phone: form.phone.trim(),
+      department: form.department.trim(),
+      roster: form.roster,
+      ...(isEdit && form.role ? { role: form.role } : {}),
+    };
+
+    try {
+      await onSubmit(payload);
+      onClose();
+    } catch {
+      // Error surfaced by parent; keep dialog open
+    }
   };
 
-  const isEdit = !!initialData;
-
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle sx={{ backgroundColor: "#1e293b", color: "#fff" }}>
-        {isEdit ? "✏️ Edit Employee" : "➕ Add Employee"}
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+      slotProps={{ paper: { sx: { overflow: "visible" } } }}
+    >
+      <DialogTitle sx={{ backgroundColor: "#1e293b", color: "#fff", py: 1.5 }}>
+        {isEdit ? "Edit Employee" : "Add Employee"}
       </DialogTitle>
 
-      <DialogContent sx={{ mt: 2 }}>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-          {[
-            { name: "name",       label: "Full Name",  type: "text" },
-            { name: "email",      label: "Email",      type: "email" },
-            { name: "phone",      label: "Phone",      type: "text" },
-            { name: "department", label: "Department", type: "text" },
-            { name: "role",       label: "Role/Title", type: "text" },
-            { name: "joinDate",   label: "Join Date",  type: "date" },
-          ].map(({ name, label, type }) => (
-            <Box key={name} sx={{ flex: '1 1 calc(50% - 8px)', minWidth: '280px' }}>
-              <TextField
-                fullWidth
-                label={label}
-                name={name}
-                type={type}
-                value={form[name as keyof Employee]}
-                onChange={handle}
-                error={!!errors[name as keyof Employee]}
-                helperText={errors[name as keyof Employee]}
-                // TS: some MUI typings may not include InputLabelProps in this union; allow for date label shrink
-                // @ts-expect-error
-                InputLabelProps={type === "date" ? { shrink: true } : undefined}
-                size="small"
-              />
-            </Box>
+      <DialogContent
+        sx={{
+          px: 3,
+          pb: 1.5,
+          overflow: "visible",
+          // MUI sets paddingTop: 0 when DialogContent follows DialogTitle;
+          // use && so the override wins and floating labels are not clipped.
+          "&&": { paddingTop: 3 },
+        }}
+      >
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+            gap: 1.5,
+          }}
+        >
+          {FIELDS.map(({ name, label, type }) => (
+            <TextField
+              key={name}
+              fullWidth
+              label={label}
+              name={name}
+              type={type}
+              value={form[name]}
+              onChange={handle}
+              error={!!errors[name]}
+              helperText={errors[name]}
+              size="small"
+              margin="none"
+              slotProps={{
+                inputLabel: {
+                  sx: {
+                    backgroundColor: "#fff",
+                    px: 0.5,
+                  },
+                },
+              }}
+            />
           ))}
+          {isEdit && (
+            <FormControl fullWidth size="small" sx={{ gridColumn: { xs: "1", sm: "1 / -1" } }}>
+              <InputLabel>Role</InputLabel>
+              <Select
+                label="Role"
+                value={form.role ?? "employee"}
+                onChange={(e) =>
+                  setForm({ ...form, role: e.target.value as EmployeeFormData["role"] })
+                }
+              >
+                <MenuItem value="employee">Employee</MenuItem>
+                <MenuItem value="admin">Admin</MenuItem>
+              </Select>
+            </FormControl>
+          )}
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={form.roster}
+                onChange={(e) => setForm({ ...form, roster: e.target.checked })}
+              />
+            }
+            label="On roster"
+            sx={{ gridColumn: { xs: "1", sm: "1 / -1" } }}
+          />
         </Box>
       </DialogContent>
 
-      <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button onClick={onClose} color="inherit">Cancel</Button>
-        <Button onClick={handleSubmit} variant="contained"
-          sx={{ backgroundColor: "#2563eb" }}>
+      <DialogActions sx={{ px: 3, py: 1.5 }}>
+        <Button onClick={onClose} color="inherit" disabled={submitting}>Cancel</Button>
+        <Button
+          onClick={handleSubmit}
+          variant="contained"
+          disabled={submitting}
+          sx={{ backgroundColor: "#2563eb" }}
+          startIcon={submitting ? <CircularProgress size={16} color="inherit" /> : undefined}
+        >
           {isEdit ? "Save Changes" : "Add Employee"}
         </Button>
       </DialogActions>
