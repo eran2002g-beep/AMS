@@ -3,6 +3,7 @@
 
 // Import the Employee model to interact with the employees table
 const Employee = require('../models/Employee');
+const { generateNextEmployeeId } = require('./employeeIdGenerator');
 
 // createEmployee - validates input and creates a new employee record
 // receives plain data object from the controller, returns the created employee
@@ -29,10 +30,17 @@ const createEmployee = async (data) => {
 
     // ---------------------------- Create Record ----------------------------
 
+    const existingEmployeeIds = await Employee.findAll({
+        attributes: ['employeeId'],
+        raw: true,
+    });
+
+    const nextEmployeeId = generateNextEmployeeId(existingEmployeeIds.map((item) => item.employeeId));
+
     // Employee.create() inserts a new row into the employees table
-    // employeeId is NOT passed here - the beforeCreate hook generates it automatically
     // role defaults to 'employee' and isActive defaults to true if not provided
     const employee = await Employee.create({
+        employeeId: nextEmployeeId,
         firstName,
         lastName,
         email,

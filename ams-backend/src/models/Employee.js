@@ -5,6 +5,7 @@ const { DataTypes } = require('sequelize');
 
 // Import the shared DB connection - this tells Sequelize which database to use
 const sequelize = require('../../config/db');
+const { generateNextEmployeeId } = require('../services/employeeIdGenerator');
 
 // Define the Employee model - each property below becomes a column in the table
 const Employee = sequelize.define('Employee', {
@@ -91,9 +92,12 @@ const Employee = sequelize.define('Employee', {
         beforeValidate: async (employee) => {
             if (!employee.isNewRecord || employee.employeeId) return;
 
-            const count = await Employee.count();
-            const padded = String(count + 1).padStart(3, '0');
-            employee.employeeId = `EMP${padded}`;
+            const existingEmployeeIds = await Employee.findAll({
+                attributes: ['employeeId'],
+                raw: true,
+            });
+
+            employee.employeeId = generateNextEmployeeId(existingEmployeeIds.map((item) => item.employeeId));
         },
     },
 });
