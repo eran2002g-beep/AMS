@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-const backendUrl = process.env.BACKEND_URL || "http://localhost:3000";
+const backendUrl = process.env.BACKEND_URL || "http://localhost:5000";
 
 const nextConfig: NextConfig = {
   async rewrites() {
@@ -16,6 +16,10 @@ const nextConfig: NextConfig = {
       {
         source: "/roster/:path*",
         destination: `${backendUrl}/roster/:path*`,
+      },
+      {
+        source: "/attendance-log/:path*",
+        destination: `${backendUrl}/attendance-log/:path*`,
       },
     ];
   },

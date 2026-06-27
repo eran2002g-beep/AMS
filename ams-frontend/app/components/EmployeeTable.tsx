@@ -10,6 +10,8 @@ import {
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import FingerprintIcon from "@mui/icons-material/Fingerprint";
+import { useRouter } from "next/navigation";
 import type { Employee } from "@/lib/api";
 
 type Props = {
@@ -90,6 +92,7 @@ const sortLabelSx = {
 };
 
 export default function EmployeeTable({ employees, onEdit, onDelete, deletingEmployeeId }: Props) {
+  const router = useRouter();
   const [confirmTarget, setConfirmTarget] = useState<Employee | null>(null);
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
 
@@ -227,6 +230,20 @@ export default function EmployeeTable({ employees, onEdit, onDelete, deletingEmp
                       </IconButton>
                     </Tooltip>
                   )}
+                  <Tooltip title="Mock punch">
+                    <IconButton
+                      size="small"
+                      onClick={() =>
+                        router.push(
+                          `/mock/punch/system?employeeId=${encodeURIComponent(emp.employeeId)}`,
+                        )
+                      }
+                      aria-label={`Mock punch for ${emp.firstName} ${emp.lastName}`}
+                      sx={{ color: "#2563eb", ml: 0.5 }}
+                    >
+                      <FingerprintIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
                 </TableCell>
               </TableRow>
             ))
