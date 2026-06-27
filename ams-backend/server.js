@@ -6,6 +6,9 @@ const express = require('express');
 // Import the shared DB connection
 const sequelize = require('./config/db');
 
+const cors = require('cors'); // FIX: import CORS middleware
+
+
 // Must run before any process.env usage - loads values from .env
 require('dotenv').config();
 
@@ -13,23 +16,36 @@ require('dotenv').config();
 // Import all models here so sequelize.sync() creates their tables
 // Every new model you add must be registered here
 
-const Employee = require('./src/models/Employee');
-const Roster   = require('./src/models/Roster');
-
 // ----------------------- Model Routes -----------------------
 const employeeRoutes = require('./src/routes/employeeRoute');
 const rosterRoutes = require('./src/routes/rosterRoute');
+const attendanceLogRoutes = require('./src/routes/attendanceLogRoute');
+
+const { errorLogger, notFoundLogger } = require('./src/middleware/errorLogger');
 
 const app = express();
 
 // Parses incoming JSON request bodies - needed so req.body works in controllers
 app.use(express.json());
 
+app.use(cors({
+    origin: 'http://localhost:3000',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    credentials: true
+}));
+
 // Mount employee routes under /employee
 app.use('/employee', employeeRoutes);
 
 // Mount roster routes under /roster
 app.use('/roster', rosterRoutes);
+
+app.use('/attendance-log', attendanceLogRoutes);
+
+// ----------------------- Error Handlers -----------------------
+// Must be registered AFTER all routes so they only catch unmatched/errored requests
+app.use(notFoundLogger);  // 404 - route not found
+app.use(errorLogger);     // 500 - unhandled errors from controllers
 
 // Use PORT from .env or fall back to 3000
 const PORT = process.env.PORT || 3000;
