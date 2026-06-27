@@ -4,6 +4,7 @@
 // Import the Employee model to interact with the employees table
 const Employee = require('../models/Employee');
 const { generateNextEmployeeId } = require('./employeeIdGenerator');
+const { validateEmployeePayload } = require('./employeeValidation');
 
 // createEmployee - validates input and creates a new employee record
 // receives plain data object from the controller, returns the created employee
@@ -14,14 +15,12 @@ const createEmployee = async (data) => {
 
     // ---------------------------- Validation ----------------------------
 
-    // Check all required fields are present before touching the database
-    if (!firstName || !lastName || !email) {
-        throw new Error('firstName, lastName and email are required');
-    }
+    const validatedData = validateEmployeePayload(data, { requireAllFields: true });
+    const { firstName: validatedFirstName, lastName: validatedLastName, email: validatedEmail, phone: validatedPhone, department: validatedDepartment, role: validatedRole, roster: validatedRoster } = validatedData;
 
     // Check if an employee with this email already exists
     // findOne returns the matching record or null if not found
-    const existingEmployee = await Employee.findOne({ where: { email } });
+    const existingEmployee = await Employee.findOne({ where: { email: validatedEmail } });
 
     // If a record was found, this email is already taken
     if (existingEmployee) {
@@ -41,13 +40,13 @@ const createEmployee = async (data) => {
     // role defaults to 'employee' and isActive defaults to true if not provided
     const employee = await Employee.create({
         employeeId: nextEmployeeId,
-        firstName,
-        lastName,
-        email,
-        phone,
-        department,
-        role,
-        roster,
+        firstName: validatedFirstName,
+        lastName: validatedLastName,
+        email: validatedEmail,
+        phone: validatedPhone,
+        department: validatedDepartment,
+        role: validatedRole,
+        roster: validatedRoster,
     });
 
     // Return the newly created employee object back to the controller
@@ -146,9 +145,12 @@ const updateEmployee = async (employeeId, updateData) => {
     // Destructure only the fields we allow to be updated
     const { firstName, lastName, email, phone, department, role, roster } = updateData;
 
+    const validatedData = validateEmployeePayload(updateData);
+    const { firstName: validatedFirstName, lastName: validatedLastName, email: validatedEmail, phone: validatedPhone, department: validatedDepartment, role: validatedRole, roster: validatedRoster } = validatedData;
+
     // If email is being changed, check if the new email already exists
-    if (email && email !== employee.email) {
-        const existingEmployee = await Employee.findOne({ where: { email } });
+    if (validatedEmail && validatedEmail !== employee.email) {
+        const existingEmployee = await Employee.findOne({ where: { email: validatedEmail } });
         if (existingEmployee) {
             throw new Error('An employee with this email already exists');
         }
@@ -156,13 +158,13 @@ const updateEmployee = async (employeeId, updateData) => {
 
     // Build the update object - only include fields that were provided
     const updateFields = {};
-    if (firstName !== undefined) updateFields.firstName = firstName;
-    if (lastName !== undefined) updateFields.lastName = lastName;
-    if (email !== undefined) updateFields.email = email;
-    if (phone !== undefined) updateFields.phone = phone;
-    if (department !== undefined) updateFields.department = department;
-    if (role !== undefined) updateFields.role = role;
-    if (roster !== undefined) updateFields.roster = roster;
+    if (firstName !== undefined) updateFields.firstName = validatedFirstName;
+    if (lastName !== undefined) updateFields.lastName = validatedLastName;
+    if (email !== undefined) updateFields.email = validatedEmail;
+    if (phone !== undefined) updateFields.phone = validatedPhone;
+    if (department !== undefined) updateFields.department = validatedDepartment;
+    if (role !== undefined) updateFields.role = validatedRole;
+    if (roster !== undefined) updateFields.roster = validatedRoster;
 
     // Update the employee record with the new values
     const updatedEmployee = await employee.update(updateFields);
