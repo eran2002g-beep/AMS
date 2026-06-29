@@ -7,6 +7,9 @@ const cors = require('cors'); // FIX: import CORS middleware
 // Import the shared DB connection
 const sequelize = require('./config/db');
 
+const cors = require('cors'); // FIX: import CORS middleware
+
+
 // Must run before any process.env usage - loads values from .env
 require('dotenv').config();
 
