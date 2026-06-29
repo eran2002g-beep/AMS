@@ -5,3 +5,6 @@ DATABASE_URL=postgresql://neondb_owner:npg_ov8NjDh7usGe@ep-square-boat-ao8j82im-
 
 # Port the Express server runs on - defaults to 3000 if not set
 PORT=8000
+
+# Secret key used to sign and verify JWT tokens - change this to a long random string in production
+JWT_SECRET=your_jwt_secret_here
