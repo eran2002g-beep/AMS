@@ -75,15 +75,23 @@ const Attendance = sequelize.define('Attendance', {
     },
 
     // status - the final attendance status calculated during roster processing
-    // present      = clocked in on time
-    // late         = clocked in after scheduledStart
+    // present      = clocked in (on time or late — see lateCoverMinutes for time to make up)
     // absent       = no punch found for a scheduled shift
     // leave        = covered by an approved leave request
-    // unauthorised = absent with no approved leave (Epic 4: View Unauthorised Leaves)
+    // unauthorised = only one punch found (missing clock-in or clock-out)
     // holiday      = scheduled day off
     status: {
-        type: DataTypes.ENUM('present', 'late', 'absent', 'leave', 'unauthorised', 'holiday'),
+        type: DataTypes.ENUM('present', 'absent', 'leave', 'unauthorised', 'holiday'),
         allowNull: false,
+    },
+
+    // lateCoverMinutes - minutes the employee still owes after shift processing
+    // must stay until scheduledEnd + arrival lateness; early departure adds to this total
+    // e.g. shift 08:00-17:00, in 08:20, out 17:00 → 20 min (should have left at 17:20)
+    lateCoverMinutes: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 0,
     },
 
     // rosterId - the roster this record was matched against during processing
@@ -128,8 +136,10 @@ const Attendance = sequelize.define('Attendance', {
 
     hooks: {
 
-        // beforeCreate - auto-generates attendanceId like ATT001, ATT002...
-        beforeCreate: async (attendance) => {
+        // beforeValidate runs before allowNull checks — must run here, not beforeCreate
+        beforeValidate: async (attendance) => {
+            if (!attendance.isNewRecord || attendance.attendanceId) return;
+
             const count  = await Attendance.count();
             const padded = String(count + 1).padStart(3, '0');
             attendance.attendanceId = `ATT${padded}`;
