@@ -21,6 +21,10 @@ const nextConfig: NextConfig = {
         source: "/attendance-log/:path*",
         destination: `${backendUrl}/attendance-log/:path*`,
       },
+      {
+        source: "/attendance/:path*",
+        destination: `${backendUrl}/attendance/:path*`,
+      },
     ];
   },
 };
