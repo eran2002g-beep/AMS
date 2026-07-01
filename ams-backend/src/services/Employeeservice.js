@@ -3,6 +3,7 @@
 
 // Import the Employee model to interact with the employees table
 const Employee = require('../models/Employee');
+const Attendance = require('../models/Attendance');
 const { validateEmployeePayload } = require('./employeeValidation');
 
 // createEmployee - validates input and creates a new employee record
@@ -170,6 +171,38 @@ const getAllEmployees = async () => {
     return result.employees;
 };
 
+// -----------------------------------------------------------------------
+// getEmployeeAttendance - fetch attendance records tied to an employee
+// supports optional month/year/status/date-range filters
+// -----------------------------------------------------------------------
+const getEmployeeAttendance = async (employeeId, filters = {}) => {
+    if (!employeeId) {
+        throw new Error('Employee ID is required to retrieve attendance.');
+    }
+
+    const employee = await Employee.findOne({ where: { employeeId, isActive: true } });
+    if (!employee) {
+        throw new Error(`Active employee with ID ${employeeId} not found.`);
+    }
+
+    const where = { employeeId };
+
+    if (filters.month) where.month = Number(filters.month);
+    if (filters.year) where.year = Number(filters.year);
+    if (filters.status) where.status = filters.status;
+
+    if (filters.startDate && filters.endDate) {
+        where.date = {
+            [require('sequelize').Op.between]: [filters.startDate, filters.endDate],
+        };
+    }
+
+    return Attendance.findAll({
+        where,
+        order: [['date', 'DESC']],
+    });
+};
+
 // Export all service functions - add new ones here as we build more features
 module.exports = {
     createEmployee,
@@ -177,4 +210,5 @@ module.exports = {
     searchEmployees,
     updateEmployee,
     deleteEmployeeById,
+    getEmployeeAttendance,
 };
