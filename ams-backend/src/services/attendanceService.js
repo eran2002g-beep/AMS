@@ -17,6 +17,82 @@ const {
 
 const pad = (n) => String(n).padStart(2, '0');
 
+const VALID_ATTENDANCE_STATUSES = ['present', 'absent', 'leave', 'unauthorised', 'holiday'];
+
+const isValidDateOnly = (value) => {
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return false;
+    }
+
+    const [year, month, day] = value.split('-').map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+
+    return date.getUTCFullYear() === year
+        && date.getUTCMonth() + 1 === month
+        && date.getUTCDate() === day;
+};
+
+const normalizePositiveInteger = (value, fallback, fieldName) => {
+    if (value === undefined || value === null || value === '') {
+        return fallback;
+    }
+
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+        throw new Error(`${fieldName} must be a positive integer.`);
+    }
+
+    return parsed;
+};
+
+const buildAttendanceFilters = (filters = {}) => {
+    const where = {};
+
+    if (filters.month !== undefined && filters.month !== '') {
+        const month = Number(filters.month);
+        if (!Number.isInteger(month) || month < 1 || month > 12) {
+            throw new Error('month must be an integer between 1 and 12.');
+        }
+        where.month = month;
+    }
+
+    if (filters.year !== undefined && filters.year !== '') {
+        const year = Number(filters.year);
+        if (!Number.isInteger(year) || year < 1) {
+            throw new Error('year must be a positive integer.');
+        }
+        where.year = year;
+    }
+
+    if (filters.status) {
+        if (!VALID_ATTENDANCE_STATUSES.includes(filters.status)) {
+            throw new Error(`status must be one of: ${VALID_ATTENDANCE_STATUSES.join(', ')}.`);
+        }
+
+        where.status = filters.status;
+    }
+
+    if (filters.startDate || filters.endDate) {
+        if (!filters.startDate || !filters.endDate) {
+            throw new Error('startDate and endDate must be provided together.');
+        }
+
+        if (!isValidDateOnly(filters.startDate) || !isValidDateOnly(filters.endDate)) {
+            throw new Error('startDate and endDate must use YYYY-MM-DD format.');
+        }
+
+        if (filters.startDate > filters.endDate) {
+            throw new Error('startDate must be less than or equal to endDate.');
+        }
+
+        where.date = {
+            [Op.between]: [filters.startDate, filters.endDate],
+        };
+    }
+
+    return where;
+};
+
 const toDateOnly = (year, month, day) => `${year}-${pad(month)}-${pad(day)}`;
 
 const resolvePeriodDates = ({ date, month, year, startDate, endDate }) => {
@@ -119,34 +195,123 @@ const processNormalAttendance = async (period = {}) => {
 };
 
 const getEmployeeAttendance = async (employeeId, filters = {}) => {
-    const where = { employeeId };
-
-    if (filters.month)  where.month  = filters.month;
-    if (filters.year)   where.year   = filters.year;
-    if (filters.status) where.status = filters.status;
-
-    if (filters.startDate && filters.endDate) {
-        where.date = { [Op.between]: [filters.startDate, filters.endDate] };
+    if (!employeeId) {
+        throw new Error('Employee ID is required to retrieve attendance records.');
     }
 
-    return Attendance.findAll({
-        where,
-        order: [['date', 'DESC']],
+    const employee = await Employee.findOne({
+        where: {
+            employeeId,
+            isActive: true,
+        },
+        attributes: ['employeeId', 'firstName', 'lastName', 'email', 'department', 'role', 'roster', 'isActive'],
     });
+
+    if (!employee) {
+        throw new Error(`Active employee with ID ${employeeId} not found.`);
+    }
+
+    const where = {
+        employeeId,
+        ...buildAttendanceFilters(filters),
+    };
+
+    const hasPagination = filters.page !== undefined || filters.limit !== undefined;
+    const page = hasPagination ? normalizePositiveInteger(filters.page, 1, 'page') : 1;
+    const limit = hasPagination ? normalizePositiveInteger(filters.limit, 20, 'limit') : undefined;
+    const offset = hasPagination ? (page - 1) * limit : undefined;
+
+    const { count, rows } = await Attendance.findAndCountAll({
+        where,
+        order: [['date', 'DESC'], ['clockIn', 'DESC']],
+        limit,
+        offset,
+    });
+
+    return {
+        employee: employee.get({ plain: true }),
+        filters: {
+            employeeId,
+            ...(filters.month !== undefined && filters.month !== '' ? { month: Number(filters.month) } : {}),
+            ...(filters.year !== undefined && filters.year !== '' ? { year: Number(filters.year) } : {}),
+            ...(filters.status ? { status: filters.status } : {}),
+            ...(filters.startDate ? { startDate: filters.startDate } : {}),
+            ...(filters.endDate ? { endDate: filters.endDate } : {}),
+            ...(hasPagination ? { page, limit } : {}),
+        },
+        meta: {
+            total: count,
+            page,
+            limit: limit ?? count,
+            totalPages: hasPagination ? Math.ceil(count / limit) : (count > 0 ? 1 : 0),
+        },
+        records: rows,
+    };
 };
 
 const getAllAttendance = async (filters = {}) => {
-    const where = {};
+    const where = {
+        ...buildAttendanceFilters(filters),
+    };
 
-    if (filters.employeeId) where.employeeId = filters.employeeId;
-    if (filters.status)     where.status     = filters.status;
-    if (filters.month)      where.month      = filters.month;
-    if (filters.year)       where.year       = filters.year;
+    if (filters.employeeId) {
+        where.employeeId = filters.employeeId;
+    }
 
-    return Attendance.findAll({
+    const hasPagination = filters.page !== undefined || filters.limit !== undefined;
+    const page = hasPagination ? normalizePositiveInteger(filters.page, 1, 'page') : 1;
+    const limit = hasPagination ? normalizePositiveInteger(filters.limit, 20, 'limit') : undefined;
+    const offset = hasPagination ? (page - 1) * limit : undefined;
+
+    const { count, rows } = await Attendance.findAndCountAll({
         where,
         order: [['date', 'DESC']],
+        limit,
+        offset,
     });
+
+    return {
+        records: rows,
+        meta: {
+            total: count,
+            page,
+            limit: limit ?? count,
+            totalPages: hasPagination ? Math.ceil(count / limit) : (count > 0 ? 1 : 0),
+        },
+        filters: {
+            ...(filters.employeeId ? { employeeId: filters.employeeId } : {}),
+            ...(filters.month !== undefined && filters.month !== '' ? { month: Number(filters.month) } : {}),
+            ...(filters.year !== undefined && filters.year !== '' ? { year: Number(filters.year) } : {}),
+            ...(filters.status ? { status: filters.status } : {}),
+            ...(filters.startDate ? { startDate: filters.startDate } : {}),
+            ...(filters.endDate ? { endDate: filters.endDate } : {}),
+            ...(hasPagination ? { page, limit } : {}),
+        },
+    };
+};
+
+const getAttendanceById = async (attendanceId) => {
+    if (!attendanceId) {
+        throw new Error('Attendance ID is required to retrieve a record.');
+    }
+
+    const attendance = await Attendance.findOne({
+        where: { attendanceId },
+    });
+
+    if (!attendance) {
+        throw new Error(`Attendance record with ID ${attendanceId} not found.`);
+    }
+
+    const employee = await Employee.findOne({
+        where: { employeeId: attendance.employeeId },
+        attributes: ['employeeId', 'firstName', 'lastName', 'email', 'department', 'role', 'roster', 'isActive'],
+    });
+
+    return {
+        attendance: attendance.get({ plain: true }),
+        employee: employee ? employee.get({ plain: true }) : null,
+    };
 };
 
 const addAttendanceRecord = async (data) => {
@@ -198,6 +363,7 @@ module.exports = {
     processNormalAttendance,
     getEmployeeAttendance,
     getAllAttendance,
+    getAttendanceById,
     addAttendanceRecord,
     editAttendanceRecord,
     deleteAttendanceRecord,
