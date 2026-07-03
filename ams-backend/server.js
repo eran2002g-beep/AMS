@@ -22,6 +22,7 @@ const Attendance = require('./src/models/Attendance');    // final calculated at
 const employeeRoutes = require('./src/routes/employeeRoute');
 const rosterRoutes = require('./src/routes/rosterRoute');
 const attendanceLogRoutes = require('./src/routes/attendanceLogRoute');
+const attendanceRoutes = require('./src/routes/attendanceRoute');
 
 // ----------------------- Error Logging Middleware -----------------------
 const { errorLogger, notFoundLogger } = require('./src/middleware/errorLogger');
@@ -51,6 +52,9 @@ app.use('/roster', rosterRoutes);
 // Mount attendance log routes under /attendance-log
 app.use('/attendance-log', attendanceLogRoutes);
 
+// Mount attendance routes under /attendance
+app.use('/attendance', attendanceRoutes);
+
 // ----------------------- Error Handlers -----------------------
 // Must be registered AFTER all routes so they only catch unmatched/errored requests
 app.use(notFoundLogger);  // 404 - route not found
@@ -62,20 +66,24 @@ const PORT = process.env.PORT || 5000;
 // Step 1 - test the database connection
 sequelize.authenticate()
 
-    // Step 2 - apply known schema patches (sync alter alone is unreliable on PostgreSQL)
+    // Step 2 - create or update tables to match model definitions
+    // alter: true updates existing tables safely without deleting data
     .then(() => {
         console.log('');
         console.log('-------------------------------------------------------');
         console.log('Neon database connected successfully.');
-        return sequelize.query(`
-            ALTER TABLE employees
-            ADD COLUMN IF NOT EXISTS roster BOOLEAN NOT NULL DEFAULT false;
-        `);
+        return sequelize.sync({ alter: true });
     })
 
-    // Step 3 - create or update tables to match model definitions
-    // alter: true updates existing tables safely without deleting data
-    .then(() => sequelize.sync({ alter: true }))
+    // Step 3 - apply known schema patches (sync alter alone is unreliable on PostgreSQL)
+    .then(() => sequelize.query(`
+        ALTER TABLE employees
+        ADD COLUMN IF NOT EXISTS roster BOOLEAN NOT NULL DEFAULT false;
+    `))
+    .then(() => sequelize.query(`
+        ALTER TABLE attendance
+        ADD COLUMN IF NOT EXISTS late_cover_minutes INTEGER NOT NULL DEFAULT 0;
+    `))
 
     // Step 4 - start the server only after the database is ready
     .then(() => {

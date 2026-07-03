@@ -5,6 +5,7 @@ import {
   Box, Button, Typography, Paper, Alert, CircularProgress, TablePagination,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import EventAvailableIcon from "@mui/icons-material/EventAvailable";
 import EmployeeForm from "@/components/EmployeeForm";
 import EmployeeTable from "@/components/EmployeeTable";
 import EmployeeFilterBar, {
@@ -13,6 +14,7 @@ import EmployeeFilterBar, {
   type EmployeeFilters,
 } from "@/components/EmployeeFilterBar";
 import {
+  attendanceApi,
   employeeApi,
   buildEmployeeUpdatePayload,
   getErrorMessage,
@@ -37,6 +39,7 @@ export default function EmployeesPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [deletingEmployeeId, setDeletingEmployeeId] = useState<string | null>(null);
+  const [processingAttendance, setProcessingAttendance] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -151,6 +154,26 @@ export default function EmployeesPage() {
     setEditingEmployee(null);
   };
 
+  const handleProcessAttendance = async () => {
+    setProcessingAttendance(true);
+    setError("");
+    setSuccess("");
+    try {
+      const result = await attendanceApi.processToday();
+      const discrepancyNote =
+        result.discrepancyCount > 0
+          ? ` ${result.discrepancyCount} discrepanc${result.discrepancyCount === 1 ? "y" : "ies"} found.`
+          : "";
+      setSuccess(
+        `Processed today's attendance for ${result.processedCount} employee${result.processedCount === 1 ? "" : "s"}.${discrepancyNote}`,
+      );
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setProcessingAttendance(false);
+    }
+  };
+
   const handlePageChange = (_: unknown, newPage: number) => {
     setPage(newPage);
   };
@@ -176,14 +199,25 @@ export default function EmployeesPage() {
           <Typography variant="h5" sx={{ fontWeight: 700, color: "#1e293b" }}>
             Employee Management
           </Typography>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={openCreateForm}
-            sx={{ backgroundColor: "#2563eb", whiteSpace: "nowrap", alignSelf: { xs: "flex-start", md: "center" } }}
-          >
-            Add Employee
-          </Button>
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.5, alignSelf: { xs: "flex-start", md: "center" } }}>
+            <Button
+              variant="outlined"
+              startIcon={processingAttendance ? <CircularProgress size={18} color="inherit" /> : <EventAvailableIcon />}
+              onClick={handleProcessAttendance}
+              disabled={processingAttendance}
+              sx={{ whiteSpace: "nowrap", borderColor: "#16a34a", color: "#16a34a" }}
+            >
+              Process Attendance
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={openCreateForm}
+              sx={{ backgroundColor: "#2563eb", whiteSpace: "nowrap" }}
+            >
+              Add Employee
+            </Button>
+          </Box>
         </Box>
 
         <EmployeeFilterBar

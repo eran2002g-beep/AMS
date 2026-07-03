@@ -3,6 +3,7 @@ const express = require('express');
 const router  = express.Router();
 const { upload } = require('../utils/rosterParser');
 const rosterService = require('../services/rosterService');
+const rosterAttendanceService = require('../services/rosterAttendanceService');
 
 
 //Ahamed's Updates............*****
@@ -93,5 +94,24 @@ router.post(
         }
     }
 );
+
+// POST /roster/process/:rosterId - match roster shifts against punch logs
+router.post('/process/:rosterId', async (req, res) => {
+    try {
+        const rosterId = Number(req.params.rosterId);
+        if (!rosterId) {
+            return res.status(400).json({ status: 'error', error: 'Valid rosterId is required.' });
+        }
+
+        const result = await rosterAttendanceService.processRosterAttendance(rosterId);
+
+        return res.status(200).json({
+            status: 'success',
+            ...result,
+        });
+    } catch (err) {
+        return res.status(400).json({ status: 'error', error: err.message });
+    }
+});
 
 module.exports = router;

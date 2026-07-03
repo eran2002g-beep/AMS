@@ -276,3 +276,44 @@ export const attendanceLogApi = {
     return response.data;
   },
 };
+
+// ─────────────────────────────────── Attendance API ───────────────────────────────────
+
+export type AttendanceDiscrepancy = {
+  employeeId: string;
+  date: string;
+  status: string;
+  lateCoverMinutes: number;
+};
+
+export type AttendanceProcessResponse = {
+  status: "success";
+  processedCount: number;
+  discrepancyCount: number;
+  discrepancies: AttendanceDiscrepancy[];
+  schedule: {
+    shiftStart: string;
+    shiftEnd: string;
+  };
+};
+
+export function getTodayDateString(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+export const attendanceApi = {
+  async processToday() {
+    const response = await api.post<AttendanceProcessResponse>("/attendance/process", {
+      date: getTodayDateString(),
+    });
+    const body = response.data;
+    if (body.status !== "success") {
+      throw new Error("Attendance processing failed");
+    }
+    return body;
+  },
+};
