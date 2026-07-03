@@ -2,43 +2,21 @@
 const express = require('express');
 const router  = express.Router();
 
-const attendanceService = require('../services/attendanceService');
+const isAdmin = require('../middleware/isAdmin');
+const attendanceController = require('../controllers/attendanceController');
 
 // POST /attendance/process - process normal attendance for non-roster employees
 // Body or query: date | month+year | startDate+endDate
-router.post('/process', async (req, res) => {
-    try {
-        const period = { ...req.query, ...req.body };
-        const result = await attendanceService.processNormalAttendance(period);
+router.post('/process', attendanceController.processNormalAttendance);
 
-        return res.status(200).json({
-            status: 'success',
-            ...result,
-        });
-    } catch (err) {
-        return res.status(400).json({ status: 'error', error: err.message });
-    }
-});
+// -----------------------------------------------------------------------
+// GET /attendance/employee/:employeeId - Retrieve attendance records for one employee
+// Supports optional month, year, status, startDate, endDate, page, and limit filters
+// -----------------------------------------------------------------------
+router.get('/employee/:employeeId', isAdmin, attendanceController.getEmployeeAttendance);
 
-router.get('/employee/:employeeId', async (req, res) => {
-    try {
-        const records = await attendanceService.getEmployeeAttendance(
-            req.params.employeeId,
-            req.query
-        );
-        return res.status(200).json({ status: 'success', count: records.length, data: records });
-    } catch (err) {
-        return res.status(400).json({ status: 'error', error: err.message });
-    }
-});
+router.get('/view', isAdmin, attendanceController.getAllAttendance);
 
-router.get('/view', async (req, res) => {
-    try {
-        const records = await attendanceService.getAllAttendance(req.query);
-        return res.status(200).json({ status: 'success', count: records.length, data: records });
-    } catch (err) {
-        return res.status(400).json({ status: 'error', error: err.message });
-    }
-});
+router.get('/:attendanceId', isAdmin, attendanceController.getAttendanceById);
 
 module.exports = router;
