@@ -297,6 +297,62 @@ export type AttendanceProcessResponse = {
   };
 };
 
+export type AttendanceRecord = {
+  id: number;
+  attendanceId: string;
+  employeeId: string;
+  date: string;
+  month: number;
+  year: number;
+  clockIn: string | null;
+  clockOut: string | null;
+  scheduledStart: string | null;
+  scheduledEnd: string | null;
+  status: "present" | "absent" | "leave" | "unauthorised" | "holiday";
+  lateCoverMinutes: number;
+  rosterId: number | null;
+  attendanceLogId: number | null;
+  leaveRequestId: number | null;
+  notes: string | null;
+  isManual: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type EmployeeAttendanceFilters = {
+  month?: number;
+  year?: number;
+  status?: AttendanceRecord["status"];
+  startDate?: string;
+  endDate?: string;
+  page?: number;
+  limit?: number;
+};
+
+export type EmployeeAttendanceResponse = {
+  status: "success";
+  count: number;
+  totalCount: number;
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+  employee: Pick<Employee, "employeeId" | "firstName" | "lastName" | "email" | "department" | "role" | "roster" | "isActive">;
+  filters: {
+    employeeId: string;
+    month?: number;
+    year?: number;
+    status?: AttendanceRecord["status"];
+    startDate?: string;
+    endDate?: string;
+    page: number;
+    limit: number;
+  };
+  data: AttendanceRecord[];
+};
+
 export function getTodayDateString(): string {
   const now = new Date();
   const y = now.getFullYear();
@@ -314,6 +370,29 @@ export const attendanceApi = {
     if (body.status !== "success") {
       throw new Error("Attendance processing failed");
     }
+    return body;
+  },
+
+  async getEmployeeAttendance(employeeId: string, filters: EmployeeAttendanceFilters = {}) {
+    const params: Record<string, string | number> = {};
+
+    if (filters.month != null) params.month = filters.month;
+    if (filters.year != null) params.year = filters.year;
+    if (filters.status) params.status = filters.status;
+    if (filters.startDate) params.startDate = filters.startDate;
+    if (filters.endDate) params.endDate = filters.endDate;
+    if (filters.page != null) params.page = filters.page;
+    if (filters.limit != null) params.limit = filters.limit;
+
+    const response = await api.get<EmployeeAttendanceResponse>(`/attendance/employee/${employeeId}`, {
+      params,
+    });
+
+    const body = response.data;
+    if (body.status !== "success") {
+      throw new Error("Failed to load employee attendance records");
+    }
+
     return body;
   },
 };
