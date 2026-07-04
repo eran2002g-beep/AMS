@@ -13,7 +13,7 @@ router.post('/process', attendanceController.processNormalAttendance);
 // GET /attendance/employee/:employeeId - Retrieve attendance records for one employee
 // Supports optional month, year, status, startDate, endDate, page, and limit filters
 // -----------------------------------------------------------------------
-router.get('/employee/:employeeId', isAdmin, attendanceController.getEmployeeAttendance);
+router.get('/employee/:employeeId', attendanceController.getEmployeeAttendance);
 
 router.get('/view', isAdmin, attendanceController.getAllAttendance);
 
