@@ -11,6 +11,7 @@ import {
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import FingerprintIcon from "@mui/icons-material/Fingerprint";
+import EventNoteIcon from "@mui/icons-material/EventNote";
 import { useRouter } from "next/navigation";
 import type { Employee } from "@/lib/api";
 
@@ -230,6 +231,21 @@ export default function EmployeeTable({ employees, onEdit, onDelete, deletingEmp
                       </IconButton>
                     </Tooltip>
                   )}
+                  <Tooltip title="View attendance">
+                    <IconButton
+                      size="small"
+                      onClick={() => {
+                        sessionStorage.setItem("ams-from-employees", "1");
+                        router.push(
+                          `/employees/attendance/${encodeURIComponent(emp.employeeId)}`,
+                        );
+                      }}
+                      aria-label={`View attendance for ${emp.firstName} ${emp.lastName}`}
+                      sx={{ color: "#16a34a", ml: 0.5 }}
+                    >
+                      <EventNoteIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
                   <Tooltip title="Mock punch">
                     <IconButton
                       size="small"

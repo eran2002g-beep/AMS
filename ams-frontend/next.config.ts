@@ -10,8 +10,13 @@ const nextConfig: NextConfig = {
         destination: `${backendUrl}/employee`,
       },
       {
-        source: "/employee/:path*",
-        destination: `${backendUrl}/employee/:path*`,
+        source: "/employee/create",
+        destination: `${backendUrl}/employee/create`,
+      },
+      {
+        // Single-segment paths only (e.g. /employee/EMP001) — does not match /employee/attendance/*
+        source: "/employee/:employeeId",
+        destination: `${backendUrl}/employee/:employeeId`,
       },
       {
         source: "/roster/:path*",
