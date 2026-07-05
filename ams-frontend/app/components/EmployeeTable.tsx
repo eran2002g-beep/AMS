@@ -237,7 +237,7 @@ export default function EmployeeTable({ employees, onEdit, onDelete, deletingEmp
                       onClick={() => {
                         sessionStorage.setItem("ams-from-employees", "1");
                         router.push(
-                          `/employee/attendance/${encodeURIComponent(emp.employeeId)}`,
+                          `/employees/attendance/${encodeURIComponent(emp.employeeId)}`,
                         );
                       }}
                       aria-label={`View attendance for ${emp.firstName} ${emp.lastName}`}

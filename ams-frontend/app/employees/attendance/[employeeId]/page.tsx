@@ -99,6 +99,11 @@ export default function EmployeeAttendancePage() {
   }, [loadAttendance]);
 
   const handleSearch = () => {
+    if ((startDate && !endDate) || (!startDate && endDate)) {
+      setError("Please select both start and end dates.");
+      return;
+    }
+
     if (startDate && endDate && startDate > endDate) {
       setError("Start date must be on or before end date.");
       return;
@@ -109,9 +114,9 @@ export default function EmployeeAttendancePage() {
       limit: appliedFilters.limit ?? DEFAULT_PAGE_SIZE,
     };
 
-    if (startDate || endDate) {
-      if (startDate) filters.startDate = startDate;
-      if (endDate) filters.endDate = endDate;
+    if (startDate && endDate) {
+      filters.startDate = startDate;
+      filters.endDate = endDate;
     } else {
       const parsed = parseMonthYear(year, month);
       if (typeof parsed === "string") {
