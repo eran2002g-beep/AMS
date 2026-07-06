@@ -47,21 +47,24 @@ const normalizePositiveInteger = (value, fallback, fieldName) => {
 
 const buildAttendanceFilters = (filters = {}) => {
     const where = {};
+    const hasDateRange = Boolean(filters.startDate && filters.endDate);
 
-    if (filters.month !== undefined && filters.month !== '') {
-        const month = Number(filters.month);
-        if (!Number.isInteger(month) || month < 1 || month > 12) {
-            throw new Error('month must be an integer between 1 and 12.');
+    if (!hasDateRange) {
+        if (filters.month !== undefined && filters.month !== '') {
+            const month = Number(filters.month);
+            if (!Number.isInteger(month) || month < 1 || month > 12) {
+                throw new Error('month must be an integer between 1 and 12.');
+            }
+            where.month = month;
         }
-        where.month = month;
-    }
 
-    if (filters.year !== undefined && filters.year !== '') {
-        const year = Number(filters.year);
-        if (!Number.isInteger(year) || year < 1) {
-            throw new Error('year must be a positive integer.');
+        if (filters.year !== undefined && filters.year !== '') {
+            const year = Number(filters.year);
+            if (!Number.isInteger(year) || year < 1) {
+                throw new Error('year must be a positive integer.');
+            }
+            where.year = year;
         }
-        where.year = year;
     }
 
     if (filters.status) {
