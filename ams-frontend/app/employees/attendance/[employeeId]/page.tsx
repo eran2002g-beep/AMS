@@ -11,6 +11,7 @@ import AttendanceTable from "@/components/AttendanceTable";
 import {
   attendanceApi,
   getErrorMessage,
+  getTodayDateString,
   type AttendanceRecord,
   type EmployeeAttendanceFilters,
   type EmployeeAttendanceResponse,
@@ -19,6 +20,7 @@ import {
 const now = new Date();
 const DEFAULT_PAGE_SIZE = 20;
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
+const TODAY = getTodayDateString();
 
 const STATUS_OPTIONS: Array<{ value: "" | AttendanceRecord["status"]; label: string }> = [
   { value: "", label: "All statuses" },
@@ -31,8 +33,8 @@ const STATUS_OPTIONS: Array<{ value: "" | AttendanceRecord["status"]; label: str
 
 function defaultFilters(): EmployeeAttendanceFilters {
   return {
-    month: now.getMonth() + 1,
-    year: now.getFullYear(),
+    startDate: TODAY,
+    endDate: TODAY,
     page: 1,
     limit: DEFAULT_PAGE_SIZE,
   };
@@ -58,8 +60,8 @@ export default function EmployeeAttendancePage() {
   const [year, setYear] = useState(String(now.getFullYear()));
   const [month, setMonth] = useState(String(now.getMonth() + 1));
   const [status, setStatus] = useState<"" | AttendanceRecord["status"]>("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [startDate, setStartDate] = useState(TODAY);
+  const [endDate, setEndDate] = useState(TODAY);
   const [appliedFilters, setAppliedFilters] = useState<EmployeeAttendanceFilters>(defaultFilters());
 
   const [showBackLink, setShowBackLink] = useState(false);
@@ -134,13 +136,16 @@ export default function EmployeeAttendancePage() {
   };
 
   const handleClearFilters = () => {
+    const today = getTodayDateString();
     setYear(String(now.getFullYear()));
     setMonth(String(now.getMonth() + 1));
     setStatus("");
-    setStartDate("");
-    setEndDate("");
+    setStartDate(today);
+    setEndDate(today);
     setError("");
     setAppliedFilters({
+      startDate: today,
+      endDate: today,
       page: 1,
       limit: appliedFilters.limit ?? DEFAULT_PAGE_SIZE,
     });
