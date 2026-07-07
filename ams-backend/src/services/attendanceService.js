@@ -352,14 +352,22 @@ const editAttendanceRecord = async (attendanceId, data) => {
 };
 
 const deleteAttendanceRecord = async (attendanceId) => {
+    if (!attendanceId) {
+        throw new Error('Attendance ID is required to delete a record.');
+    }
+
     const record = await Attendance.findOne({ where: { attendanceId } });
 
     if (!record) {
-        throw new Error('Attendance record not found');
+        throw new Error(`Attendance record with ID ${attendanceId} not found.`);
     }
 
     await record.destroy();
-    return { message: 'Attendance record deleted successfully' };
+
+    return {
+        message: `Attendance record ${attendanceId} deleted successfully.`,
+        attendanceId,
+    };
 };
 
 module.exports = {

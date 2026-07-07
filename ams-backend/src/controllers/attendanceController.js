@@ -67,9 +67,24 @@ const getAttendanceById = async (req, res) => {
     }
 };
 
+const deleteAttendance = async (req, res) => {
+    try {
+        const result = await attendanceService.deleteAttendanceRecord(req.params.attendanceId);
+
+        return res.status(200).json({
+            status: 'success',
+            ...result,
+        });
+    } catch (err) {
+        const statusCode = err.message.includes('not found') ? 404 : 400;
+        return res.status(statusCode).json({ status: 'error', error: err.message });
+    }
+};
+
 module.exports = {
     processNormalAttendance,
     getEmployeeAttendance,
     getAllAttendance,
     getAttendanceById,
+    deleteAttendance,
 };
