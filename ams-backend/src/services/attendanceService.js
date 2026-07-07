@@ -318,24 +318,43 @@ const getAttendanceById = async (attendanceId) => {
 };
 
 const addAttendanceRecord = async (data) => {
-    const { employeeId, date, clockIn, clockOut, status, notes, lateCoverMinutes } = data;
+    const employeeId = String(data?.employeeId || '').trim();
+    const date = String(data?.date || '').trim();
+    const status = String(data?.status || '').trim().toLowerCase();
 
     if (!employeeId || !date || !status) {
         throw new Error('employeeId, date and status are required');
     }
 
-    const dateObj = new Date(date);
+    if (!isValidDateOnly(date)) {
+        throw new Error('date must use YYYY-MM-DD format.');
+    }
+
+    if (!VALID_ATTENDANCE_STATUSES.includes(status)) {
+        throw new Error(`status must be one of: ${VALID_ATTENDANCE_STATUSES.join(', ')}.`);
+    }
+
+    const employee = await Employee.findOne({
+        where: { employeeId, isActive: true },
+    });
+
+    if (!employee) {
+        throw new Error(`Active employee with ID ${employeeId} not found.`);
+    }
+
+    const dateObj = new Date(`${date}T00:00:00Z`);
+    const normalizedNotes = typeof data?.notes === 'string' ? data.notes.trim() : null;
 
     return Attendance.create({
         employeeId,
         date,
-        month: dateObj.getMonth() + 1,
-        year:  dateObj.getFullYear(),
-        clockIn,
-        clockOut,
+        month: dateObj.getUTCMonth() + 1,
+        year:  dateObj.getUTCFullYear(),
+        clockIn: data?.clockIn || null,
+        clockOut: data?.clockOut || null,
         status,
-        lateCoverMinutes: lateCoverMinutes ?? 0,
-        notes,
+        lateCoverMinutes: Number.isInteger(Number(data?.lateCoverMinutes)) ? Number(data.lateCoverMinutes) : 0,
+        notes: normalizedNotes,
         isManual: true,
     });
 };

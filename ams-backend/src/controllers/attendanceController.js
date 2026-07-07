@@ -67,9 +67,24 @@ const getAttendanceById = async (req, res) => {
     }
 };
 
+const createAttendanceRecord = async (req, res) => {
+    try {
+        const record = await attendanceService.addAttendanceRecord(req.body);
+
+        return res.status(201).json({
+            status: 'success',
+            data: record,
+        });
+    } catch (err) {
+        const statusCode = err.message.includes('not found') ? 404 : 400;
+        return res.status(statusCode).json({ status: 'error', error: err.message });
+    }
+};
+
 module.exports = {
     processNormalAttendance,
     getEmployeeAttendance,
     getAllAttendance,
     getAttendanceById,
+    createAttendanceRecord,
 };
