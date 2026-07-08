@@ -352,7 +352,7 @@ const editAttendanceRecord = async (attendanceId, data) => {
 };
 
 const deleteAttendanceRecord = async (attendanceId) => {
-    if (!attendanceId) {
+    if (!attendanceId || attendanceId.trim() === '') {
         throw new Error('Attendance ID is required to delete a record.');
     }
 
