@@ -79,6 +79,7 @@ export default function EmployeeAttendancePage() {
   const [success, setSuccess] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [deletingAttendanceId, setDeletingAttendanceId] = useState<string | null>(null);
 
   useEffect(() => {
     if (sessionStorage.getItem("ams-from-employees") === "1") {
@@ -184,6 +185,21 @@ export default function EmployeeAttendancePage() {
       setError(getErrorMessage(err));
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDeleteAttendance = async (record: AttendanceRecord) => {
+    setDeletingAttendanceId(record.attendanceId);
+    setError("");
+    setSuccess("");
+    try {
+      await attendanceApi.deleteRecord(record.attendanceId);
+      setSuccess(`Attendance record for ${record.date} deleted.`);
+      await loadAttendance();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setDeletingAttendanceId(null);
     }
   };
 
@@ -366,7 +382,11 @@ export default function EmployeeAttendancePage() {
         </Box>
       ) : (
         <>
-          <AttendanceTable records={records} />
+          <AttendanceTable
+            records={records}
+            onDelete={handleDeleteAttendance}
+            deletingAttendanceId={deletingAttendanceId}
+          />
           {meta && (
             <Paper sx={{ borderRadius: 2, mt: 0 }}>
               <TablePagination

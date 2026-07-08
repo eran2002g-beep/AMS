@@ -376,6 +376,12 @@ export type AttendanceCreateResponse = {
   data: AttendanceRecord;
 };
 
+export type AttendanceDeleteResponse = {
+  status: "success";
+  message: string;
+  deletedId: string;
+};
+
 export const attendanceApi = {
   async processToday() {
     const response = await api.post<AttendanceProcessResponse>("/attendance/process", {
@@ -418,5 +424,14 @@ export const attendanceApi = {
       throw new Error("Failed to create attendance record");
     }
     return body.data;
+  },
+
+  async deleteRecord(attendanceId: string) {
+    const response = await api.delete<AttendanceDeleteResponse>(`/attendance/${encodeURIComponent(attendanceId)}`);
+    const body = response.data;
+    if (body.status !== "success") {
+      throw new Error("Failed to delete attendance record");
+    }
+    return body;
   },
 };
