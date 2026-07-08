@@ -361,6 +361,21 @@ export function getTodayDateString(): string {
   return `${y}-${m}-${d}`;
 }
 
+export type AttendanceCreatePayload = {
+  employeeId: string;
+  date: string;
+  status: AttendanceRecord["status"];
+  clockIn?: string;
+  clockOut?: string;
+  lateCoverMinutes?: number;
+  notes?: string;
+};
+
+export type AttendanceCreateResponse = {
+  status: "success";
+  data: AttendanceRecord;
+};
+
 export const attendanceApi = {
   async processToday() {
     const response = await api.post<AttendanceProcessResponse>("/attendance/process", {
@@ -394,5 +409,14 @@ export const attendanceApi = {
     }
 
     return body;
+  },
+
+  async createRecord(payload: AttendanceCreatePayload) {
+    const response = await api.post<AttendanceCreateResponse>("/attendance/create", payload);
+    const body = response.data;
+    if (body.status !== "success") {
+      throw new Error("Failed to create attendance record");
+    }
+    return body.data;
   },
 };

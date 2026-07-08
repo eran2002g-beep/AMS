@@ -16,11 +16,18 @@ import {
   type EmployeeAttendanceFilters,
   type EmployeeAttendanceResponse,
 } from "@/lib/api";
+import AttendanceForm, { type AttendanceFormData } from "@/components/AttendanceForm";
+import AddIcon from "@mui/icons-material/Add";
+
+const TODAY = getTodayDateString();
 
 const now = new Date();
 const DEFAULT_PAGE_SIZE = 20;
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
-const TODAY = getTodayDateString();
+const CURRENT_YEAR = now.getFullYear();
+const CURRENT_MONTH = now.getMonth() + 1;
+
+type FilterMode = "month" | "range";
 
 const STATUS_OPTIONS: Array<{ value: "" | AttendanceRecord["status"]; label: string }> = [
   { value: "", label: "All statuses" },
@@ -57,8 +64,9 @@ export default function EmployeeAttendancePage() {
   const router = useRouter();
   const employeeId = typeof params.employeeId === "string" ? params.employeeId : "";
 
-  const [year, setYear] = useState(String(now.getFullYear()));
-  const [month, setMonth] = useState(String(now.getMonth() + 1));
+  const [filterMode, setFilterMode] = useState<FilterMode>("range");
+  const [year, setYear] = useState(String(CURRENT_YEAR));
+  const [month, setMonth] = useState(String(CURRENT_MONTH));
   const [status, setStatus] = useState<"" | AttendanceRecord["status"]>("");
   const [startDate, setStartDate] = useState(TODAY);
   const [endDate, setEndDate] = useState(TODAY);
@@ -68,6 +76,9 @@ export default function EmployeeAttendancePage() {
   const [response, setResponse] = useState<EmployeeAttendanceResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [formOpen, setFormOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (sessionStorage.getItem("ams-from-employees") === "1") {
@@ -101,22 +112,22 @@ export default function EmployeeAttendancePage() {
   }, [loadAttendance]);
 
   const handleSearch = () => {
-    if ((startDate && !endDate) || (!startDate && endDate)) {
-      setError("Please select both start and end dates.");
-      return;
-    }
-
-    if (startDate && endDate && startDate > endDate) {
-      setError("Start date must be on or before end date.");
-      return;
-    }
-
     const filters: EmployeeAttendanceFilters = {
       page: 1,
       limit: appliedFilters.limit ?? DEFAULT_PAGE_SIZE,
     };
 
-    if (startDate && endDate) {
+    if (filterMode === "range") {
+      if (!startDate || !endDate) {
+        setError("Please select both start and end dates.");
+        return;
+      }
+
+      if (startDate > endDate) {
+        setError("Start date must be on or before end date.");
+        return;
+      }
+
       filters.startDate = startDate;
       filters.endDate = endDate;
     } else {
@@ -137,8 +148,9 @@ export default function EmployeeAttendancePage() {
 
   const handleClearFilters = () => {
     const today = getTodayDateString();
-    setYear(String(now.getFullYear()));
-    setMonth(String(now.getMonth() + 1));
+    setFilterMode("range");
+    setYear(String(CURRENT_YEAR));
+    setMonth(String(CURRENT_MONTH));
     setStatus("");
     setStartDate(today);
     setEndDate(today);
@@ -149,6 +161,30 @@ export default function EmployeeAttendancePage() {
       page: 1,
       limit: appliedFilters.limit ?? DEFAULT_PAGE_SIZE,
     });
+  };
+
+  const handleAddAttendance = async (data: AttendanceFormData) => {
+    setSubmitting(true);
+    setError("");
+    setSuccess("");
+    try {
+      await attendanceApi.createRecord({
+        employeeId,
+        date: data.date,
+        status: data.status,
+        clockIn: data.clockIn || undefined,
+        clockOut: data.clockOut || undefined,
+        lateCoverMinutes: data.lateCoverMinutes ? Number(data.lateCoverMinutes) : undefined,
+        notes: data.notes || undefined,
+      });
+      setFormOpen(false);
+      setSuccess("Attendance record added successfully.");
+      await loadAttendance();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handlePageChange = (_: unknown, newPage: number) => {
@@ -188,33 +224,46 @@ export default function EmployeeAttendancePage() {
           </Box>
         )}
 
-        <Typography variant="h5" sx={{ fontWeight: 700, color: "#1e293b", mb: 1 }}>
-          Employee Attendance
-        </Typography>
-
-        {employee ? (
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center", mb: 2 }}>
-            <Typography variant="body1" sx={{ fontWeight: 600 }}>
-              {employee.firstName} {employee.lastName}
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 2, mb: 2 }}>
+          <Box>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: "#1e293b", mb: 1 }}>
+              Employee Attendance
             </Typography>
-            <Chip label={employee.employeeId} size="small" sx={{ backgroundColor: "#e0f2fe", color: "#0369a1" }} />
-            {employee.department && (
-              <Chip label={employee.department} size="small" sx={{ backgroundColor: "#f1f5f9", color: "#64748b" }} />
+
+            {employee ? (
+              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center" }}>
+                <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                  {employee.firstName} {employee.lastName}
+                </Typography>
+                <Chip label={employee.employeeId} size="small" sx={{ backgroundColor: "#e0f2fe", color: "#0369a1" }} />
+                {employee.department && (
+                  <Chip label={employee.department} size="small" sx={{ backgroundColor: "#f1f5f9", color: "#64748b" }} />
+                )}
+                <Chip
+                  label={employee.roster ? "Roster" : "Normal shift"}
+                  size="small"
+                  sx={{
+                    backgroundColor: employee.roster ? "#dcfce7" : "#f1f5f9",
+                    color: employee.roster ? "#15803d" : "#64748b",
+                  }}
+                />
+              </Box>
+            ) : (
+              <Typography variant="body2" sx={{ color: "#64748b" }}>
+                Employee ID: <Link component="span" sx={{ fontWeight: 600 }}>{employeeId}</Link>
+              </Typography>
             )}
-            <Chip
-              label={employee.roster ? "Roster" : "Normal shift"}
-              size="small"
-              sx={{
-                backgroundColor: employee.roster ? "#dcfce7" : "#f1f5f9",
-                color: employee.roster ? "#15803d" : "#64748b",
-              }}
-            />
           </Box>
-        ) : (
-          <Typography variant="body2" sx={{ color: "#64748b", mb: 2 }}>
-            Employee ID: <Link component="span" sx={{ fontWeight: 600 }}>{employeeId}</Link>
-          </Typography>
-        )}
+
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setFormOpen(true)}
+            sx={{ backgroundColor: "#16a34a", "&:hover": { backgroundColor: "#15803d" } }}
+          >
+            Add Attendance
+          </Button>
+        </Box>
 
         <Box
           sx={{
@@ -225,12 +274,23 @@ export default function EmployeeAttendancePage() {
           }}
         >
           <TextField
+            label="Filter by"
+            select
+            size="small"
+            value={filterMode}
+            onChange={(e) => setFilterMode(e.target.value as FilterMode)}
+            sx={{ width: 140 }}
+          >
+            <MenuItem value="month">Month</MenuItem>
+            <MenuItem value="range">Date range</MenuItem>
+          </TextField>
+          <TextField
             label="Year"
             type="number"
             size="small"
             value={year}
             onChange={(e) => setYear(e.target.value)}
-            disabled={!!startDate || !!endDate}
+            disabled={filterMode === "range"}
             sx={{ width: 110 }}
             slotProps={{ htmlInput: { min: 2000, max: 2099 } }}
           />
@@ -240,7 +300,7 @@ export default function EmployeeAttendancePage() {
             size="small"
             value={month}
             onChange={(e) => setMonth(e.target.value)}
-            disabled={!!startDate || !!endDate}
+            disabled={filterMode === "range"}
             sx={{ width: 140 }}
           >
             {Array.from({ length: 12 }, (_, i) => (
@@ -269,6 +329,7 @@ export default function EmployeeAttendancePage() {
             size="small"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
+            disabled={filterMode === "month"}
             slotProps={{ inputLabel: { shrink: true } }}
             sx={{ width: 160 }}
           />
@@ -278,6 +339,7 @@ export default function EmployeeAttendancePage() {
             size="small"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
+            disabled={filterMode === "month"}
             slotProps={{ inputLabel: { shrink: true } }}
             sx={{ width: 160 }}
           />
@@ -296,6 +358,7 @@ export default function EmployeeAttendancePage() {
       </Paper>
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {success && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess("")}>{success}</Alert>}
 
       {loading ? (
         <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
@@ -322,6 +385,14 @@ export default function EmployeeAttendancePage() {
           )}
         </>
       )}
+
+      <AttendanceForm
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        onSubmit={handleAddAttendance}
+        submitting={submitting}
+        defaultDate={getTodayDateString()}
+      />
     </Box>
   );
 }

@@ -17,7 +17,7 @@ router.get('/employee/:employeeId', attendanceController.getEmployeeAttendance);
 
 router.get('/view', isAdmin, attendanceController.getAllAttendance);
 
-router.post('/create', isAdmin, attendanceController.createAttendanceRecord);
+router.post('/create', attendanceController.createAttendanceRecord);
 
 router.get('/:attendanceId', isAdmin, attendanceController.getAttendanceById);
 
