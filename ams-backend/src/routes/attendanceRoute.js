@@ -21,4 +21,7 @@ router.post('/create', attendanceController.createAttendanceRecord);
 
 router.get('/:attendanceId', isAdmin, attendanceController.getAttendanceById);
 
+// DELETE /attendance/:attendanceId - permanently remove an attendance record (admin only)
+router.delete('/:attendanceId', attendanceController.deleteAttendance);
+
 module.exports = router;
