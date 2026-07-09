@@ -359,15 +359,145 @@ const addAttendanceRecord = async (data) => {
     });
 };
 
+const normalizeAttendanceUpdatePayload = (data = {}) => {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+        throw new Error('Update data must be an object.');
+    }
+
+    const allowedFields = [
+        'employeeId', 'date', 'clockIn', 'clockOut', 'status', 'lateCoverMinutes',
+        'notes', 'scheduledStart', 'scheduledEnd', 'rosterId', 'attendanceLogId',
+        'leaveRequestId', 'isManual', 'month', 'year',
+    ];
+
+    const update = {};
+
+    for (const [key, value] of Object.entries(data)) {
+        if (!allowedFields.includes(key) || value === undefined) {
+            continue;
+        }
+
+        if (key === 'employeeId') {
+            const employeeId = String(value || '').trim();
+            if (!employeeId) {
+                continue;
+            }
+            update.employeeId = employeeId;
+            continue;
+        }
+
+        if (key === 'date') {
+            const date = String(value || '').trim();
+            if (!date) {
+                continue;
+            }
+            if (!isValidDateOnly(date)) {
+                throw new Error('date must use YYYY-MM-DD format.');
+            }
+            const dateObj = new Date(`${date}T00:00:00Z`);
+            update.date = date;
+            update.month = dateObj.getUTCMonth() + 1;
+            update.year = dateObj.getUTCFullYear();
+            continue;
+        }
+
+        if (['clockIn', 'clockOut', 'scheduledStart', 'scheduledEnd'].includes(key)) {
+            update[key] = value === null || value === '' ? null : String(value).trim();
+            continue;
+        }
+
+        if (key === 'status') {
+            const status = String(value || '').trim().toLowerCase();
+            if (!VALID_ATTENDANCE_STATUSES.includes(status)) {
+                throw new Error(`status must be one of: ${VALID_ATTENDANCE_STATUSES.join(', ')}.`);
+            }
+            update.status = status;
+            continue;
+        }
+
+        if (key === 'lateCoverMinutes') {
+            const parsed = Number(value);
+            if (!Number.isInteger(parsed) || parsed < 0) {
+                throw new Error('lateCoverMinutes must be a non-negative integer.');
+            }
+            update.lateCoverMinutes = parsed;
+            continue;
+        }
+
+        if (key === 'notes') {
+            update.notes = typeof value === 'string' ? value.trim() : null;
+            continue;
+        }
+
+        if (key === 'isManual') {
+            update.isManual = Boolean(value);
+            continue;
+        }
+
+        if (['rosterId', 'attendanceLogId', 'leaveRequestId'].includes(key)) {
+            if (value === null || value === '') {
+                update[key] = null;
+                continue;
+            }
+
+            const parsed = Number(value);
+            if (!Number.isInteger(parsed) || parsed <= 0) {
+                throw new Error(`${key} must be a positive integer.`);
+            }
+            update[key] = parsed;
+            continue;
+        }
+
+        if (key === 'month') {
+            const parsed = Number(value);
+            if (!Number.isInteger(parsed) || parsed < 1 || parsed > 12) {
+                throw new Error('month must be an integer between 1 and 12.');
+            }
+            update.month = parsed;
+            continue;
+        }
+
+        if (key === 'year') {
+            const parsed = Number(value);
+            if (!Number.isInteger(parsed) || parsed < 1) {
+                throw new Error('year must be a positive integer.');
+            }
+            update.year = parsed;
+        }
+    }
+
+    if (Object.keys(update).length === 0) {
+        throw new Error('No valid fields provided to update attendance record.');
+    }
+
+    return update;
+};
+
 const editAttendanceRecord = async (attendanceId, data) => {
+    if (!attendanceId || String(attendanceId).trim() === '') {
+        throw new Error('Attendance ID is required to edit a record.');
+    }
+
     const record = await Attendance.findOne({ where: { attendanceId } });
 
     if (!record) {
         throw new Error('Attendance record not found');
     }
 
-    await record.update(data);
-    return record;
+    const updatePayload = normalizeAttendanceUpdatePayload(data);
+
+    if (updatePayload.employeeId) {
+        const employee = await Employee.findOne({
+            where: { employeeId: updatePayload.employeeId, isActive: true },
+        });
+
+        if (!employee) {
+            throw new Error(`Active employee with ID ${updatePayload.employeeId} not found.`);
+        }
+    }
+
+    await record.update(updatePayload);
+    return record.reload();
 };
 
 const deleteAttendanceRecord = async (attendanceId) => {
