@@ -10,6 +10,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import AttendanceTable from "@/components/AttendanceTable";
 import {
   attendanceApi,
+  buildAttendanceUpdatePayload,
   getErrorMessage,
   getTodayDateString,
   type AttendanceRecord,
@@ -78,6 +79,7 @@ export default function EmployeeAttendancePage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [formOpen, setFormOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<AttendanceRecord | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [deletingAttendanceId, setDeletingAttendanceId] = useState<string | null>(null);
 
@@ -164,6 +166,21 @@ export default function EmployeeAttendancePage() {
     });
   };
 
+  const openCreateForm = () => {
+    setEditingRecord(null);
+    setFormOpen(true);
+  };
+
+  const openEditForm = (record: AttendanceRecord) => {
+    setEditingRecord(record);
+    setFormOpen(true);
+  };
+
+  const closeForm = () => {
+    setFormOpen(false);
+    setEditingRecord(null);
+  };
+
   const handleAddAttendance = async (data: AttendanceFormData) => {
     setSubmitting(true);
     setError("");
@@ -178,8 +195,33 @@ export default function EmployeeAttendancePage() {
         lateCoverMinutes: data.lateCoverMinutes ? Number(data.lateCoverMinutes) : undefined,
         notes: data.notes || undefined,
       });
-      setFormOpen(false);
+      closeForm();
       setSuccess("Attendance record added successfully.");
+      await loadAttendance();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleUpdateAttendance = async (data: AttendanceFormData) => {
+    if (!editingRecord) return;
+
+    const changes = buildAttendanceUpdatePayload(editingRecord, data);
+    if (Object.keys(changes).length === 0) {
+      setSuccess("No changes to save.");
+      closeForm();
+      return;
+    }
+
+    setSubmitting(true);
+    setError("");
+    setSuccess("");
+    try {
+      await attendanceApi.updateRecord(editingRecord.attendanceId, changes);
+      closeForm();
+      setSuccess("Attendance record updated successfully.");
       await loadAttendance();
     } catch (err) {
       setError(getErrorMessage(err));
@@ -274,7 +316,7 @@ export default function EmployeeAttendancePage() {
           <Button
             variant="contained"
             startIcon={<AddIcon />}
-            onClick={() => setFormOpen(true)}
+            onClick={openCreateForm}
             sx={{ backgroundColor: "#16a34a", "&:hover": { backgroundColor: "#15803d" } }}
           >
             Add Attendance
@@ -384,6 +426,7 @@ export default function EmployeeAttendancePage() {
         <>
           <AttendanceTable
             records={records}
+            onEdit={openEditForm}
             onDelete={handleDeleteAttendance}
             deletingAttendanceId={deletingAttendanceId}
           />
@@ -408,10 +451,11 @@ export default function EmployeeAttendancePage() {
 
       <AttendanceForm
         open={formOpen}
-        onClose={() => setFormOpen(false)}
-        onSubmit={handleAddAttendance}
+        onClose={closeForm}
+        onSubmit={editingRecord ? handleUpdateAttendance : handleAddAttendance}
         submitting={submitting}
         defaultDate={getTodayDateString()}
+        record={editingRecord}
       />
     </Box>
   );

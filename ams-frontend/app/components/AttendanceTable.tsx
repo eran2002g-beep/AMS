@@ -7,10 +7,12 @@ import {
   DialogContentText, DialogActions, Button,
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
+import EditIcon from "@mui/icons-material/Edit";
 import type { AttendanceRecord } from "@/lib/api";
 
 type Props = {
   records: AttendanceRecord[];
+  onEdit?: (record: AttendanceRecord) => void;
   onDelete?: (record: AttendanceRecord) => Promise<void>;
   deletingAttendanceId?: string | null;
 };
@@ -50,9 +52,9 @@ function statusChipSx(status: AttendanceRecord["status"]) {
   }
 }
 
-export default function AttendanceTable({ records, onDelete, deletingAttendanceId }: Props) {
+export default function AttendanceTable({ records, onEdit, onDelete, deletingAttendanceId }: Props) {
   const [confirmTarget, setConfirmTarget] = useState<AttendanceRecord | null>(null);
-  const showActions = !!onDelete;
+  const showActions = !!onEdit || !!onDelete;
   const columnCount = COLUMNS.length + (showActions ? 1 : 0);
 
   const handleConfirmDelete = async () => {
@@ -126,17 +128,30 @@ export default function AttendanceTable({ records, onDelete, deletingAttendanceI
                   <TableCell>{display(record.notes)}</TableCell>
                   {showActions && (
                     <TableCell>
-                      <Tooltip title="Delete attendance">
-                        <IconButton
-                          size="small"
-                          onClick={() => setConfirmTarget(record)}
-                          disabled={deletingAttendanceId === record.attendanceId}
-                          aria-label={`Delete attendance for ${formatDate(record.date)}`}
-                          sx={{ color: "#dc2626" }}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
+                      {onEdit && (
+                        <Tooltip title="Edit attendance">
+                          <IconButton
+                            size="small"
+                            onClick={() => onEdit(record)}
+                            aria-label={`Edit attendance for ${formatDate(record.date)}`}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                      {onDelete && (
+                        <Tooltip title="Delete attendance">
+                          <IconButton
+                            size="small"
+                            onClick={() => setConfirmTarget(record)}
+                            disabled={deletingAttendanceId === record.attendanceId}
+                            aria-label={`Delete attendance for ${formatDate(record.date)}`}
+                            sx={{ color: "#dc2626", ml: onEdit ? 0.5 : 0 }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                     </TableCell>
                   )}
                 </TableRow>

@@ -5,6 +5,7 @@ import {
   TextField, Button, Box, CircularProgress, MenuItem,
 } from "@mui/material";
 import type { AttendanceRecord } from "@/lib/api";
+import TimePickerField from "@/components/TimePickerField";
 
 export type AttendanceFormData = {
   date: string;
@@ -34,24 +35,44 @@ function emptyForm(defaultDate: string): AttendanceFormData {
   };
 }
 
+function recordToForm(record: AttendanceRecord): AttendanceFormData {
+  return {
+    date: record.date,
+    status: record.status,
+    clockIn: record.clockIn ? record.clockIn.slice(0, 5) : "",
+    clockOut: record.clockOut ? record.clockOut.slice(0, 5) : "",
+    lateCoverMinutes: record.lateCoverMinutes > 0 ? String(record.lateCoverMinutes) : "",
+    notes: record.notes ?? "",
+  };
+}
+
 type Props = {
   open: boolean;
   onClose: () => void;
   onSubmit: (data: AttendanceFormData) => Promise<void>;
   submitting?: boolean;
   defaultDate?: string;
+  record?: AttendanceRecord | null;
 };
 
-export default function AttendanceForm({ open, onClose, onSubmit, submitting, defaultDate = "" }: Props) {
+export default function AttendanceForm({
+  open,
+  onClose,
+  onSubmit,
+  submitting,
+  defaultDate = "",
+  record,
+}: Props) {
+  const isEdit = !!record;
   const [form, setForm] = useState<AttendanceFormData>(emptyForm(defaultDate));
   const [errors, setErrors] = useState<Partial<Record<keyof AttendanceFormData, string>>>({});
 
   useEffect(() => {
     if (open) {
-      setForm(emptyForm(defaultDate));
+      setForm(record ? recordToForm(record) : emptyForm(defaultDate));
       setErrors({});
     }
-  }, [open, defaultDate]);
+  }, [open, defaultDate, record]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -79,7 +100,9 @@ export default function AttendanceForm({ open, onClose, onSubmit, submitting, de
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle sx={{ fontWeight: 700 }}>Add Attendance Record</DialogTitle>
+      <DialogTitle sx={{ fontWeight: 700 }}>
+        {isEdit ? "Edit Attendance Record" : "Add Attendance Record"}
+      </DialogTitle>
       <DialogContent>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
           <TextField
@@ -112,23 +135,21 @@ export default function AttendanceForm({ open, onClose, onSubmit, submitting, de
             ))}
           </TextField>
           <Box sx={{ display: "flex", gap: 2 }}>
-            <TextField
-              name="clockIn"
+            <TimePickerField
               label="Clock In"
-              type="time"
               value={form.clockIn}
-              onChange={handleChange}
-              slotProps={{ inputLabel: { shrink: true } }}
-              fullWidth
+              onChange={(clockIn) => {
+                setForm({ ...form, clockIn });
+                setErrors({ ...errors, clockIn: "" });
+              }}
             />
-            <TextField
-              name="clockOut"
+            <TimePickerField
               label="Clock Out"
-              type="time"
               value={form.clockOut}
-              onChange={handleChange}
-              slotProps={{ inputLabel: { shrink: true } }}
-              fullWidth
+              onChange={(clockOut) => {
+                setForm({ ...form, clockOut });
+                setErrors({ ...errors, clockOut: "" });
+              }}
             />
           </Box>
           <TextField
@@ -163,7 +184,7 @@ export default function AttendanceForm({ open, onClose, onSubmit, submitting, de
           disabled={submitting}
           sx={{ backgroundColor: "#16a34a", "&:hover": { backgroundColor: "#15803d" } }}
         >
-          {submitting ? <CircularProgress size={22} color="inherit" /> : "Save"}
+          {submitting ? <CircularProgress size={22} color="inherit" /> : isEdit ? "Save Changes" : "Save"}
         </Button>
       </DialogActions>
     </Dialog>

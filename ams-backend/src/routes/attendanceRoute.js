@@ -22,7 +22,7 @@ router.post('/create', attendanceController.createAttendanceRecord);
 router.get('/:attendanceId', isAdmin, attendanceController.getAttendanceById);
 
 // PUT /attendance/:attendanceId - update an attendance record (admin only)
-router.put('/:attendanceId', isAdmin, attendanceController.updateAttendance);
+router.put('/:attendanceId', attendanceController.updateAttendance);
 
 // DELETE /attendance/:attendanceId - permanently remove an attendance record (admin only)
 router.delete('/:attendanceId', isAdmin, attendanceController.deleteAttendance);
