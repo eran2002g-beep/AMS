@@ -361,6 +361,86 @@ export function getTodayDateString(): string {
   return `${y}-${m}-${d}`;
 }
 
+export type AttendanceCreatePayload = {
+  employeeId: string;
+  date: string;
+  status: AttendanceRecord["status"];
+  clockIn?: string;
+  clockOut?: string;
+  lateCoverMinutes?: number;
+  notes?: string;
+};
+
+export type AttendanceCreateResponse = {
+  status: "success";
+  data: AttendanceRecord;
+};
+
+export type AttendanceDeleteResponse = {
+  status: "success";
+  message: string;
+  deletedId: string;
+};
+
+export type AttendanceUpdatePayload = Partial<{
+  date: string;
+  status: AttendanceRecord["status"];
+  clockIn: string | null;
+  clockOut: string | null;
+  lateCoverMinutes: number;
+  notes: string | null;
+}>;
+
+export type AttendanceUpdateResponse = {
+  status: "success";
+  message: string;
+  data: AttendanceRecord;
+};
+
+function normalizeTimeForCompare(value: string | null): string {
+  if (!value) return "";
+  return value.slice(0, 5);
+}
+
+export function buildAttendanceUpdatePayload(
+  original: AttendanceRecord,
+  form: {
+    date: string;
+    status: AttendanceRecord["status"];
+    clockIn: string;
+    clockOut: string;
+    lateCoverMinutes: string;
+    notes: string;
+  },
+): AttendanceUpdatePayload {
+  const changes: AttendanceUpdatePayload = {};
+
+  if (form.date !== original.date) changes.date = form.date;
+  if (form.status !== original.status) changes.status = form.status;
+
+  const origClockIn = normalizeTimeForCompare(original.clockIn);
+  const origClockOut = normalizeTimeForCompare(original.clockOut);
+  if (form.clockIn !== origClockIn) {
+    changes.clockIn = form.clockIn || null;
+  }
+  if (form.clockOut !== origClockOut) {
+    changes.clockOut = form.clockOut || null;
+  }
+
+  const lateMinutes = form.lateCoverMinutes ? Number(form.lateCoverMinutes) : 0;
+  if (lateMinutes !== original.lateCoverMinutes) {
+    changes.lateCoverMinutes = lateMinutes;
+  }
+
+  const notes = form.notes.trim();
+  const origNotes = original.notes ?? "";
+  if (notes !== origNotes) {
+    changes.notes = notes || null;
+  }
+
+  return changes;
+}
+
 export const attendanceApi = {
   async processToday() {
     const response = await api.post<AttendanceProcessResponse>("/attendance/process", {
@@ -394,5 +474,35 @@ export const attendanceApi = {
     }
 
     return body;
+  },
+
+  async createRecord(payload: AttendanceCreatePayload) {
+    const response = await api.post<AttendanceCreateResponse>("/attendance/create", payload);
+    const body = response.data;
+    if (body.status !== "success") {
+      throw new Error("Failed to create attendance record");
+    }
+    return body.data;
+  },
+
+  async deleteRecord(attendanceId: string) {
+    const response = await api.delete<AttendanceDeleteResponse>(`/attendance/${encodeURIComponent(attendanceId)}`);
+    const body = response.data;
+    if (body.status !== "success") {
+      throw new Error("Failed to delete attendance record");
+    }
+    return body;
+  },
+
+  async updateRecord(attendanceId: string, payload: AttendanceUpdatePayload) {
+    const response = await api.put<AttendanceUpdateResponse>(
+      `/attendance/${encodeURIComponent(attendanceId)}`,
+      payload,
+    );
+    const body = response.data;
+    if (body.status !== "success") {
+      throw new Error("Failed to update attendance record");
+    }
+    return body.data;
   },
 };

@@ -1,12 +1,20 @@
 "use client";
+import { useState } from "react";
 import {
   Table, TableHead, TableRow, TableCell,
   TableBody, TableContainer, Paper, Chip,
+  IconButton, Tooltip, Dialog, DialogTitle, DialogContent,
+  DialogContentText, DialogActions, Button,
 } from "@mui/material";
+import DeleteIcon from "@mui/icons-material/Delete";
+import EditIcon from "@mui/icons-material/Edit";
 import type { AttendanceRecord } from "@/lib/api";
 
 type Props = {
   records: AttendanceRecord[];
+  onEdit?: (record: AttendanceRecord) => void;
+  onDelete?: (record: AttendanceRecord) => Promise<void>;
+  deletingAttendanceId?: string | null;
 };
 
 const COLUMNS = [
@@ -44,62 +52,149 @@ function statusChipSx(status: AttendanceRecord["status"]) {
   }
 }
 
-export default function AttendanceTable({ records }: Props) {
+export default function AttendanceTable({ records, onEdit, onDelete, deletingAttendanceId }: Props) {
+  const [confirmTarget, setConfirmTarget] = useState<AttendanceRecord | null>(null);
+  const showActions = !!onEdit || !!onDelete;
+  const columnCount = COLUMNS.length + (showActions ? 1 : 0);
+
+  const handleConfirmDelete = async () => {
+    if (!confirmTarget || !onDelete) return;
+    await onDelete(confirmTarget);
+    setConfirmTarget(null);
+  };
+
   return (
-    <TableContainer component={Paper} sx={{ borderRadius: 2, boxShadow: 2 }}>
-      <Table>
-        <TableHead>
-          <TableRow sx={{ backgroundColor: "#1e293b" }}>
-            {COLUMNS.map((col) => (
-              <TableCell
-                key={col.id}
-                sx={{
-                  color: "#fff",
-                  fontWeight: 700,
-                  fontSize: "0.8rem",
-                  textTransform: "uppercase",
-                }}
-              >
-                {col.label}
-              </TableCell>
-            ))}
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {records.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={COLUMNS.length} align="center" sx={{ color: "#94a3b8", py: 4 }}>
-                No attendance records found for the selected filters.
-              </TableCell>
+    <>
+      <TableContainer component={Paper} sx={{ borderRadius: 2, boxShadow: 2 }}>
+        <Table>
+          <TableHead>
+            <TableRow sx={{ backgroundColor: "#1e293b" }}>
+              {COLUMNS.map((col) => (
+                <TableCell
+                  key={col.id}
+                  sx={{
+                    color: "#fff",
+                    fontWeight: 700,
+                    fontSize: "0.8rem",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {col.label}
+                </TableCell>
+              ))}
+              {showActions && (
+                <TableCell
+                  sx={{
+                    color: "#fff",
+                    fontWeight: 700,
+                    fontSize: "0.8rem",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Actions
+                </TableCell>
+              )}
             </TableRow>
-          ) : (
-            records.map((record) => (
-              <TableRow key={record.id} hover>
-                <TableCell sx={{ fontWeight: 600 }}>{formatDate(record.date)}</TableCell>
-                <TableCell>{display(record.clockIn)}</TableCell>
-                <TableCell>{display(record.clockOut)}</TableCell>
-                <TableCell>
-                  {record.scheduledStart && record.scheduledEnd
-                    ? `${record.scheduledStart} – ${record.scheduledEnd}`
-                    : "—"}
+          </TableHead>
+          <TableBody>
+            {records.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={columnCount} align="center" sx={{ color: "#94a3b8", py: 4 }}>
+                  No attendance records found for the selected filters.
                 </TableCell>
-                <TableCell>
-                  <Chip
-                    label={record.status}
-                    size="small"
-                    sx={{
-                      ...statusChipSx(record.status),
-                      textTransform: "capitalize",
-                    }}
-                  />
-                </TableCell>
-                <TableCell>{record.lateCoverMinutes > 0 ? record.lateCoverMinutes : "—"}</TableCell>
-                <TableCell>{display(record.notes)}</TableCell>
               </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
-    </TableContainer>
+            ) : (
+              records.map((record) => (
+                <TableRow key={record.id} hover>
+                  <TableCell sx={{ fontWeight: 600 }}>{formatDate(record.date)}</TableCell>
+                  <TableCell>{display(record.clockIn)}</TableCell>
+                  <TableCell>{display(record.clockOut)}</TableCell>
+                  <TableCell>
+                    {record.scheduledStart && record.scheduledEnd
+                      ? `${record.scheduledStart} – ${record.scheduledEnd}`
+                      : "—"}
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={record.status}
+                      size="small"
+                      sx={{
+                        ...statusChipSx(record.status),
+                        textTransform: "capitalize",
+                      }}
+                    />
+                  </TableCell>
+                  <TableCell>{record.lateCoverMinutes > 0 ? record.lateCoverMinutes : "—"}</TableCell>
+                  <TableCell>{display(record.notes)}</TableCell>
+                  {showActions && (
+                    <TableCell>
+                      {onEdit && (
+                        <Tooltip title="Edit attendance">
+                          <IconButton
+                            size="small"
+                            onClick={() => onEdit(record)}
+                            aria-label={`Edit attendance for ${formatDate(record.date)}`}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                      {onDelete && (
+                        <Tooltip title="Delete attendance">
+                          <IconButton
+                            size="small"
+                            onClick={() => setConfirmTarget(record)}
+                            disabled={deletingAttendanceId === record.attendanceId}
+                            aria-label={`Delete attendance for ${formatDate(record.date)}`}
+                            sx={{ color: "#dc2626", ml: onEdit ? 0.5 : 0 }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
+
+      <Dialog
+        open={confirmTarget !== null}
+        onClose={() => !deletingAttendanceId && setConfirmTarget(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ backgroundColor: "#1e293b", color: "#fff", py: 1.5 }}>
+          Delete Attendance
+        </DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          <DialogContentText>
+            {confirmTarget && (
+              <>
+                Delete attendance record for{" "}
+                <strong>{formatDate(confirmTarget.date)}</strong> ({confirmTarget.attendanceId})?
+                This cannot be undone.
+              </>
+            )}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 1.5 }}>
+          <Button onClick={() => setConfirmTarget(null)} disabled={!!deletingAttendanceId}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleConfirmDelete}
+            disabled={!!deletingAttendanceId}
+          >
+            {deletingAttendanceId ? "Deleting…" : "Delete"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   );
 }
