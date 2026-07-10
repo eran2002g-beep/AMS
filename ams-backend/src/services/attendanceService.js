@@ -1,9 +1,10 @@
-// src/services/attendanceService.js - normal attendance processing and attendance record management
+// src/services/attendanceService.js - normal and roster attendance processing and attendance record management
 
 const { Op } = require('sequelize');
 const Employee      = require('../models/Employee');
 const AttendanceLog = require('../models/AttendanceLog');
 const Attendance    = require('../models/Attendance');
+const RosterEntry   = require('../models/Roster');
 const {
     NORMAL_SHIFT_START,
     NORMAL_SHIFT_END,
@@ -14,6 +15,14 @@ const {
     buildDiscrepancy,
     isDiscrepancy,
 } = require('../utils/attendanceUtils');
+const {
+    validateTimeString,
+    validateClockInBeforeClockOut,
+    validateDateNotInFuture,
+    validateNoDuplicateAttendance,
+    validateLateCoverMinutes,
+    validateShiftTimes,
+} = require('./attendanceValidation');
 
 const pad = (n) => String(n).padStart(2, '0');
 
@@ -197,6 +206,85 @@ const processNormalAttendance = async (period = {}) => {
     };
 };
 
+// ---------------------------------------------------------------------------
+// processRosterAttendance
+// Processes attendance for all entries in a given roster batch.
+// For each RosterEntry, it:
+//   1. Finds the matching AttendanceLog punches for that employee on that date
+//   2. Selects the closest clock-in / clock-out times to the scheduled shift
+//   3. Calculates status (present / absent / unauthorised) and lateCoverMinutes
+//   4. Upserts a final Attendance record (creates or overwrites the existing one)
+// Returns processedCount, discrepancyCount, discrepancies, records, and schedule info
+// ---------------------------------------------------------------------------
+const processRosterAttendance = async (rosterId) => {
+    if (!rosterId || !Number.isInteger(Number(rosterId)) || Number(rosterId) <= 0) {
+        throw new Error('A valid positive integer rosterId is required.');
+    }
+
+    const rosterIdNum = Number(rosterId);
+
+    const entries = await RosterEntry.findAll({ where: { rosterId: rosterIdNum } });
+
+    if (entries.length === 0) {
+        throw new Error(`No roster entries found for roster ID ${rosterIdNum}.`);
+    }
+
+    const results       = [];
+    const discrepancies = [];
+
+    for (const entry of entries) {
+        // Fetch all punch logs for this employee on this roster date, ordered by time
+        const logs = await AttendanceLog.findAll({
+            where: {
+                employeeId: entry.employeeId,
+                punchDate:  entry.date,
+            },
+            order: [['punchTime', 'ASC']],
+        });
+
+        // Match the closest clock-in / clock-out to the scheduled shift window
+        const { clockIn, clockOut, logId } = matchLogsToShift(
+            logs, entry.shiftStart, entry.shiftEnd
+        );
+
+        const status           = calculateStatus(clockIn, clockOut);
+        const lateCoverMinutes = calculateLateCover(
+            entry.shiftStart, entry.shiftEnd, clockIn, clockOut
+        );
+
+        if (isDiscrepancy(status, lateCoverMinutes)) {
+            discrepancies.push(buildDiscrepancy(
+                entry.employeeId, entry.date, status, lateCoverMinutes
+            ));
+        }
+
+        const attendanceRecord = await upsertAttendanceRecord({
+            employeeId:      entry.employeeId,
+            date:            entry.date,
+            clockIn,
+            clockOut,
+            scheduledStart:  entry.shiftStart,
+            scheduledEnd:    entry.shiftEnd,
+            status,
+            lateCoverMinutes,
+            rosterId:        rosterIdNum,
+            logId,
+        });
+
+        results.push(attendanceRecord);
+    }
+
+    return {
+        processedCount:   results.length,
+        discrepancyCount: discrepancies.length,
+        discrepancies,
+        records:          results,
+        schedule: {
+            rosterId: rosterIdNum,
+        },
+    };
+};
+
 const getEmployeeAttendance = async (employeeId, filters = {}) => {
     if (!employeeId) {
         throw new Error('Employee ID is required to retrieve attendance records.');
@@ -334,6 +422,16 @@ const addAttendanceRecord = async (data) => {
         throw new Error(`status must be one of: ${VALID_ATTENDANCE_STATUSES.join(', ')}.`);
     }
 
+    // --- Attendance validation checks ---
+    validateDateNotInFuture(date);
+
+    const clockIn  = data?.clockIn  ? String(data.clockIn).trim()  : null;
+    const clockOut = data?.clockOut ? String(data.clockOut).trim() : null;
+    validateTimeString(clockIn,  'clockIn');
+    validateTimeString(clockOut, 'clockOut');
+    validateClockInBeforeClockOut(clockIn, clockOut);
+    validateLateCoverMinutes(data?.lateCoverMinutes);
+
     const employee = await Employee.findOne({
         where: { employeeId, isActive: true },
     });
@@ -341,6 +439,8 @@ const addAttendanceRecord = async (data) => {
     if (!employee) {
         throw new Error(`Active employee with ID ${employeeId} not found.`);
     }
+
+    await validateNoDuplicateAttendance(employeeId, date);
 
     const dateObj = new Date(`${date}T00:00:00Z`);
     const normalizedNotes = typeof data?.notes === 'string' ? data.notes.trim() : null;
@@ -350,8 +450,8 @@ const addAttendanceRecord = async (data) => {
         date,
         month: dateObj.getUTCMonth() + 1,
         year:  dateObj.getUTCFullYear(),
-        clockIn: data?.clockIn || null,
-        clockOut: data?.clockOut || null,
+        clockIn,
+        clockOut,
         status,
         lateCoverMinutes: Number.isInteger(Number(data?.lateCoverMinutes)) ? Number(data.lateCoverMinutes) : 0,
         notes: normalizedNotes,
@@ -402,7 +502,12 @@ const normalizeAttendanceUpdatePayload = (data = {}) => {
         }
 
         if (['clockIn', 'clockOut', 'scheduledStart', 'scheduledEnd'].includes(key)) {
-            update[key] = value === null || value === '' ? null : String(value).trim();
+            const normalizedTime = value === null || value === '' ? null : String(value).trim();
+            // Validate the time string format when a non-null value is supplied
+            if (normalizedTime !== null) {
+                validateTimeString(normalizedTime, key);
+            }
+            update[key] = normalizedTime;
             continue;
         }
 
@@ -416,11 +521,8 @@ const normalizeAttendanceUpdatePayload = (data = {}) => {
         }
 
         if (key === 'lateCoverMinutes') {
-            const parsed = Number(value);
-            if (!Number.isInteger(parsed) || parsed < 0) {
-                throw new Error('lateCoverMinutes must be a non-negative integer.');
-            }
-            update.lateCoverMinutes = parsed;
+            validateLateCoverMinutes(value);
+            update.lateCoverMinutes = Number(value);
             continue;
         }
 
@@ -496,6 +598,26 @@ const editAttendanceRecord = async (attendanceId, data) => {
         }
     }
 
+    // --- Cross-field validation using merged (existing + incoming) values ---
+
+    // Merge clockIn / clockOut: incoming payload wins, fall back to existing record
+    const mergedClockIn  = 'clockIn'  in updatePayload ? updatePayload.clockIn  : record.clockIn;
+    const mergedClockOut = 'clockOut' in updatePayload ? updatePayload.clockOut : record.clockOut;
+    validateClockInBeforeClockOut(mergedClockIn, mergedClockOut);
+
+    // Merge scheduledStart / scheduledEnd and validate the shift window
+    const mergedStart = 'scheduledStart' in updatePayload ? updatePayload.scheduledStart : record.scheduledStart;
+    const mergedEnd   = 'scheduledEnd'   in updatePayload ? updatePayload.scheduledEnd   : record.scheduledEnd;
+    validateShiftTimes(mergedStart, mergedEnd);
+
+    // If date or employeeId is changing, guard against creating a duplicate record
+    const targetEmployeeId = updatePayload.employeeId ?? record.employeeId;
+    const targetDate       = updatePayload.date       ?? record.date;
+    const dateOrEmpChanged = updatePayload.employeeId || updatePayload.date;
+    if (dateOrEmpChanged) {
+        await validateNoDuplicateAttendance(targetEmployeeId, targetDate, attendanceId);
+    }
+
     await record.update(updatePayload);
     return record.reload();
 };
@@ -521,6 +643,7 @@ const deleteAttendanceRecord = async (attendanceId) => {
 
 module.exports = {
     processNormalAttendance,
+    processRosterAttendance,
     getEmployeeAttendance,
     getAllAttendance,
     getAttendanceById,
