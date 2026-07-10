@@ -1,9 +1,10 @@
-// src/services/attendanceService.js - normal attendance processing and attendance record management
+// src/services/attendanceService.js - normal and roster attendance processing and attendance record management
 
 const { Op } = require('sequelize');
 const Employee      = require('../models/Employee');
 const AttendanceLog = require('../models/AttendanceLog');
 const Attendance    = require('../models/Attendance');
+const RosterEntry   = require('../models/Roster');
 const {
     NORMAL_SHIFT_START,
     NORMAL_SHIFT_END,
@@ -193,6 +194,85 @@ const processNormalAttendance = async (period = {}) => {
         schedule: {
             shiftStart: NORMAL_SHIFT_START,
             shiftEnd:   NORMAL_SHIFT_END,
+        },
+    };
+};
+
+// ---------------------------------------------------------------------------
+// processRosterAttendance
+// Processes attendance for all entries in a given roster batch.
+// For each RosterEntry, it:
+//   1. Finds the matching AttendanceLog punches for that employee on that date
+//   2. Selects the closest clock-in / clock-out times to the scheduled shift
+//   3. Calculates status (present / absent / unauthorised) and lateCoverMinutes
+//   4. Upserts a final Attendance record (creates or overwrites the existing one)
+// Returns processedCount, discrepancyCount, discrepancies, records, and schedule info
+// ---------------------------------------------------------------------------
+const processRosterAttendance = async (rosterId) => {
+    if (!rosterId || !Number.isInteger(Number(rosterId)) || Number(rosterId) <= 0) {
+        throw new Error('A valid positive integer rosterId is required.');
+    }
+
+    const rosterIdNum = Number(rosterId);
+
+    const entries = await RosterEntry.findAll({ where: { rosterId: rosterIdNum } });
+
+    if (entries.length === 0) {
+        throw new Error(`No roster entries found for roster ID ${rosterIdNum}.`);
+    }
+
+    const results       = [];
+    const discrepancies = [];
+
+    for (const entry of entries) {
+        // Fetch all punch logs for this employee on this roster date, ordered by time
+        const logs = await AttendanceLog.findAll({
+            where: {
+                employeeId: entry.employeeId,
+                punchDate:  entry.date,
+            },
+            order: [['punchTime', 'ASC']],
+        });
+
+        // Match the closest clock-in / clock-out to the scheduled shift window
+        const { clockIn, clockOut, logId } = matchLogsToShift(
+            logs, entry.shiftStart, entry.shiftEnd
+        );
+
+        const status           = calculateStatus(clockIn, clockOut);
+        const lateCoverMinutes = calculateLateCover(
+            entry.shiftStart, entry.shiftEnd, clockIn, clockOut
+        );
+
+        if (isDiscrepancy(status, lateCoverMinutes)) {
+            discrepancies.push(buildDiscrepancy(
+                entry.employeeId, entry.date, status, lateCoverMinutes
+            ));
+        }
+
+        const attendanceRecord = await upsertAttendanceRecord({
+            employeeId:      entry.employeeId,
+            date:            entry.date,
+            clockIn,
+            clockOut,
+            scheduledStart:  entry.shiftStart,
+            scheduledEnd:    entry.shiftEnd,
+            status,
+            lateCoverMinutes,
+            rosterId:        rosterIdNum,
+            logId,
+        });
+
+        results.push(attendanceRecord);
+    }
+
+    return {
+        processedCount:   results.length,
+        discrepancyCount: discrepancies.length,
+        discrepancies,
+        records:          results,
+        schedule: {
+            rosterId: rosterIdNum,
         },
     };
 };
@@ -521,6 +601,7 @@ const deleteAttendanceRecord = async (attendanceId) => {
 
 module.exports = {
     processNormalAttendance,
+    processRosterAttendance,
     getEmployeeAttendance,
     getAllAttendance,
     getAttendanceById,
