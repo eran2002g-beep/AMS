@@ -15,6 +15,14 @@ const {
     buildDiscrepancy,
     isDiscrepancy,
 } = require('../utils/attendanceUtils');
+const {
+    validateTimeString,
+    validateClockInBeforeClockOut,
+    validateDateNotInFuture,
+    validateNoDuplicateAttendance,
+    validateLateCoverMinutes,
+    validateShiftTimes,
+} = require('./attendanceValidation');
 
 const pad = (n) => String(n).padStart(2, '0');
 
@@ -414,6 +422,16 @@ const addAttendanceRecord = async (data) => {
         throw new Error(`status must be one of: ${VALID_ATTENDANCE_STATUSES.join(', ')}.`);
     }
 
+    // --- Attendance validation checks ---
+    validateDateNotInFuture(date);
+
+    const clockIn  = data?.clockIn  ? String(data.clockIn).trim()  : null;
+    const clockOut = data?.clockOut ? String(data.clockOut).trim() : null;
+    validateTimeString(clockIn,  'clockIn');
+    validateTimeString(clockOut, 'clockOut');
+    validateClockInBeforeClockOut(clockIn, clockOut);
+    validateLateCoverMinutes(data?.lateCoverMinutes);
+
     const employee = await Employee.findOne({
         where: { employeeId, isActive: true },
     });
@@ -421,6 +439,8 @@ const addAttendanceRecord = async (data) => {
     if (!employee) {
         throw new Error(`Active employee with ID ${employeeId} not found.`);
     }
+
+    await validateNoDuplicateAttendance(employeeId, date);
 
     const dateObj = new Date(`${date}T00:00:00Z`);
     const normalizedNotes = typeof data?.notes === 'string' ? data.notes.trim() : null;
@@ -430,8 +450,8 @@ const addAttendanceRecord = async (data) => {
         date,
         month: dateObj.getUTCMonth() + 1,
         year:  dateObj.getUTCFullYear(),
-        clockIn: data?.clockIn || null,
-        clockOut: data?.clockOut || null,
+        clockIn,
+        clockOut,
         status,
         lateCoverMinutes: Number.isInteger(Number(data?.lateCoverMinutes)) ? Number(data.lateCoverMinutes) : 0,
         notes: normalizedNotes,
@@ -482,7 +502,12 @@ const normalizeAttendanceUpdatePayload = (data = {}) => {
         }
 
         if (['clockIn', 'clockOut', 'scheduledStart', 'scheduledEnd'].includes(key)) {
-            update[key] = value === null || value === '' ? null : String(value).trim();
+            const normalizedTime = value === null || value === '' ? null : String(value).trim();
+            // Validate the time string format when a non-null value is supplied
+            if (normalizedTime !== null) {
+                validateTimeString(normalizedTime, key);
+            }
+            update[key] = normalizedTime;
             continue;
         }
 
@@ -496,11 +521,8 @@ const normalizeAttendanceUpdatePayload = (data = {}) => {
         }
 
         if (key === 'lateCoverMinutes') {
-            const parsed = Number(value);
-            if (!Number.isInteger(parsed) || parsed < 0) {
-                throw new Error('lateCoverMinutes must be a non-negative integer.');
-            }
-            update.lateCoverMinutes = parsed;
+            validateLateCoverMinutes(value);
+            update.lateCoverMinutes = Number(value);
             continue;
         }
 
@@ -574,6 +596,26 @@ const editAttendanceRecord = async (attendanceId, data) => {
         if (!employee) {
             throw new Error(`Active employee with ID ${updatePayload.employeeId} not found.`);
         }
+    }
+
+    // --- Cross-field validation using merged (existing + incoming) values ---
+
+    // Merge clockIn / clockOut: incoming payload wins, fall back to existing record
+    const mergedClockIn  = 'clockIn'  in updatePayload ? updatePayload.clockIn  : record.clockIn;
+    const mergedClockOut = 'clockOut' in updatePayload ? updatePayload.clockOut : record.clockOut;
+    validateClockInBeforeClockOut(mergedClockIn, mergedClockOut);
+
+    // Merge scheduledStart / scheduledEnd and validate the shift window
+    const mergedStart = 'scheduledStart' in updatePayload ? updatePayload.scheduledStart : record.scheduledStart;
+    const mergedEnd   = 'scheduledEnd'   in updatePayload ? updatePayload.scheduledEnd   : record.scheduledEnd;
+    validateShiftTimes(mergedStart, mergedEnd);
+
+    // If date or employeeId is changing, guard against creating a duplicate record
+    const targetEmployeeId = updatePayload.employeeId ?? record.employeeId;
+    const targetDate       = updatePayload.date       ?? record.date;
+    const dateOrEmpChanged = updatePayload.employeeId || updatePayload.date;
+    if (dateOrEmpChanged) {
+        await validateNoDuplicateAttendance(targetEmployeeId, targetDate, attendanceId);
     }
 
     await record.update(updatePayload);

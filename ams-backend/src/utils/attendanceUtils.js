@@ -1,10 +1,19 @@
-// src/utils/attendanceUtils.js - shared attendance calculation helpers
+// src/utils/attendanceUtils.js - shared attendance calculation helpers and validation primitives
 
 const Attendance = require('../models/Attendance');
 
 const NORMAL_SHIFT_START = '08:30';
 const NORMAL_SHIFT_END   = '17:00';
 const MINUTES_PER_DAY    = 24 * 60;
+
+// isValidTimeString - returns true for HH:MM or HH:MM:SS with valid hour/minute/second ranges
+const isValidTimeString = (value) => {
+    if (typeof value !== 'string') return false;
+    const match = /^(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(value.trim());
+    if (!match) return false;
+    const [, h, m, s] = match.map((v) => (v === undefined ? 0 : Number(v)));
+    return h >= 0 && h <= 23 && m >= 0 && m <= 59 && s >= 0 && s <= 59;
+};
 
 const timeToMinutes = (timeStr) => {
     const [hours, minutes] = timeStr.split(':').map(Number);
@@ -142,6 +151,7 @@ const isDiscrepancy = (status, lateCoverMinutes) =>
 module.exports = {
     NORMAL_SHIFT_START,
     NORMAL_SHIFT_END,
+    isValidTimeString,
     calculateLateCover,
     calculateStatus,
     matchLogsToShift,
