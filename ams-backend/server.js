@@ -84,6 +84,10 @@ sequelize.authenticate()
         ALTER TABLE attendance
         ADD COLUMN IF NOT EXISTS late_cover_minutes INTEGER NOT NULL DEFAULT 0;
     `))
+    .then(() => sequelize.query(`
+        ALTER TABLE attendance
+        ADD COLUMN IF NOT EXISTS late_minutes INTEGER NOT NULL DEFAULT 0;
+    `))
 
     // Step 4 - start the server only after the database is ready
     .then(() => {

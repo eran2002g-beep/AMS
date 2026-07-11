@@ -154,12 +154,12 @@ export default function AttendanceForm({
           </Box>
           <TextField
             name="lateCoverMinutes"
-            label="Late (minutes)"
+            label="Cover owed (minutes)"
             type="number"
             value={form.lateCoverMinutes}
             onChange={handleChange}
             error={!!errors.lateCoverMinutes}
-            helperText={errors.lateCoverMinutes}
+            helperText={errors.lateCoverMinutes || "Minutes still owed if the employee left before making up lateness"}
             slotProps={{ htmlInput: { min: 0 } }}
             fullWidth
           />

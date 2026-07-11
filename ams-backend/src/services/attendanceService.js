@@ -8,6 +8,7 @@ const RosterEntry   = require('../models/Roster');
 const {
     NORMAL_SHIFT_START,
     NORMAL_SHIFT_END,
+    calculateArrivalLateMinutes,
     calculateLateCover,
     calculateStatus,
     matchLogsToShift,
@@ -187,13 +188,14 @@ const processNormalAttendance = async (period = {}) => {
             );
 
             const status           = calculateStatus(clockIn, clockOut);
+            const lateMinutes      = calculateArrivalLateMinutes(NORMAL_SHIFT_START, clockIn);
             const lateCoverMinutes = calculateLateCover(
                 NORMAL_SHIFT_START, NORMAL_SHIFT_END, clockIn, clockOut
             );
 
-            if (isDiscrepancy(status, lateCoverMinutes)) {
+            if (isDiscrepancy(status, lateMinutes, lateCoverMinutes)) {
                 discrepancies.push(buildDiscrepancy(
-                    employee.employeeId, date, status, lateCoverMinutes
+                    employee.employeeId, date, status, lateMinutes, lateCoverMinutes
                 ));
             }
 
@@ -205,6 +207,7 @@ const processNormalAttendance = async (period = {}) => {
                 scheduledStart:  NORMAL_SHIFT_START,
                 scheduledEnd:    NORMAL_SHIFT_END,
                 status,
+                lateMinutes,
                 lateCoverMinutes,
                 rosterId:        null,
                 logId,
@@ -226,18 +229,6 @@ const processNormalAttendance = async (period = {}) => {
     };
 };
 
-// ---------------------------------------------------------------------------
-// processRosterAttendance
-// Processes attendance for roster shifts in a given period.
-// Period: date | month+year | startDate+endDate (same as processNormalAttendance)
-// Optional: rosterId — process a single upload batch instead of a date period
-// For each RosterEntry, it:
-//   1. Finds the matching AttendanceLog punches for that employee on that date
-//   2. Selects the closest clock-in / clock-out times to the scheduled shift
-//   3. Calculates status (present / absent / unauthorised) and lateCoverMinutes
-//   4. Upserts a final Attendance record (creates or overwrites the existing one)
-// Returns processedCount, discrepancyCount, discrepancies, records, and schedule info
-// ---------------------------------------------------------------------------
 const processRosterEntries = async (entries) => {
     const results       = [];
     const discrepancies = [];
@@ -256,13 +247,14 @@ const processRosterEntries = async (entries) => {
         );
 
         const status           = calculateStatus(clockIn, clockOut);
+        const lateMinutes      = calculateArrivalLateMinutes(entry.shiftStart, clockIn);
         const lateCoverMinutes = calculateLateCover(
             entry.shiftStart, entry.shiftEnd, clockIn, clockOut
         );
 
-        if (isDiscrepancy(status, lateCoverMinutes)) {
+        if (isDiscrepancy(status, lateMinutes, lateCoverMinutes)) {
             discrepancies.push(buildDiscrepancy(
-                entry.employeeId, entry.date, status, lateCoverMinutes
+                entry.employeeId, entry.date, status, lateMinutes, lateCoverMinutes
             ));
         }
 
@@ -274,6 +266,7 @@ const processRosterEntries = async (entries) => {
             scheduledStart:  entry.shiftStart,
             scheduledEnd:    entry.shiftEnd,
             status,
+            lateMinutes,
             lateCoverMinutes,
             rosterId:        entry.rosterId,
             logId,
@@ -285,6 +278,75 @@ const processRosterEntries = async (entries) => {
     return { results, discrepancies };
 };
 
+const removeAutoRosterAttendance = async (employeeId, date) => Attendance.destroy({
+    where: {
+        employeeId,
+        date,
+        isManual: false,
+        rosterId: { [Op.ne]: null },
+    },
+});
+
+const filterRosterEntriesForProcessing = async (entries) => {
+    const employeeIds = [...new Set(entries.map((entry) => entry.employeeId))];
+
+    const employees = await Employee.findAll({
+        where: { employeeId: employeeIds },
+        attributes: ['employeeId', 'roster', 'isActive'],
+    });
+
+    const employeeMap = new Map(employees.map((employee) => [employee.employeeId, employee]));
+
+    const eligible          = [];
+    const skipped           = [];
+    let removedRecordCount  = 0;
+
+    for (const entry of entries) {
+        const employee = employeeMap.get(entry.employeeId);
+
+        if (!employee) {
+            removedRecordCount += await removeAutoRosterAttendance(entry.employeeId, entry.date);
+            skipped.push({
+                employeeId: entry.employeeId,
+                date:       entry.date,
+                reason:     'Employee not found.',
+            });
+            continue;
+        }
+
+        if (!employee.isActive) {
+            removedRecordCount += await removeAutoRosterAttendance(entry.employeeId, entry.date);
+            skipped.push({
+                employeeId: entry.employeeId,
+                date:       entry.date,
+                reason:     'Employee is inactive.',
+            });
+            continue;
+        }
+
+        if (!employee.roster) {
+            removedRecordCount += await removeAutoRosterAttendance(entry.employeeId, entry.date);
+            skipped.push({
+                employeeId: entry.employeeId,
+                date:       entry.date,
+                reason:     'Employee is not marked as on roster.',
+            });
+            continue;
+        }
+
+        eligible.push(entry);
+    }
+
+    return { eligible, skipped, removedRecordCount };
+};
+
+// ---------------------------------------------------------------------------
+// processRosterAttendance
+// Processes attendance for roster shifts in a given period.
+// Only employees marked roster=true are processed.
+// Period: date | month+year | startDate+endDate (same as processNormalAttendance)
+// Optional: rosterId — process a single upload batch instead of a date period
+// ---------------------------------------------------------------------------
 const processRosterAttendance = async (period = {}) => {
     let entries;
     let schedule = {};
@@ -322,13 +384,34 @@ const processRosterAttendance = async (period = {}) => {
         }
     }
 
-    const { results, discrepancies } = await processRosterEntries(entries);
+    const { eligible, skipped, removedRecordCount } = await filterRosterEntriesForProcessing(entries);
+
+    if (eligible.length === 0) {
+        if (skipped.length > 0) {
+            return {
+                processedCount:      0,
+                skippedCount:        skipped.length,
+                removedRecordCount,
+                discrepancyCount:    0,
+                discrepancies:       [],
+                skipped,
+                records:             [],
+                schedule,
+            };
+        }
+        throw new Error('No roster shifts found for the selected period.');
+    }
+
+    const { results, discrepancies } = await processRosterEntries(eligible);
 
     return {
-        processedCount:   results.length,
-        discrepancyCount: discrepancies.length,
+        processedCount:      results.length,
+        skippedCount:        skipped.length,
+        removedRecordCount,
+        discrepancyCount:    discrepancies.length,
         discrepancies,
-        records:          results,
+        skipped,
+        records:             results,
         schedule,
     };
 };

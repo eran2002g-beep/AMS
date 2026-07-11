@@ -1,6 +1,43 @@
 // src/services/rosterService.js - roster upload and view operations
 const Roster = require('../models/Roster');
+const Employee = require('../models/Employee');
 const { parseRosterFile, extractMonthYear } = require('../utils/rosterParser');
+
+const validateRosterEmployees = async (rosterRows) => {
+    const employeeIds = [...new Set(rosterRows.map((row) => row.employeeId))];
+
+    const employees = await Employee.findAll({
+        where: { employeeId: employeeIds },
+        attributes: ['employeeId', 'roster', 'isActive', 'firstName', 'lastName'],
+    });
+
+    const employeeMap = new Map(employees.map((employee) => [employee.employeeId, employee]));
+    const invalid     = [];
+
+    for (const employeeId of employeeIds) {
+        const employee = employeeMap.get(employeeId);
+
+        if (!employee) {
+            invalid.push(`${employeeId} (not found)`);
+            continue;
+        }
+
+        if (!employee.isActive) {
+            invalid.push(`${employeeId} (inactive)`);
+            continue;
+        }
+
+        if (!employee.roster) {
+            invalid.push(`${employeeId} (not on roster)`);
+        }
+    }
+
+    if (invalid.length > 0) {
+        throw new Error(
+            `Roster upload rejected. Only active roster employees are allowed: ${invalid.join(', ')}.`,
+        );
+    }
+};
 
 // uploadRoster - called by POST /roster/upload
 // Accepts the multer file object, parses it, then bulk-inserts all rows into the roster table.
@@ -21,6 +58,8 @@ const uploadRoster = async (file) => {
     //   shiftStart  e.g. "08:00"
     //   shiftEnd    e.g. "17:00"
     const rosterRows = await parseRosterFile(file.path, file.originalname);
+
+    await validateRosterEmployees(rosterRows);
 
     // ---------------------------- Step 2: Generate a unique rosterId for this batch ----------------------------
     // rosterId groups all rows from one upload together.

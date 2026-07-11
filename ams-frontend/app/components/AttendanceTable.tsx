@@ -9,6 +9,13 @@ import {
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import type { AttendanceRecord } from "@/lib/api";
+import {
+  formatLateMinutes,
+  getArrivalLateMinutes,
+  getAttendanceDisplayStatus,
+  getLateCoverMinutes,
+  getRequiredClockOut,
+} from "@/lib/api";
 
 type Props = {
   records: AttendanceRecord[];
@@ -23,7 +30,8 @@ const COLUMNS = [
   { id: "clockOut", label: "Clock Out" },
   { id: "scheduled", label: "Scheduled" },
   { id: "status", label: "Status" },
-  { id: "lateCoverMinutes", label: "Late (min)" },
+  { id: "lateMinutes", label: "Late (min)" },
+  { id: "lateCoverMinutes", label: "Cover owed (min)" },
   { id: "notes", label: "Notes" },
 ];
 
@@ -35,21 +43,16 @@ function formatDate(value: string) {
   return date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
-function statusChipSx(status: AttendanceRecord["status"]) {
-  switch (status) {
-    case "present":
-      return { backgroundColor: "#dcfce7", color: "#15803d" };
-    case "absent":
-      return { backgroundColor: "#fee2e2", color: "#b91c1c" };
-    case "leave":
-      return { backgroundColor: "#e0f2fe", color: "#0369a1" };
-    case "unauthorised":
-      return { backgroundColor: "#fef3c7", color: "#b45309" };
-    case "holiday":
-      return { backgroundColor: "#f3e8ff", color: "#7e22ce" };
-    default:
-      return { backgroundColor: "#f1f5f9", color: "#64748b" };
-  }
+function lateCellSx(minutes: number) {
+  return minutes > 0
+    ? { color: "#c2410c", fontWeight: 700 }
+    : { color: "inherit" };
+}
+
+function coverCellSx(minutes: number) {
+  return minutes > 0
+    ? { color: "#b45309", fontWeight: 700 }
+    : { color: "inherit" };
 }
 
 export default function AttendanceTable({ records, onEdit, onDelete, deletingAttendanceId }: Props) {
@@ -104,7 +107,13 @@ export default function AttendanceTable({ records, onEdit, onDelete, deletingAtt
                 </TableCell>
               </TableRow>
             ) : (
-              records.map((record) => (
+              records.map((record) => {
+                const lateMinutes = getArrivalLateMinutes(record);
+                const coverOwed = getLateCoverMinutes(record);
+                const displayStatus = getAttendanceDisplayStatus(record);
+                const requiredClockOut = getRequiredClockOut(record);
+
+                return (
                 <TableRow key={record.id} hover>
                   <TableCell sx={{ fontWeight: 600 }}>{formatDate(record.date)}</TableCell>
                   <TableCell>{display(record.clockIn)}</TableCell>
@@ -115,16 +124,35 @@ export default function AttendanceTable({ records, onEdit, onDelete, deletingAtt
                       : "—"}
                   </TableCell>
                   <TableCell>
-                    <Chip
-                      label={record.status}
-                      size="small"
-                      sx={{
-                        ...statusChipSx(record.status),
-                        textTransform: "capitalize",
-                      }}
-                    />
+                    <Tooltip title={displayStatus.detail ?? ""} disableHoverListener={!displayStatus.detail}>
+                      <Chip
+                        label={displayStatus.label}
+                        size="small"
+                        sx={{
+                          ...displayStatus.chipSx,
+                          textTransform: "none",
+                          fontWeight: 600,
+                        }}
+                      />
+                    </Tooltip>
                   </TableCell>
-                  <TableCell>{record.lateCoverMinutes > 0 ? record.lateCoverMinutes : "—"}</TableCell>
+                  <TableCell sx={lateCellSx(lateMinutes)}>
+                    {formatLateMinutes(lateMinutes)}
+                  </TableCell>
+                  <TableCell sx={coverCellSx(coverOwed)}>
+                    <Tooltip
+                      title={
+                        coverOwed > 0 && requiredClockOut
+                          ? `Should have clocked out by ${requiredClockOut}`
+                          : coverOwed > 0
+                            ? "Late cover time not made up"
+                            : ""
+                      }
+                      disableHoverListener={coverOwed <= 0}
+                    >
+                      <span>{formatLateMinutes(coverOwed)}</span>
+                    </Tooltip>
+                  </TableCell>
                   <TableCell>{display(record.notes)}</TableCell>
                   {showActions && (
                     <TableCell>
@@ -155,7 +183,8 @@ export default function AttendanceTable({ records, onEdit, onDelete, deletingAtt
                     </TableCell>
                   )}
                 </TableRow>
-              ))
+                );
+              })
             )}
           </TableBody>
         </Table>

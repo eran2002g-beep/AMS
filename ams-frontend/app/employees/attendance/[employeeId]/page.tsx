@@ -8,6 +8,7 @@ import {
 import SearchIcon from "@mui/icons-material/Search";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import AttendanceTable from "@/components/AttendanceTable";
+import DateRangePicker from "@/components/DateRangePicker";
 import {
   attendanceApi,
   buildAttendanceUpdatePayload,
@@ -342,31 +343,44 @@ export default function EmployeeAttendancePage() {
             <MenuItem value="month">Month</MenuItem>
             <MenuItem value="range">Date range</MenuItem>
           </TextField>
-          <TextField
-            label="Year"
-            type="number"
-            size="small"
-            value={year}
-            onChange={(e) => setYear(e.target.value)}
-            disabled={filterMode === "range"}
-            sx={{ width: 110 }}
-            slotProps={{ htmlInput: { min: 2000, max: 2099 } }}
-          />
-          <TextField
-            label="Month"
-            select
-            size="small"
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
-            disabled={filterMode === "range"}
-            sx={{ width: 140 }}
-          >
-            {Array.from({ length: 12 }, (_, i) => (
-              <MenuItem key={i + 1} value={String(i + 1)}>
-                {new Date(2000, i, 1).toLocaleString("default", { month: "long" })}
-              </MenuItem>
-            ))}
-          </TextField>
+
+          {filterMode === "month" ? (
+            <>
+              <TextField
+                label="Year"
+                type="number"
+                size="small"
+                value={year}
+                onChange={(e) => setYear(e.target.value)}
+                sx={{ width: 110 }}
+                slotProps={{ htmlInput: { min: 2000, max: 2099 } }}
+              />
+              <TextField
+                label="Month"
+                select
+                size="small"
+                value={month}
+                onChange={(e) => setMonth(e.target.value)}
+                sx={{ width: 140 }}
+              >
+                {Array.from({ length: 12 }, (_, i) => (
+                  <MenuItem key={i + 1} value={String(i + 1)}>
+                    {new Date(2000, i, 1).toLocaleString("default", { month: "long" })}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </>
+          ) : (
+            <Box sx={{ flex: { xs: "1 1 100%", md: "1 1 480px" }, minWidth: 0 }}>
+              <DateRangePicker
+                startDate={startDate}
+                endDate={endDate}
+                onStartDateChange={setStartDate}
+                onEndDateChange={setEndDate}
+              />
+            </Box>
+          )}
+
           <TextField
             label="Status"
             select
@@ -381,26 +395,6 @@ export default function EmployeeAttendancePage() {
               </MenuItem>
             ))}
           </TextField>
-          <TextField
-            label="Start date"
-            type="date"
-            size="small"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            disabled={filterMode === "month"}
-            slotProps={{ inputLabel: { shrink: true } }}
-            sx={{ width: 160 }}
-          />
-          <TextField
-            label="End date"
-            type="date"
-            size="small"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            disabled={filterMode === "month"}
-            slotProps={{ inputLabel: { shrink: true } }}
-            sx={{ width: 160 }}
-          />
           <Button
             variant="contained"
             startIcon={<SearchIcon />}

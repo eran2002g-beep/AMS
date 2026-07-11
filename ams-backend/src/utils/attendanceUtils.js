@@ -37,6 +37,15 @@ const normalizeOnShiftTimeline = (scheduledStart, scheduledEnd, clockIn, clockOu
     return { startMins, endMins, inMins, outMins };
 };
 
+const calculateArrivalLateMinutes = (scheduledStart, clockIn) => {
+    if (!clockIn || !scheduledStart) return 0;
+
+    const startMins = timeToMinutes(scheduledStart);
+    const inMins    = timeToMinutes(clockIn);
+
+    return Math.max(0, inMins - startMins);
+};
+
 const calculateLateCover = (scheduledStart, scheduledEnd, clockIn, clockOut) => {
     if (!clockIn || !clockOut) return 0;
 
@@ -99,6 +108,7 @@ const upsertAttendanceRecord = async ({
     scheduledStart,
     scheduledEnd,
     status,
+    lateMinutes,
     lateCoverMinutes,
     rosterId,
     logId,
@@ -115,6 +125,7 @@ const upsertAttendanceRecord = async ({
         existing.scheduledStart   = scheduledStart;
         existing.scheduledEnd     = scheduledEnd;
         existing.status           = status;
+        existing.lateMinutes      = lateMinutes;
         existing.lateCoverMinutes = lateCoverMinutes;
         existing.rosterId         = rosterId;
         existing.attendanceLogId  = logId;
@@ -131,6 +142,7 @@ const upsertAttendanceRecord = async ({
         scheduledStart,
         scheduledEnd,
         status,
+        lateMinutes,
         lateCoverMinutes,
         rosterId,
         attendanceLogId: logId,
@@ -138,20 +150,22 @@ const upsertAttendanceRecord = async ({
     });
 };
 
-const buildDiscrepancy = (employeeId, date, status, lateCoverMinutes) => ({
+const buildDiscrepancy = (employeeId, date, status, lateMinutes, lateCoverMinutes) => ({
     employeeId,
     date,
     status,
+    lateMinutes,
     lateCoverMinutes,
 });
 
-const isDiscrepancy = (status, lateCoverMinutes) =>
-    status === 'absent' || status === 'unauthorised' || lateCoverMinutes > 0;
+const isDiscrepancy = (status, lateMinutes, lateCoverMinutes) =>
+    status === 'absent' || status === 'unauthorised' || lateMinutes > 0 || lateCoverMinutes > 0;
 
 module.exports = {
     NORMAL_SHIFT_START,
     NORMAL_SHIFT_END,
     isValidTimeString,
+    calculateArrivalLateMinutes,
     calculateLateCover,
     calculateStatus,
     matchLogsToShift,

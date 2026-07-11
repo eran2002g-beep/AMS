@@ -283,14 +283,24 @@ export type AttendanceDiscrepancy = {
   employeeId: string;
   date: string;
   status: string;
+  lateMinutes: number;
   lateCoverMinutes: number;
+};
+
+export type RosterSkippedEntry = {
+  employeeId: string;
+  date: string;
+  reason: string;
 };
 
 export type AttendanceProcessResponse = {
   status: "success";
   processedCount: number;
+  skippedCount?: number;
+  removedRecordCount?: number;
   discrepancyCount: number;
   discrepancies: AttendanceDiscrepancy[];
+  skipped?: RosterSkippedEntry[];
   schedule: {
     shiftStart?: string;
     shiftEnd?: string;
@@ -323,6 +333,7 @@ export type AttendanceRecord = {
   scheduledStart: string | null;
   scheduledEnd: string | null;
   status: "present" | "absent" | "leave" | "unauthorised" | "holiday";
+  lateMinutes: number;
   lateCoverMinutes: number;
   rosterId: number | null;
   attendanceLogId: number | null;
@@ -375,6 +386,124 @@ export function getTodayDateString(): string {
   return `${y}-${m}-${d}`;
 }
 
+function timeToMinutes(time: string): number {
+  const [hours, minutes] = time.split(":").map(Number);
+  return (hours * 60) + minutes;
+}
+
+export function getArrivalLateMinutes(
+  record: Pick<AttendanceRecord, "lateMinutes" | "clockIn" | "scheduledStart">,
+): number {
+  if (record.clockIn && record.scheduledStart) {
+    return Math.max(0, timeToMinutes(record.clockIn) - timeToMinutes(record.scheduledStart));
+  }
+  return record.lateMinutes ?? 0;
+}
+
+const MINUTES_PER_DAY = 24 * 60;
+
+function normalizeOnShiftTimeline(
+  scheduledStart: string,
+  scheduledEnd: string,
+  clockIn: string,
+  clockOut: string,
+) {
+  let startMins = timeToMinutes(scheduledStart);
+  let endMins = timeToMinutes(scheduledEnd);
+  let inMins = timeToMinutes(clockIn);
+  let outMins = timeToMinutes(clockOut);
+
+  if (endMins <= startMins) endMins += MINUTES_PER_DAY;
+  if (outMins < inMins) outMins += MINUTES_PER_DAY;
+
+  return { startMins, endMins, inMins, outMins };
+}
+
+export function getLateCoverMinutes(
+  record: Pick<
+    AttendanceRecord,
+    "lateCoverMinutes" | "clockIn" | "clockOut" | "scheduledStart" | "scheduledEnd"
+  >,
+): number {
+  if (record.clockIn && record.clockOut && record.scheduledStart && record.scheduledEnd) {
+    const { startMins, endMins, inMins, outMins } = normalizeOnShiftTimeline(
+      record.scheduledStart,
+      record.scheduledEnd,
+      record.clockIn,
+      record.clockOut,
+    );
+    const arrivalLateMinutes = Math.max(0, inMins - startMins);
+    const requiredClockOutMins = endMins + arrivalLateMinutes;
+    return Math.max(0, requiredClockOutMins - outMins);
+  }
+  return record.lateCoverMinutes ?? 0;
+}
+
+export function formatLateMinutes(value: number): string {
+  return value > 0 ? String(value) : "—";
+}
+
+export type AttendanceDisplayStatus = {
+  label: string;
+  chipSx: { backgroundColor: string; color: string };
+  detail?: string;
+};
+
+export function getAttendanceDisplayStatus(
+  record: Pick<
+    AttendanceRecord,
+    "status" | "lateMinutes" | "lateCoverMinutes" | "clockIn" | "clockOut" | "scheduledStart" | "scheduledEnd"
+  >,
+): AttendanceDisplayStatus {
+  const lateMinutes = getArrivalLateMinutes(record);
+  const coverOwed = getLateCoverMinutes(record);
+
+  if (record.status === "present" && lateMinutes > 0 && coverOwed > 0) {
+    return {
+      label: "Late · Not covered",
+      chipSx: { backgroundColor: "#ffedd5", color: "#c2410c" },
+      detail: `${lateMinutes} min late, ${coverOwed} min cover still owed`,
+    };
+  }
+
+  if (record.status === "present" && lateMinutes > 0 && coverOwed === 0) {
+    return {
+      label: "Late · Covered",
+      chipSx: { backgroundColor: "#dcfce7", color: "#15803d" },
+      detail: `${lateMinutes} min late, cover time made up`,
+    };
+  }
+
+  switch (record.status) {
+    case "present":
+      return { label: "Present", chipSx: { backgroundColor: "#dcfce7", color: "#15803d" } };
+    case "absent":
+      return { label: "Absent", chipSx: { backgroundColor: "#fee2e2", color: "#b91c1c" } };
+    case "leave":
+      return { label: "Leave", chipSx: { backgroundColor: "#e0f2fe", color: "#0369a1" } };
+    case "unauthorised":
+      return { label: "Unauthorised", chipSx: { backgroundColor: "#fef3c7", color: "#b45309" } };
+    case "holiday":
+      return { label: "Holiday", chipSx: { backgroundColor: "#f3e8ff", color: "#7e22ce" } };
+    default:
+      return { label: record.status, chipSx: { backgroundColor: "#f1f5f9", color: "#64748b" } };
+  }
+}
+
+export function getRequiredClockOut(
+  record: Pick<AttendanceRecord, "scheduledEnd" | "scheduledStart" | "clockIn" | "lateMinutes">,
+): string | null {
+  const lateMinutes = getArrivalLateMinutes(record);
+  if (!record.scheduledEnd || lateMinutes <= 0) return null;
+
+  const [hours, minutes] = record.scheduledEnd.split(":").map(Number);
+  const totalMinutes = (hours * 60) + minutes + lateMinutes;
+  const normalized = totalMinutes % MINUTES_PER_DAY;
+  const h = Math.floor(normalized / 60);
+  const m = normalized % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
 export type AttendanceCreatePayload = {
   employeeId: string;
   date: string;
@@ -401,6 +530,7 @@ export type AttendanceUpdatePayload = Partial<{
   status: AttendanceRecord["status"];
   clockIn: string | null;
   clockOut: string | null;
+  lateMinutes: number;
   lateCoverMinutes: number;
   notes: string | null;
 }>;

@@ -14,7 +14,13 @@ import UploadFileIcon from "@mui/icons-material/UploadFile";
 import SearchIcon from "@mui/icons-material/Search";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EventAvailableIcon from "@mui/icons-material/EventAvailable";
+import DateRangePicker from "@/components/DateRangePicker";
 import { rosterApi, attendanceApi, type RosterEntry, type RosterViewFilters, getErrorMessage } from "@/lib/api";
+import {
+  formatDateRangeLabel,
+  getThisMonthRange,
+  parseDateRange,
+} from "@/lib/dateUtils";
 
 const now = new Date();
 
@@ -38,19 +44,7 @@ function monthName(month: number): string {
   return new Date(2000, month - 1, 1).toLocaleString("default", { month: "long" });
 }
 
-function parseDateRange(startDate: string, endDate: string): { startDate: string; endDate: string } | string {
-  if (!startDate.trim() || !endDate.trim()) {
-    return "Please select both a start date and an end date.";
-  }
-  if (startDate > endDate) {
-    return "Start date must be on or before the end date.";
-  }
-  return { startDate: startDate.trim(), endDate: endDate.trim() };
-}
-
-function formatDateRangeLabel(startDate: string, endDate: string): string {
-  return startDate === endDate ? startDate : `${startDate} to ${endDate}`;
-}
+const defaultProcessRange = getThisMonthRange();
 
 export default function RostersPage() {
   const [entries, setEntries] = useState<RosterEntry[]>([]);
@@ -70,8 +64,8 @@ export default function RostersPage() {
   const [confirmDeleteDate, setConfirmDeleteDate] = useState<string | null>(null);
   const [deletingDate, setDeletingDate] = useState<string | null>(null);
   const [processingAttendance, setProcessingAttendance] = useState(false);
-  const [processStartDate, setProcessStartDate] = useState("");
-  const [processEndDate, setProcessEndDate] = useState("");
+  const [processStartDate, setProcessStartDate] = useState(defaultProcessRange.startDate);
+  const [processEndDate, setProcessEndDate] = useState(defaultProcessRange.endDate);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const loadRoster = useCallback(async (filters: { date?: string; year?: number; month?: number }) => {
@@ -224,9 +218,19 @@ export default function RostersPage() {
         result.discrepancyCount > 0
           ? ` ${result.discrepancyCount} discrepanc${result.discrepancyCount === 1 ? "y" : "ies"} found.`
           : "";
+      const skippedNote =
+        (result.skippedCount ?? 0) > 0
+          ? ` ${result.skippedCount} shift${result.skippedCount === 1 ? "" : "s"} skipped (employee not on roster).`
+          : "";
+      const removedNote =
+        (result.removedRecordCount ?? 0) > 0
+          ? ` ${result.removedRecordCount} mistaken attendance record${result.removedRecordCount === 1 ? "" : "s"} removed.`
+          : "";
 
       setSuccess(
-        `Processed ${result.processedCount} roster shift${result.processedCount === 1 ? "" : "s"} for ${formatDateRangeLabel(parsed.startDate, parsed.endDate)}.${discrepancyNote}`,
+        result.processedCount === 0 && (result.skippedCount ?? 0) > 0
+          ? `No roster shifts processed.${skippedNote}${removedNote}`
+          : `Processed ${result.processedCount} roster shift${result.processedCount === 1 ? "" : "s"} for ${formatDateRangeLabel(parsed.startDate, parsed.endDate)}.${skippedNote}${removedNote}${discrepancyNote}`,
       );
     } catch (err) {
       setError(getErrorMessage(err));
@@ -271,37 +275,36 @@ export default function RostersPage() {
         <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5, color: "#475569" }}>
           Process Roster Attendance
         </Typography>
-        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, alignItems: "center", mb: 3 }}>
-          <TextField
-            size="small"
-            label="Start Date"
-            type="date"
-            value={processStartDate}
-            onChange={(e) => setProcessStartDate(e.target.value)}
-            slotProps={{ inputLabel: { shrink: true } }}
-            sx={{ minWidth: 180 }}
-          />
-          <TextField
-            size="small"
-            label="End Date"
-            type="date"
-            value={processEndDate}
-            onChange={(e) => setProcessEndDate(e.target.value)}
-            slotProps={{ inputLabel: { shrink: true } }}
-            sx={{ minWidth: 180 }}
-          />
+        <Box sx={{ display: "flex", flexDirection: { xs: "column", lg: "row" }, gap: 2, alignItems: { lg: "flex-start" }, mb: 1 }}>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <DateRangePicker
+              startDate={processStartDate}
+              endDate={processEndDate}
+              onStartDateChange={setProcessStartDate}
+              onEndDateChange={setProcessEndDate}
+              disabled={processingAttendance}
+              helperText={`${formatDateRangeLabel(processStartDate, processEndDate)} — only roster shifts in this range will be processed.`}
+            />
+          </Box>
           <Button
             variant="outlined"
             startIcon={processingAttendance ? <CircularProgress size={18} color="inherit" /> : <EventAvailableIcon />}
             onClick={handleProcessAttendance}
             disabled={processingAttendance || !processRangeReady}
-            sx={{ whiteSpace: "nowrap", borderColor: "#16a34a", color: "#16a34a" }}
+            sx={{
+              whiteSpace: "nowrap",
+              borderColor: "#16a34a",
+              color: "#16a34a",
+              alignSelf: { xs: "stretch", lg: "flex-start" },
+              minHeight: 40,
+              px: 2.5,
+            }}
           >
             Process Roster Attendance
           </Button>
         </Box>
         <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 3 }}>
-          Matches punch logs against roster shifts that exist within the selected date range.
+          Use quick presets or pick dates from the calendar. Punch logs are matched only for roster shifts that exist in the range.
         </Typography>
 
         <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5, color: "#475569" }}>

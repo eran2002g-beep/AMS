@@ -3,6 +3,7 @@
 const RosterEntry   = require('../models/Roster');
 const AttendanceLog = require('../models/AttendanceLog');
 const {
+    calculateArrivalLateMinutes,
     calculateLateCover,
     calculateStatus,
     matchLogsToShift,
@@ -37,13 +38,14 @@ const processRosterAttendance = async (rosterId) => {
         const { clockIn, clockOut, logId } = await matchEntryToLogs(entry);
 
         const status           = calculateStatus(clockIn, clockOut);
+        const lateMinutes      = calculateArrivalLateMinutes(entry.shiftStart, clockIn);
         const lateCoverMinutes = calculateLateCover(
             entry.shiftStart, entry.shiftEnd, clockIn, clockOut
         );
 
-        if (isDiscrepancy(status, lateCoverMinutes)) {
+        if (isDiscrepancy(status, lateMinutes, lateCoverMinutes)) {
             discrepancies.push(buildDiscrepancy(
-                entry.employeeId, entry.date, status, lateCoverMinutes
+                entry.employeeId, entry.date, status, lateMinutes, lateCoverMinutes
             ));
         }
 
@@ -55,6 +57,7 @@ const processRosterAttendance = async (rosterId) => {
             scheduledStart:  entry.shiftStart,
             scheduledEnd:    entry.shiftEnd,
             status,
+            lateMinutes,
             lateCoverMinutes,
             rosterId,
             logId,

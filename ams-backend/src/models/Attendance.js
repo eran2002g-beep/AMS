@@ -2,6 +2,7 @@
 
 const { DataTypes } = require('sequelize');
 const sequelize     = require('../../config/db');
+const { nextSequentialPublicId } = require('../utils/publicId');
 
 const Attendance = sequelize.define('Attendance', {
 
@@ -85,6 +86,14 @@ const Attendance = sequelize.define('Attendance', {
         allowNull: false,
     },
 
+    // lateMinutes - how many minutes late the employee arrived vs scheduled start
+    // e.g. shift 10:00, in 10:45 → 45
+    lateMinutes: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 0,
+    },
+
     // lateCoverMinutes - minutes the employee still owes after shift processing
     // must stay until scheduledEnd + arrival lateness; early departure adds to this total
     // e.g. shift 08:00-17:00, in 08:20, out 17:00 → 20 min (should have left at 17:20)
@@ -140,9 +149,9 @@ const Attendance = sequelize.define('Attendance', {
         beforeValidate: async (attendance) => {
             if (!attendance.isNewRecord || attendance.attendanceId) return;
 
-            const count  = await Attendance.count();
-            const padded = String(count + 1).padStart(3, '0');
-            attendance.attendanceId = `ATT${padded}`;
+            attendance.attendanceId = await nextSequentialPublicId(
+                Attendance, 'attendanceId', 'ATT'
+            );
         },
     },
 });
