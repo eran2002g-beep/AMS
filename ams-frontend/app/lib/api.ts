@@ -292,9 +292,23 @@ export type AttendanceProcessResponse = {
   discrepancyCount: number;
   discrepancies: AttendanceDiscrepancy[];
   schedule: {
-    shiftStart: string;
-    shiftEnd: string;
+    shiftStart?: string;
+    shiftEnd?: string;
+    rosterId?: number;
+    date?: string;
+    month?: number;
+    year?: number;
+    startDate?: string;
+    endDate?: string;
   };
+};
+
+export type AttendanceProcessPeriod = {
+  date?: string;
+  month?: number;
+  year?: number;
+  startDate?: string;
+  endDate?: string;
 };
 
 export type AttendanceRecord = {
@@ -449,6 +463,18 @@ export const attendanceApi = {
     const body = response.data;
     if (body.status !== "success") {
       throw new Error("Attendance processing failed");
+    }
+    return body;
+  },
+
+  async processRoster(period: AttendanceProcessPeriod) {
+    const response = await api.post<AttendanceProcessResponse>(
+      "/attendance/process-roster",
+      period,
+    );
+    const body = response.data;
+    if (body.status !== "success") {
+      throw new Error("Roster attendance processing failed");
     }
     return body;
   },

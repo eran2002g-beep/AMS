@@ -109,17 +109,33 @@ const toDateOnly = (year, month, day) => `${year}-${pad(month)}-${pad(day)}`;
 
 const resolvePeriodDates = ({ date, month, year, startDate, endDate }) => {
     if (date) {
+        if (!isValidDateOnly(date)) {
+            throw new Error('date must use YYYY-MM-DD format.');
+        }
         return [date];
     }
 
     if (month && year) {
         const m = Number(month);
         const y = Number(year);
+        if (!Number.isInteger(m) || m < 1 || m > 12) {
+            throw new Error('month must be an integer between 1 and 12.');
+        }
+        if (!Number.isInteger(y) || y < 1) {
+            throw new Error('year must be a positive integer.');
+        }
         const daysInMonth = new Date(y, m, 0).getDate();
         return Array.from({ length: daysInMonth }, (_, i) => toDateOnly(y, m, i + 1));
     }
 
     if (startDate && endDate) {
+        if (!isValidDateOnly(startDate) || !isValidDateOnly(endDate)) {
+            throw new Error('startDate and endDate must use YYYY-MM-DD format.');
+        }
+        if (startDate > endDate) {
+            throw new Error('startDate must be less than or equal to endDate.');
+        }
+
         const dates = [];
         const [sy, sm, sd] = startDate.split('-').map(Number);
         const [ey, em, ed] = endDate.split('-').map(Number);
@@ -132,6 +148,10 @@ const resolvePeriodDates = ({ date, month, year, startDate, endDate }) => {
         }
 
         return dates;
+    }
+
+    if (startDate || endDate) {
+        throw new Error('startDate and endDate must be provided together.');
     }
 
     throw new Error('Provide date, month+year, or startDate+endDate.');
@@ -208,7 +228,9 @@ const processNormalAttendance = async (period = {}) => {
 
 // ---------------------------------------------------------------------------
 // processRosterAttendance
-// Processes attendance for all entries in a given roster batch.
+// Processes attendance for roster shifts in a given period.
+// Period: date | month+year | startDate+endDate (same as processNormalAttendance)
+// Optional: rosterId — process a single upload batch instead of a date period
 // For each RosterEntry, it:
 //   1. Finds the matching AttendanceLog punches for that employee on that date
 //   2. Selects the closest clock-in / clock-out times to the scheduled shift
@@ -216,24 +238,11 @@ const processNormalAttendance = async (period = {}) => {
 //   4. Upserts a final Attendance record (creates or overwrites the existing one)
 // Returns processedCount, discrepancyCount, discrepancies, records, and schedule info
 // ---------------------------------------------------------------------------
-const processRosterAttendance = async (rosterId) => {
-    if (!rosterId || !Number.isInteger(Number(rosterId)) || Number(rosterId) <= 0) {
-        throw new Error('A valid positive integer rosterId is required.');
-    }
-
-    const rosterIdNum = Number(rosterId);
-
-    const entries = await RosterEntry.findAll({ where: { rosterId: rosterIdNum } });
-
-    if (entries.length === 0) {
-        throw new Error(`No roster entries found for roster ID ${rosterIdNum}.`);
-    }
-
+const processRosterEntries = async (entries) => {
     const results       = [];
     const discrepancies = [];
 
     for (const entry of entries) {
-        // Fetch all punch logs for this employee on this roster date, ordered by time
         const logs = await AttendanceLog.findAll({
             where: {
                 employeeId: entry.employeeId,
@@ -242,7 +251,6 @@ const processRosterAttendance = async (rosterId) => {
             order: [['punchTime', 'ASC']],
         });
 
-        // Match the closest clock-in / clock-out to the scheduled shift window
         const { clockIn, clockOut, logId } = matchLogsToShift(
             logs, entry.shiftStart, entry.shiftEnd
         );
@@ -267,21 +275,61 @@ const processRosterAttendance = async (rosterId) => {
             scheduledEnd:    entry.shiftEnd,
             status,
             lateCoverMinutes,
-            rosterId:        rosterIdNum,
+            rosterId:        entry.rosterId,
             logId,
         });
 
         results.push(attendanceRecord);
     }
 
+    return { results, discrepancies };
+};
+
+const processRosterAttendance = async (period = {}) => {
+    let entries;
+    let schedule = {};
+
+    if (period.rosterId !== undefined && period.rosterId !== '') {
+        const rosterIdNum = Number(period.rosterId);
+        if (!Number.isInteger(rosterIdNum) || rosterIdNum <= 0) {
+            throw new Error('A valid positive integer rosterId is required.');
+        }
+
+        entries = await RosterEntry.findAll({ where: { rosterId: rosterIdNum } });
+        if (entries.length === 0) {
+            throw new Error(`No roster entries found for roster ID ${rosterIdNum}.`);
+        }
+
+        schedule = { rosterId: rosterIdNum };
+    } else {
+        const dates = resolvePeriodDates(period);
+
+        entries = await RosterEntry.findAll({
+            where: { date: { [Op.in]: dates } },
+            order: [['date', 'ASC'], ['employeeId', 'ASC']],
+        });
+
+        if (entries.length === 0) {
+            throw new Error('No roster shifts found for the selected period.');
+        }
+
+        if (period.date) {
+            schedule = { date: period.date };
+        } else if (period.month && period.year) {
+            schedule = { month: Number(period.month), year: Number(period.year) };
+        } else {
+            schedule = { startDate: period.startDate, endDate: period.endDate };
+        }
+    }
+
+    const { results, discrepancies } = await processRosterEntries(entries);
+
     return {
         processedCount:   results.length,
         discrepancyCount: discrepancies.length,
         discrepancies,
         records:          results,
-        schedule: {
-            rosterId: rosterIdNum,
-        },
+        schedule,
     };
 };
 

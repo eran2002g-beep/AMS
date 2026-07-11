@@ -14,6 +14,24 @@ const processNormalAttendance = async (req, res) => {
     }
 };
 
+const processRosterAttendance = async (req, res) => {
+    try {
+        const period = { ...req.query, ...req.body };
+        if (req.params.rosterId) {
+            period.rosterId = req.params.rosterId;
+        }
+
+        const result = await attendanceService.processRosterAttendance(period);
+
+        return res.status(200).json({
+            status: 'success',
+            ...result,
+        });
+    } catch (err) {
+        return res.status(400).json({ status: 'error', error: err.message });
+    }
+};
+
 const getEmployeeAttendance = async (req, res) => {
     try {
         const result = await attendanceService.getEmployeeAttendance(
@@ -125,6 +143,7 @@ const updateAttendance = async (req, res) => {
 
 module.exports = {
     processNormalAttendance,
+    processRosterAttendance,
     getEmployeeAttendance,
     getAllAttendance,
     getAttendanceById,

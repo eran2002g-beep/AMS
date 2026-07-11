@@ -13,7 +13,8 @@ import {
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import SearchIcon from "@mui/icons-material/Search";
 import DeleteIcon from "@mui/icons-material/Delete";
-import { rosterApi, type RosterEntry, type RosterViewFilters, getErrorMessage } from "@/lib/api";
+import EventAvailableIcon from "@mui/icons-material/EventAvailable";
+import { rosterApi, attendanceApi, type RosterEntry, type RosterViewFilters, getErrorMessage } from "@/lib/api";
 
 const now = new Date();
 
@@ -37,6 +38,20 @@ function monthName(month: number): string {
   return new Date(2000, month - 1, 1).toLocaleString("default", { month: "long" });
 }
 
+function parseDateRange(startDate: string, endDate: string): { startDate: string; endDate: string } | string {
+  if (!startDate.trim() || !endDate.trim()) {
+    return "Please select both a start date and an end date.";
+  }
+  if (startDate > endDate) {
+    return "Start date must be on or before the end date.";
+  }
+  return { startDate: startDate.trim(), endDate: endDate.trim() };
+}
+
+function formatDateRangeLabel(startDate: string, endDate: string): string {
+  return startDate === endDate ? startDate : `${startDate} to ${endDate}`;
+}
+
 export default function RostersPage() {
   const [entries, setEntries] = useState<RosterEntry[]>([]);
   const [filterMode, setFilterMode] = useState<"month" | "date">("month");
@@ -54,6 +69,9 @@ export default function RostersPage() {
   const [deletingMonth, setDeletingMonth] = useState(false);
   const [confirmDeleteDate, setConfirmDeleteDate] = useState<string | null>(null);
   const [deletingDate, setDeletingDate] = useState<string | null>(null);
+  const [processingAttendance, setProcessingAttendance] = useState(false);
+  const [processStartDate, setProcessStartDate] = useState("");
+  const [processEndDate, setProcessEndDate] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   const loadRoster = useCallback(async (filters: { date?: string; year?: number; month?: number }) => {
@@ -189,6 +207,36 @@ export default function RostersPage() {
     }
   };
 
+  const handleProcessAttendance = async () => {
+    const parsed = parseDateRange(processStartDate, processEndDate);
+    if (typeof parsed === "string") {
+      setError(parsed);
+      return;
+    }
+
+    setProcessingAttendance(true);
+    setError("");
+    setSuccess("");
+    try {
+      const result = await attendanceApi.processRoster(parsed);
+
+      const discrepancyNote =
+        result.discrepancyCount > 0
+          ? ` ${result.discrepancyCount} discrepanc${result.discrepancyCount === 1 ? "y" : "ies"} found.`
+          : "";
+
+      setSuccess(
+        `Processed ${result.processedCount} roster shift${result.processedCount === 1 ? "" : "s"} for ${formatDateRangeLabel(parsed.startDate, parsed.endDate)}.${discrepancyNote}`,
+      );
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setProcessingAttendance(false);
+    }
+  };
+
+  const processRangeReady = processStartDate.trim() !== "" && processEndDate.trim() !== "";
+
   const filterLabel = appliedFilters.date
     ? `Date: ${appliedFilters.date}`
     : `Year: ${appliedFilters.year}, Month: ${appliedFilters.month}`;
@@ -202,12 +250,59 @@ export default function RostersPage() {
   return (
     <Box>
       <Paper sx={{ p: 2, mb: 3, borderRadius: 2 }} elevation={1}>
-        <Typography variant="h5" sx={{ fontWeight: 700, color: "#1e293b", mb: 2 }}>
-          Roster Management
-        </Typography>
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: { xs: "column", md: "row" },
+            justifyContent: "space-between",
+            alignItems: { xs: "stretch", md: "center" },
+            gap: 2,
+            mb: 2,
+          }}
+        >
+          <Typography variant="h5" sx={{ fontWeight: 700, color: "#1e293b" }}>
+            Roster Management
+          </Typography>
+        </Box>
 
         {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError("")}>{error}</Alert>}
         {success && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess("")}>{success}</Alert>}
+
+        <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5, color: "#475569" }}>
+          Process Roster Attendance
+        </Typography>
+        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, alignItems: "center", mb: 3 }}>
+          <TextField
+            size="small"
+            label="Start Date"
+            type="date"
+            value={processStartDate}
+            onChange={(e) => setProcessStartDate(e.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }}
+            sx={{ minWidth: 180 }}
+          />
+          <TextField
+            size="small"
+            label="End Date"
+            type="date"
+            value={processEndDate}
+            onChange={(e) => setProcessEndDate(e.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }}
+            sx={{ minWidth: 180 }}
+          />
+          <Button
+            variant="outlined"
+            startIcon={processingAttendance ? <CircularProgress size={18} color="inherit" /> : <EventAvailableIcon />}
+            onClick={handleProcessAttendance}
+            disabled={processingAttendance || !processRangeReady}
+            sx={{ whiteSpace: "nowrap", borderColor: "#16a34a", color: "#16a34a" }}
+          >
+            Process Roster Attendance
+          </Button>
+        </Box>
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 3 }}>
+          Matches punch logs against roster shifts that exist within the selected date range.
+        </Typography>
 
         <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5, color: "#475569" }}>
           Upload Roster File

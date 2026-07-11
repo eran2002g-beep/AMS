@@ -9,6 +9,13 @@ const attendanceController = require('../controllers/attendanceController');
 // Body or query: date | month+year | startDate+endDate
 router.post('/process', attendanceController.processNormalAttendance);
 
+// POST /attendance/process-roster - process roster attendance for scheduled shifts
+// Body or query: date | month+year | startDate+endDate
+router.post('/process-roster', attendanceController.processRosterAttendance);
+
+// Legacy: process a single upload batch by rosterId
+router.post('/process-roster/:rosterId', attendanceController.processRosterAttendance);
+
 // -----------------------------------------------------------------------
 // GET /attendance/employee/:employeeId - Retrieve attendance records for one employee
 // Supports optional month, year, status, startDate, endDate, page, and limit filters
