@@ -88,6 +88,17 @@ sequelize.authenticate()
         ALTER TABLE attendance
         ADD COLUMN IF NOT EXISTS late_minutes INTEGER NOT NULL DEFAULT 0;
     `))
+    .then(() => sequelize.query(`
+        DO $$ BEGIN
+            CREATE TYPE "enum_attendance_dayType" AS ENUM ('full_day', 'short_leave', 'half_day');
+        EXCEPTION
+            WHEN duplicate_object THEN NULL;
+        END $$;
+    `))
+    .then(() => sequelize.query(`
+        ALTER TABLE attendance
+        ADD COLUMN IF NOT EXISTS "dayType" "enum_attendance_dayType";
+    `))
 
     // Step 4 - start the server only after the database is ready
     .then(() => {
