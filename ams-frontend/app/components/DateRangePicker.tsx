@@ -72,7 +72,7 @@ export default function DateRangePicker({
       }}
     >
       {showPresets && (
-        <Stack direction="row" flexWrap="wrap" gap={1} sx={{ mb: 2 }}>
+        <Stack direction="row" sx={{ mb: 2, flexWrap: "wrap", gap: 1 }}>
           {PRESETS.map((preset) => (
             <Chip
               key={preset.id}
@@ -94,7 +94,7 @@ export default function DateRangePicker({
       <Stack
         direction={{ xs: "column", sm: "row" }}
         spacing={2}
-        alignItems={{ xs: "stretch", sm: "flex-start" }}
+        sx={{ alignItems: { xs: "stretch", sm: "flex-start" } }}
       >
         <DatePicker
           label="From"

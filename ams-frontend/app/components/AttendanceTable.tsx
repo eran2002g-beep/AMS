@@ -4,11 +4,11 @@ import {
   Table, TableHead, TableRow, TableCell,
   TableBody, TableContainer, Paper, Chip,
   IconButton, Tooltip, Dialog, DialogTitle, DialogContent,
-  DialogContentText, DialogActions, Button,
+  DialogContentText, DialogActions, Button, Box, Typography,
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
-import type { AttendanceRecord } from "@/lib/api";
+import type { AttendanceRecord, Employee } from "@/lib/api";
 import {
   formatLateMinutes,
   formatDayType,
@@ -24,6 +24,7 @@ type Props = {
   onEdit?: (record: AttendanceRecord) => void;
   onDelete?: (record: AttendanceRecord) => Promise<void>;
   deletingAttendanceId?: string | null;
+  employeeMap?: Record<string, Employee>;
 };
 
 const COLUMNS = [
@@ -58,10 +59,10 @@ function coverCellSx(minutes: number) {
     : { color: "inherit" };
 }
 
-export default function AttendanceTable({ records, onEdit, onDelete, deletingAttendanceId }: Props) {
+export default function AttendanceTable({ records, onEdit, onDelete, deletingAttendanceId, employeeMap }: Props) {
   const [confirmTarget, setConfirmTarget] = useState<AttendanceRecord | null>(null);
   const showActions = !!onEdit || !!onDelete;
-  const columnCount = COLUMNS.length + (showActions ? 1 : 0);
+  const columnCount = COLUMNS.length + (showActions ? 1 : 0) + (employeeMap ? 1 : 0);
 
   const handleConfirmDelete = async () => {
     if (!confirmTarget || !onDelete) return;
@@ -75,6 +76,18 @@ export default function AttendanceTable({ records, onEdit, onDelete, deletingAtt
         <Table>
           <TableHead>
             <TableRow sx={{ backgroundColor: "#1e293b" }}>
+              {employeeMap && (
+                <TableCell
+                  sx={{
+                    color: "#fff",
+                    fontWeight: 700,
+                    fontSize: "0.8rem",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Employee
+                </TableCell>
+              )}
               {COLUMNS.map((col) => (
                 <TableCell
                   key={col.id}
@@ -115,9 +128,33 @@ export default function AttendanceTable({ records, onEdit, onDelete, deletingAtt
                 const coverOwed = getLateCoverMinutes(record);
                 const displayStatus = getAttendanceDisplayStatus(record);
                 const requiredClockOut = getRequiredClockOut(record);
+                const emp = employeeMap ? employeeMap[record.employeeId] : undefined;
 
                 return (
                 <TableRow key={record.id} hover>
+                  {employeeMap && (
+                    <TableCell sx={{ fontWeight: 600 }}>
+                      {emp ? (
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: "#1e293b" }}>
+                            {emp.firstName} {emp.lastName}
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: "#64748b", display: "block" }}>
+                            {emp.employeeId} {emp.department ? `· ${emp.department}` : ""}
+                          </Typography>
+                        </Box>
+                      ) : (
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: "#94a3b8" }}>
+                            Unknown Employee
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: "#64748b", display: "block" }}>
+                            {record.employeeId}
+                          </Typography>
+                        </Box>
+                      )}
+                    </TableCell>
+                  )}
                   <TableCell sx={{ fontWeight: 600 }}>{formatDate(record.date)}</TableCell>
                   <TableCell>{display(record.clockIn)}</TableCell>
                   <TableCell>{display(record.clockOut)}</TableCell>
