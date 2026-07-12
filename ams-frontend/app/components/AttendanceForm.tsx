@@ -4,10 +4,11 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Button, Box, CircularProgress, MenuItem,
 } from "@mui/material";
-import type { AttendanceRecord } from "@/lib/api";
+import type { AttendanceRecord, Employee } from "@/lib/api";
 import TimePickerField from "@/components/TimePickerField";
 
 export type AttendanceFormData = {
+  employeeId?: string;
   date: string;
   status: AttendanceRecord["status"];
   clockIn: string;
@@ -26,6 +27,7 @@ const STATUS_OPTIONS: Array<{ value: AttendanceRecord["status"]; label: string }
 
 function emptyForm(defaultDate: string): AttendanceFormData {
   return {
+    employeeId: "",
     date: defaultDate,
     status: "present",
     clockIn: "",
@@ -37,6 +39,7 @@ function emptyForm(defaultDate: string): AttendanceFormData {
 
 function recordToForm(record: AttendanceRecord): AttendanceFormData {
   return {
+    employeeId: record.employeeId,
     date: record.date,
     status: record.status,
     clockIn: record.clockIn ? record.clockIn.slice(0, 5) : "",
@@ -53,6 +56,7 @@ type Props = {
   submitting?: boolean;
   defaultDate?: string;
   record?: AttendanceRecord | null;
+  employeesList?: Employee[];
 };
 
 export default function AttendanceForm({
@@ -62,8 +66,14 @@ export default function AttendanceForm({
   submitting,
   defaultDate = "",
   record,
+  employeesList,
 }: Props) {
   const isEdit = !!record;
+  const empName = (id: string) => {
+    if (!employeesList) return id;
+    const found = employeesList.find((e) => e.employeeId === id);
+    return found ? `${found.firstName} ${found.lastName} (${id})` : id;
+  };
   const [form, setForm] = useState<AttendanceFormData>(emptyForm(defaultDate));
   const [errors, setErrors] = useState<Partial<Record<keyof AttendanceFormData, string>>>({});
 
@@ -82,6 +92,9 @@ export default function AttendanceForm({
   const validate = () => {
     const newErrors: Partial<Record<keyof AttendanceFormData, string>> = {};
 
+    if (!isEdit && employeesList && !form.employeeId) {
+      newErrors.employeeId = "Employee is required";
+    }
     if (!form.date) newErrors.date = "Date is required";
     if (!form.status) newErrors.status = "Status is required";
 
@@ -105,6 +118,33 @@ export default function AttendanceForm({
       </DialogTitle>
       <DialogContent>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
+          {!isEdit && employeesList && (
+            <TextField
+              name="employeeId"
+              label="Employee"
+              select
+              value={form.employeeId || ""}
+              onChange={handleChange}
+              error={!!errors.employeeId}
+              helperText={errors.employeeId}
+              fullWidth
+              required
+            >
+              {employeesList.map((emp) => (
+                <MenuItem key={emp.employeeId} value={emp.employeeId}>
+                  {emp.firstName} {emp.lastName} ({emp.employeeId})
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+          {isEdit && employeesList && (
+            <TextField
+              label="Employee"
+              value={record ? `${empName(record.employeeId)}` : ""}
+              disabled
+              fullWidth
+            />
+          )}
           <TextField
             name="date"
             label="Date"

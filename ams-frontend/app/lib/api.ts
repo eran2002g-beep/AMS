@@ -379,6 +379,29 @@ export type EmployeeAttendanceResponse = {
   data: AttendanceRecord[];
 };
 
+export type AllAttendanceResponse = {
+  status: "success";
+  count: number;
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+  filters: {
+    q?: string;
+    employeeId?: string;
+    month?: number;
+    year?: number;
+    status?: AttendanceRecord["status"];
+    startDate?: string;
+    endDate?: string;
+    page: number;
+    limit: number;
+  };
+  data: AttendanceRecord[];
+};
+
 export function getTodayDateString(): string {
   const now = new Date();
   const y = now.getFullYear();
@@ -674,6 +697,31 @@ export const attendanceApi = {
     const body = response.data;
     if (body.status !== "success") {
       throw new Error("Failed to load employee attendance records");
+    }
+
+    return body;
+  },
+
+  async getAllAttendance(filters: EmployeeAttendanceFilters & { q?: string; employeeId?: string } = {}) {
+    const params: Record<string, string | number> = {};
+
+    if (filters.q) params.q = filters.q;
+    if (filters.employeeId) params.employeeId = filters.employeeId;
+    if (filters.month != null) params.month = filters.month;
+    if (filters.year != null) params.year = filters.year;
+    if (filters.status) params.status = filters.status;
+    if (filters.startDate) params.startDate = filters.startDate;
+    if (filters.endDate) params.endDate = filters.endDate;
+    if (filters.page != null) params.page = filters.page;
+    if (filters.limit != null) params.limit = filters.limit;
+
+    const response = await api.get<AllAttendanceResponse>("/attendance", {
+      params,
+    });
+
+    const body = response.data;
+    if (body.status !== "success") {
+      throw new Error("Failed to load attendance records");
     }
 
     return body;

@@ -13,6 +13,7 @@ export default function Navbar() {
 
   const navItems = [
     { label: "Employees", path: "/employees" },
+    { label: "Attendance", path: "/attendance" },
     { label: "Rosters", path: "/rosters" },
   ];
 
