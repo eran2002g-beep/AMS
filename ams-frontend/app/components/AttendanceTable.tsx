@@ -11,8 +11,10 @@ import EditIcon from "@mui/icons-material/Edit";
 import type { AttendanceRecord } from "@/lib/api";
 import {
   formatLateMinutes,
+  formatDayType,
   getArrivalLateMinutes,
   getAttendanceDisplayStatus,
+  getDayTypeChipSx,
   getLateCoverMinutes,
   getRequiredClockOut,
 } from "@/lib/api";
@@ -29,6 +31,7 @@ const COLUMNS = [
   { id: "clockIn", label: "Clock In" },
   { id: "clockOut", label: "Clock Out" },
   { id: "scheduled", label: "Scheduled" },
+  { id: "dayType", label: "Day Type" },
   { id: "status", label: "Status" },
   { id: "lateMinutes", label: "Late (min)" },
   { id: "lateCoverMinutes", label: "Cover owed (min)" },
@@ -122,6 +125,21 @@ export default function AttendanceTable({ records, onEdit, onDelete, deletingAtt
                     {record.scheduledStart && record.scheduledEnd
                       ? `${record.scheduledStart} – ${record.scheduledEnd}`
                       : "—"}
+                  </TableCell>
+                  <TableCell>
+                    {record.dayType ? (
+                      <Chip
+                        label={formatDayType(record.dayType)}
+                        size="small"
+                        sx={{
+                          ...getDayTypeChipSx(record.dayType),
+                          textTransform: "none",
+                          fontWeight: 600,
+                        }}
+                      />
+                    ) : (
+                      "—"
+                    )}
                   </TableCell>
                   <TableCell>
                     <Tooltip title={displayStatus.detail ?? ""} disableHoverListener={!displayStatus.detail}>

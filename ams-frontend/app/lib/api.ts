@@ -335,6 +335,7 @@ export type AttendanceRecord = {
   status: "present" | "absent" | "leave" | "unauthorised" | "holiday";
   lateMinutes: number;
   lateCoverMinutes: number;
+  dayType?: "full_day" | "short_leave" | "half_day" | null;
   rosterId: number | null;
   attendanceLogId: number | null;
   leaveRequestId: number | null;
@@ -422,9 +423,13 @@ function normalizeOnShiftTimeline(
 export function getLateCoverMinutes(
   record: Pick<
     AttendanceRecord,
-    "lateCoverMinutes" | "clockIn" | "clockOut" | "scheduledStart" | "scheduledEnd"
+    "lateCoverMinutes" | "clockIn" | "clockOut" | "scheduledStart" | "scheduledEnd" | "dayType"
   >,
 ): number {
+  if (record.dayType) {
+    return record.lateCoverMinutes ?? 0;
+  }
+
   if (record.clockIn && record.clockOut && record.scheduledStart && record.scheduledEnd) {
     const { startMins, endMins, inMins, outMins } = normalizeOnShiftTimeline(
       record.scheduledStart,
@@ -443,6 +448,34 @@ export function formatLateMinutes(value: number): string {
   return value > 0 ? String(value) : "—";
 }
 
+export function formatDayType(dayType: AttendanceRecord["dayType"]): string {
+  switch (dayType) {
+    case "full_day":
+      return "Full day";
+    case "short_leave":
+      return "Short leave";
+    case "half_day":
+      return "Half day";
+    default:
+      return "—";
+  }
+}
+
+export type DayTypeChipSx = { backgroundColor: string; color: string };
+
+export function getDayTypeChipSx(dayType: AttendanceRecord["dayType"]): DayTypeChipSx {
+  switch (dayType) {
+    case "full_day":
+      return { backgroundColor: "#dcfce7", color: "#15803d" };
+    case "short_leave":
+      return { backgroundColor: "#e0f2fe", color: "#0369a1" };
+    case "half_day":
+      return { backgroundColor: "#fef3c7", color: "#b45309" };
+    default:
+      return { backgroundColor: "#f1f5f9", color: "#64748b" };
+  }
+}
+
 export type AttendanceDisplayStatus = {
   label: string;
   chipSx: { backgroundColor: string; color: string };
@@ -452,25 +485,39 @@ export type AttendanceDisplayStatus = {
 export function getAttendanceDisplayStatus(
   record: Pick<
     AttendanceRecord,
-    "status" | "lateMinutes" | "lateCoverMinutes" | "clockIn" | "clockOut" | "scheduledStart" | "scheduledEnd"
+    "status" | "lateMinutes" | "lateCoverMinutes" | "clockIn" | "clockOut" | "scheduledStart" | "scheduledEnd" | "dayType"
   >,
 ): AttendanceDisplayStatus {
   const lateMinutes = getArrivalLateMinutes(record);
   const coverOwed = getLateCoverMinutes(record);
+  const dayTypeLabel = formatDayType(record.dayType);
 
   if (record.status === "present" && lateMinutes > 0 && coverOwed > 0) {
     return {
       label: "Late · Not covered",
       chipSx: { backgroundColor: "#ffedd5", color: "#c2410c" },
-      detail: `${lateMinutes} min late, ${coverOwed} min cover still owed`,
+      detail: record.dayType
+        ? `${dayTypeLabel} · ${lateMinutes} min late, ${coverOwed} min cover still owed`
+        : `${lateMinutes} min late, ${coverOwed} min cover still owed`,
     };
   }
 
   if (record.status === "present" && lateMinutes > 0 && coverOwed === 0) {
     return {
-      label: "Late · Covered",
-      chipSx: { backgroundColor: "#dcfce7", color: "#15803d" },
-      detail: `${lateMinutes} min late, cover time made up`,
+      label: record.dayType ? `${dayTypeLabel} · Late` : "Late · Covered",
+      chipSx: record.dayType
+        ? getDayTypeChipSx(record.dayType)
+        : { backgroundColor: "#dcfce7", color: "#15803d" },
+      detail: record.dayType
+        ? `${lateMinutes} min late, minimum hours met for ${dayTypeLabel.toLowerCase()}`
+        : `${lateMinutes} min late, cover time made up`,
+    };
+  }
+
+  if (record.status === "present" && record.dayType) {
+    return {
+      label: dayTypeLabel,
+      chipSx: getDayTypeChipSx(record.dayType),
     };
   }
 

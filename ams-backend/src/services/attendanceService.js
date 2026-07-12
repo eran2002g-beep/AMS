@@ -11,6 +11,8 @@ const {
     calculateArrivalLateMinutes,
     calculateLateCover,
     calculateStatus,
+    calculateWorkedMinutes,
+    classifyWorkDay,
     matchLogsToShift,
     upsertAttendanceRecord,
     buildDiscrepancy,
@@ -187,15 +189,23 @@ const processNormalAttendance = async (period = {}) => {
                 logs, NORMAL_SHIFT_START, NORMAL_SHIFT_END
             );
 
-            const status           = calculateStatus(clockIn, clockOut);
-            const lateMinutes      = calculateArrivalLateMinutes(NORMAL_SHIFT_START, clockIn);
-            const lateCoverMinutes = calculateLateCover(
-                NORMAL_SHIFT_START, NORMAL_SHIFT_END, clockIn, clockOut
-            );
+            let status           = calculateStatus(clockIn, clockOut);
+            let lateCoverMinutes = 0;
+            let dayType          = null;
+
+            if (clockIn && clockOut) {
+                const workedMinutes = calculateWorkedMinutes(clockIn, clockOut);
+                const classified    = classifyWorkDay(workedMinutes);
+                status              = classified.status;
+                lateCoverMinutes    = classified.lateCoverMinutes;
+                dayType             = classified.dayType;
+            }
+
+            const lateMinutes = calculateArrivalLateMinutes(NORMAL_SHIFT_START, clockIn);
 
             if (isDiscrepancy(status, lateMinutes, lateCoverMinutes)) {
                 discrepancies.push(buildDiscrepancy(
-                    employee.employeeId, date, status, lateMinutes, lateCoverMinutes
+                    employee.employeeId, date, status, lateMinutes, lateCoverMinutes, dayType
                 ));
             }
 
@@ -209,6 +219,7 @@ const processNormalAttendance = async (period = {}) => {
                 status,
                 lateMinutes,
                 lateCoverMinutes,
+                dayType,
                 rosterId:        null,
                 logId,
             });

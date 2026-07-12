@@ -103,6 +103,16 @@ const Attendance = sequelize.define('Attendance', {
         defaultValue: 0,
     },
 
+    // dayType - gross worked-hours classification for normal attendance processing
+    // full_day    = worked >= 7 hours
+    // short_leave = worked >= 6 hours and < 7 hours
+    // half_day    = worked >= 5 hours and < 6 hours
+    // null        = insufficient hours, missing punches, or roster/manual record
+    dayType: {
+        type: DataTypes.ENUM('full_day', 'short_leave', 'half_day'),
+        allowNull: true,
+    },
+
     // rosterId - the roster this record was matched against during processing
     // links back to the Roster table - used for View Roster Attendance (Epic 4)
     rosterId: {

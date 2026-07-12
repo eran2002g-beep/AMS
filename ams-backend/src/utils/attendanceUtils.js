@@ -2,9 +2,12 @@
 
 const Attendance = require('../models/Attendance');
 
-const NORMAL_SHIFT_START = '08:30';
-const NORMAL_SHIFT_END   = '17:00';
-const MINUTES_PER_DAY    = 24 * 60;
+const NORMAL_SHIFT_START  = '08:30';
+const NORMAL_SHIFT_END    = '17:00';
+const MINUTES_PER_DAY     = 24 * 60;
+const FULL_DAY_MINUTES    = 7 * 60;  // 420
+const SHORT_LEAVE_MINUTES = 6 * 60;  // 360
+const HALF_DAY_MINUTES    = 5 * 60;  // 300
 
 // isValidTimeString - returns true for HH:MM or HH:MM:SS with valid hour/minute/second ranges
 const isValidTimeString = (value) => {
@@ -65,6 +68,39 @@ const calculateStatus = (clockIn, clockOut) => {
     return 'present';
 };
 
+const calculateWorkedMinutes = (clockIn, clockOut) => {
+    if (!clockIn || !clockOut) return 0;
+
+    let inMins  = timeToMinutes(clockIn);
+    let outMins = timeToMinutes(clockOut);
+
+    if (outMins <= inMins) {
+        outMins += MINUTES_PER_DAY;
+    }
+
+    return outMins - inMins;
+};
+
+const classifyWorkDay = (workedMinutes) => {
+    if (workedMinutes >= FULL_DAY_MINUTES) {
+        return { dayType: 'full_day', status: 'present', lateCoverMinutes: 0 };
+    }
+
+    if (workedMinutes >= SHORT_LEAVE_MINUTES) {
+        return { dayType: 'short_leave', status: 'present', lateCoverMinutes: 0 };
+    }
+
+    if (workedMinutes >= HALF_DAY_MINUTES) {
+        return { dayType: 'half_day', status: 'present', lateCoverMinutes: 0 };
+    }
+
+    return {
+        dayType:          null,
+        status:           'unauthorised',
+        lateCoverMinutes: HALF_DAY_MINUTES - workedMinutes,
+    };
+};
+
 const closestLogToTime = (logs, targetTime, { afterMinutes = null } = {}) => {
     const targetMinutes = timeToMinutes(targetTime);
     let best     = null;
@@ -110,6 +146,7 @@ const upsertAttendanceRecord = async ({
     status,
     lateMinutes,
     lateCoverMinutes,
+    dayType,
     rosterId,
     logId,
 }) => {
@@ -127,6 +164,7 @@ const upsertAttendanceRecord = async ({
         existing.status           = status;
         existing.lateMinutes      = lateMinutes;
         existing.lateCoverMinutes = lateCoverMinutes;
+        existing.dayType          = dayType ?? null;
         existing.rosterId         = rosterId;
         existing.attendanceLogId  = logId;
         return existing.save();
@@ -144,18 +182,20 @@ const upsertAttendanceRecord = async ({
         status,
         lateMinutes,
         lateCoverMinutes,
+        dayType: dayType ?? null,
         rosterId,
         attendanceLogId: logId,
         isManual: false,
     });
 };
 
-const buildDiscrepancy = (employeeId, date, status, lateMinutes, lateCoverMinutes) => ({
+const buildDiscrepancy = (employeeId, date, status, lateMinutes, lateCoverMinutes, dayType = null) => ({
     employeeId,
     date,
     status,
     lateMinutes,
     lateCoverMinutes,
+    dayType,
 });
 
 const isDiscrepancy = (status, lateMinutes, lateCoverMinutes) =>
@@ -164,10 +204,15 @@ const isDiscrepancy = (status, lateMinutes, lateCoverMinutes) =>
 module.exports = {
     NORMAL_SHIFT_START,
     NORMAL_SHIFT_END,
+    FULL_DAY_MINUTES,
+    SHORT_LEAVE_MINUTES,
+    HALF_DAY_MINUTES,
     isValidTimeString,
     calculateArrivalLateMinutes,
     calculateLateCover,
     calculateStatus,
+    calculateWorkedMinutes,
+    classifyWorkDay,
     matchLogsToShift,
     upsertAttendanceRecord,
     buildDiscrepancy,
