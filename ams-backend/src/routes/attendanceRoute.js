@@ -18,7 +18,7 @@ router.post('/process-roster/:rosterId', attendanceController.processRosterAtten
 
 // -----------------------------------------------------------------------
 // GET /attendance - Retrieve all attendance records (admin only)
-// Supports optional employeeId, month, year, status, startDate, endDate, page, and limit filters
+// Supports optional q, employeeId, month, year, status, startDate, endDate, page, and limit filters
 // -----------------------------------------------------------------------
 router.get('/', isAdmin, attendanceController.getAllAttendance);
 

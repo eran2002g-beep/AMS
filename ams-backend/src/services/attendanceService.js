@@ -55,6 +55,62 @@ const normalizePositiveInteger = (value, fallback, fieldName) => {
     return parsed;
 };
 
+const normalizeSearchTerm = (value) => {
+    if (typeof value !== 'string') {
+        return '';
+    }
+
+    return value.trim();
+};
+
+const buildAttendanceSearchWhere = (searchTerm, employeeIds = []) => {
+    const term = normalizeSearchTerm(searchTerm);
+
+    if (!term) {
+        return {};
+    }
+
+    const like = `%${term}%`;
+    const where = {
+        [Op.or]: [
+            { attendanceId: { [Op.iLike]: like } },
+            { employeeId: { [Op.iLike]: like } },
+            { notes: { [Op.iLike]: like } },
+        ],
+    };
+
+    if (employeeIds.length > 0) {
+        where[Op.or].push({ employeeId: { [Op.in]: employeeIds } });
+    }
+
+    return where;
+};
+
+const findMatchingEmployeeIdsForSearch = async (searchTerm) => {
+    const term = normalizeSearchTerm(searchTerm);
+
+    if (!term) {
+        return [];
+    }
+
+    const like = `%${term}%`;
+    const matchingEmployees = await Employee.findAll({
+        where: {
+            [Op.or]: [
+                { employeeId: { [Op.iLike]: like } },
+                { firstName: { [Op.iLike]: like } },
+                { lastName: { [Op.iLike]: like } },
+                { email: { [Op.iLike]: like } },
+                { department: { [Op.iLike]: like } },
+            ],
+        },
+        attributes: ['employeeId'],
+        raw: true,
+    });
+
+    return matchingEmployees.map((employee) => employee.employeeId);
+};
+
 const buildAttendanceFilters = (filters = {}) => {
     const where = {};
     const hasDateRange = Boolean(filters.startDate && filters.endDate);
@@ -472,8 +528,10 @@ const getEmployeeAttendance = async (employeeId, filters = {}) => {
 };
 
 const getAllAttendance = async (filters = {}) => {
+    const matchingEmployeeIds = await findMatchingEmployeeIdsForSearch(filters.q);
     const where = {
         ...buildAttendanceFilters(filters),
+        ...buildAttendanceSearchWhere(filters.q, matchingEmployeeIds),
     };
 
     if (filters.employeeId) {
@@ -501,6 +559,7 @@ const getAllAttendance = async (filters = {}) => {
             totalPages: hasPagination ? Math.ceil(count / limit) : (count > 0 ? 1 : 0),
         },
         filters: {
+            ...(filters.q ? { q: normalizeSearchTerm(filters.q) } : {}),
             ...(filters.employeeId ? { employeeId: filters.employeeId } : {}),
             ...(filters.month !== undefined && filters.month !== '' ? { month: Number(filters.month) } : {}),
             ...(filters.year !== undefined && filters.year !== '' ? { year: Number(filters.year) } : {}),
@@ -773,6 +832,8 @@ const deleteAttendanceRecord = async (attendanceId) => {
 };
 
 module.exports = {
+    normalizeSearchTerm,
+    buildAttendanceSearchWhere,
     processNormalAttendance,
     processRosterAttendance,
     getEmployeeAttendance,
