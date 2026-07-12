@@ -1,13 +1,13 @@
+// app/attendance/page.tsx
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import {
-  Box, Button, Typography, Paper, Alert, CircularProgress,
-  TextField, MenuItem, TablePagination,
+  Box, Button, Typography, Paper, Alert, CircularProgress, TablePagination,
 } from "@mui/material";
-import SearchIcon from "@mui/icons-material/Search";
 import EventAvailableIcon from "@mui/icons-material/EventAvailable";
+import AddIcon from "@mui/icons-material/Add";
 import AttendanceTable from "@/components/AttendanceTable";
-import DateRangePicker from "@/components/DateRangePicker";
+import AttendanceFilterBar, { type AttendanceFilters } from "@/components/AttendanceFilterBar";
 import {
   attendanceApi,
   employeeApi,
@@ -15,63 +15,25 @@ import {
   getErrorMessage,
   getTodayDateString,
   type AttendanceRecord,
-  type EmployeeAttendanceFilters,
   type AllAttendanceResponse,
   type Employee,
 } from "@/lib/api";
 import AttendanceForm, { type AttendanceFormData } from "@/components/AttendanceForm";
-import AddIcon from "@mui/icons-material/Add";
+
+const DEFAULT_PAGE_SIZE = 20;
+const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
 const TODAY = getTodayDateString();
 
-const now = new Date();
-const DEFAULT_PAGE_SIZE = 20;
-const PAGE_SIZE_OPTIONS = [10, 20, 50];
-const CURRENT_YEAR = now.getFullYear();
-const CURRENT_MONTH = now.getMonth() + 1;
+type AppliedFilters = AttendanceFilters & { page: number; limit: number };
 
-type FilterMode = "month" | "range";
-
-const STATUS_OPTIONS: Array<{ value: "" | AttendanceRecord["status"]; label: string }> = [
-  { value: "", label: "All statuses" },
-  { value: "present", label: "Present" },
-  { value: "absent", label: "Absent" },
-  { value: "leave", label: "Leave" },
-  { value: "unauthorised", label: "Unauthorised" },
-  { value: "holiday", label: "Holiday" },
-];
-
-function defaultFilters(): EmployeeAttendanceFilters & { q?: string } {
-  return {
-    startDate: TODAY,
-    endDate: TODAY,
-    q: "",
-    page: 1,
-    limit: DEFAULT_PAGE_SIZE,
-  };
-}
-
-function parseMonthYear(yearStr: string, monthStr: string): { year: number; month: number } | string {
-  const parsedYear = Number(yearStr);
-  const parsedMonth = Number(monthStr);
-  if (!Number.isInteger(parsedYear) || parsedYear < 2000 || parsedYear > 2099) {
-    return "Year must be between 2000 and 2099.";
-  }
-  if (!Number.isInteger(parsedMonth) || parsedMonth < 1 || parsedMonth > 12) {
-    return "Month must be between 1 and 12.";
-  }
-  return { year: parsedYear, month: parsedMonth };
+function defaultApplied(): AppliedFilters {
+  return { startDate: TODAY, endDate: TODAY, page: 1, limit: DEFAULT_PAGE_SIZE };
 }
 
 export default function AllAttendancePage() {
-  const [filterMode, setFilterMode] = useState<FilterMode>("range");
-  const [year, setYear] = useState(String(CURRENT_YEAR));
-  const [month, setMonth] = useState(String(CURRENT_MONTH));
-  const [status, setStatus] = useState<"" | AttendanceRecord["status"]>("");
-  const [startDate, setStartDate] = useState(TODAY);
-  const [endDate, setEndDate] = useState(TODAY);
-  const [searchText, setSearchText] = useState("");
-  const [appliedFilters, setAppliedFilters] = useState<EmployeeAttendanceFilters & { q?: string }>(defaultFilters());
+  const [appliedFilters, setAppliedFilters] = useState<AppliedFilters>(defaultApplied());
+  const [filterError, setFilterError] = useState("");
 
   const [response, setResponse] = useState<AllAttendanceResponse | null>(null);
   const [employeesList, setEmployeesList] = useState<Employee[]>([]);
@@ -85,27 +47,27 @@ export default function AllAttendancePage() {
   const [deletingAttendanceId, setDeletingAttendanceId] = useState<string | null>(null);
   const [processingAttendance, setProcessingAttendance] = useState(false);
 
-  // Load all active employees to map ID to names in table
+  // Load all active employees to map ID → name in table and populate add-form dropdown
   useEffect(() => {
     employeeApi.list({ limit: 1000 })
       .then((res) => {
         setEmployeesList(res.employees);
         const map: Record<string, Employee> = {};
-        res.employees.forEach((emp) => {
-          map[emp.employeeId] = emp;
-        });
+        res.employees.forEach((emp) => { map[emp.employeeId] = emp; });
         setEmployeesMap(map);
       })
-      .catch((err) => {
-        console.error("Failed to load employees for listing", err);
-      });
+      .catch((err) => console.error("Failed to load employees", err));
   }, []);
 
   const loadAttendance = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const result = await attendanceApi.getAllAttendance(appliedFilters);
+      const { status, ...rest } = appliedFilters;
+      const result = await attendanceApi.getAllAttendance({
+        ...rest,
+        ...(status ? { status } : {}),
+      });
       setResponse(result);
     } catch (err) {
       setResponse(null);
@@ -115,91 +77,57 @@ export default function AllAttendancePage() {
     }
   }, [appliedFilters]);
 
-  useEffect(() => {
-    loadAttendance();
-  }, [loadAttendance]);
+  useEffect(() => { loadAttendance(); }, [loadAttendance]);
 
-  const handleSearch = () => {
-    const filters: EmployeeAttendanceFilters & { q?: string } = {
-      page: 1,
-      limit: appliedFilters.limit ?? DEFAULT_PAGE_SIZE,
-    };
+  // ── Filter bar callbacks ────────────────────────────────────────────────────
 
-    if (searchText.trim()) {
-      filters.q = searchText.trim();
-    }
-
-    if (filterMode === "range") {
-      if (!startDate || !endDate) {
-        setError("Please select both start and end dates.");
-        return;
-      }
-
-      if (startDate > endDate) {
-        setError("Start date must be on or before end date.");
-        return;
-      }
-
-      filters.startDate = startDate;
-      filters.endDate = endDate;
-    } else {
-      const parsed = parseMonthYear(year, month);
-      if (typeof parsed === "string") {
-        setError(parsed);
-        return;
-      }
-      filters.year = parsed.year;
-      filters.month = parsed.month;
-    }
-
-    if (status) filters.status = status;
-
-    setError("");
-    setAppliedFilters(filters);
-  };
-
-  const handleClearFilters = () => {
-    const today = getTodayDateString();
-    setFilterMode("range");
-    setYear(String(CURRENT_YEAR));
-    setMonth(String(CURRENT_MONTH));
-    setStatus("");
-    setStartDate(today);
-    setEndDate(today);
-    setSearchText("");
-    setError("");
+  const handleSearch = (filters: AttendanceFilters) => {
     setAppliedFilters({
-      startDate: today,
-      endDate: today,
-      q: "",
+      ...filters,
       page: 1,
-      limit: appliedFilters.limit ?? DEFAULT_PAGE_SIZE,
+      limit: appliedFilters.limit,
     });
   };
 
-  const openCreateForm = () => {
-    setEditingRecord(null);
-    setFormOpen(true);
+  const handleClear = () => {
+    setFilterError("");
+    setAppliedFilters(defaultApplied());
   };
 
-  const openEditForm = (record: AttendanceRecord) => {
-    setEditingRecord(record);
-    setFormOpen(true);
+  // ── Process attendance ──────────────────────────────────────────────────────
+
+  const handleProcessAttendance = async () => {
+    setProcessingAttendance(true);
+    setError("");
+    setSuccess("");
+    try {
+      const result = await attendanceApi.processToday();
+      const note = result.discrepancyCount > 0
+        ? ` ${result.discrepancyCount} discrepancy found.`
+        : "";
+      setSuccess(
+        `Processed today's attendance for ${result.processedCount} employee${result.processedCount === 1 ? "" : "s"}.${note}`,
+      );
+      await loadAttendance();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setProcessingAttendance(false);
+    }
   };
 
-  const closeForm = () => {
-    setFormOpen(false);
-    setEditingRecord(null);
-  };
+  // ── Form callbacks ──────────────────────────────────────────────────────────
+
+  const openCreateForm = () => { setEditingRecord(null); setFormOpen(true); };
+  const openEditForm   = (rec: AttendanceRecord) => { setEditingRecord(rec); setFormOpen(true); };
+  const closeForm      = () => { setFormOpen(false); setEditingRecord(null); };
 
   const handleAddAttendance = async (data: AttendanceFormData) => {
     setSubmitting(true);
     setError("");
     setSuccess("");
     try {
-      if (!data.employeeId) {
-        throw new Error("Employee selection is required.");
-      }
+      if (!data.employeeId) throw new Error("Employee selection is required.");
       await attendanceApi.createRecord({
         employeeId: data.employeeId,
         date: data.date,
@@ -221,14 +149,8 @@ export default function AllAttendancePage() {
 
   const handleUpdateAttendance = async (data: AttendanceFormData) => {
     if (!editingRecord) return;
-
     const changes = buildAttendanceUpdatePayload(editingRecord, data);
-    if (Object.keys(changes).length === 0) {
-      setSuccess("No changes to save.");
-      closeForm();
-      return;
-    }
-
+    if (Object.keys(changes).length === 0) { setSuccess("No changes to save."); closeForm(); return; }
     setSubmitting(true);
     setError("");
     setSuccess("");
@@ -259,54 +181,37 @@ export default function AllAttendancePage() {
     }
   };
 
-  const handleProcessAttendance = async () => {
-    setProcessingAttendance(true);
-    setError("");
-    setSuccess("");
-    try {
-      const result = await attendanceApi.processToday();
-      const discrepancyNote =
-        result.discrepancyCount > 0
-          ? ` ${result.discrepancyCount} discrepancy found.`
-          : "";
-      setSuccess(
-        `Processed today's attendance for ${result.processedCount} employee${result.processedCount === 1 ? "" : "s"}.${discrepancyNote}`,
-      );
-      await loadAttendance();
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setProcessingAttendance(false);
-    }
-  };
+  // ── Pagination ──────────────────────────────────────────────────────────────
 
-  const handlePageChange = (_: unknown, newPage: number) => {
-    setAppliedFilters((prev) => ({
-      ...prev,
-      page: newPage + 1,
-    }));
-  };
+  const handlePageChange = (_: unknown, newPage: number) =>
+    setAppliedFilters((prev) => ({ ...prev, page: newPage + 1 }));
 
-  const handleRowsPerPageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const limit = parseInt(event.target.value, 10);
-    setAppliedFilters((prev) => ({
-      ...prev,
-      page: 1,
-      limit,
-    }));
-  };
+  const handleRowsPerPageChange = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setAppliedFilters((prev) => ({ ...prev, page: 1, limit: parseInt(e.target.value, 10) }));
 
-  const records = response?.data ?? [];
-  const meta = response?.meta;
-  const page = (appliedFilters.page ?? 1) - 1;
+  // ── Render ──────────────────────────────────────────────────────────────────
+
+  const records    = response?.data ?? [];
+  const meta       = response?.meta;
+  const page       = (appliedFilters.page ?? 1) - 1;
   const rowsPerPage = appliedFilters.limit ?? DEFAULT_PAGE_SIZE;
 
   return (
     <Box>
       <Paper sx={{ p: 2, mb: 3, borderRadius: 2 }} elevation={1}>
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 2, mb: 2 }}>
+        {/* ── Header ── */}
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            flexWrap: "wrap",
+            gap: 2,
+            mb: 2,
+          }}
+        >
           <Box>
-            <Typography variant="h5" sx={{ fontWeight: 700, color: "#1e293b", mb: 1 }}>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: "#1e293b", mb: 0.5 }}>
               All Attendance Records
             </Typography>
             <Typography variant="body2" sx={{ color: "#64748b" }}>
@@ -335,99 +240,14 @@ export default function AllAttendancePage() {
           </Box>
         </Box>
 
-        <Box
-          sx={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 2,
-            alignItems: "flex-end",
-          }}
-        >
-          <TextField
-            label="Search Employee"
-            placeholder="Name, ID, Department"
-            size="small"
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            sx={{ width: { xs: "100%", md: 240 } }}
-          />
-
-          <TextField
-            label="Filter by"
-            select
-            size="small"
-            value={filterMode}
-            onChange={(e) => setFilterMode(e.target.value as FilterMode)}
-            sx={{ width: 140 }}
-          >
-            <MenuItem value="month">Month</MenuItem>
-            <MenuItem value="range">Date range</MenuItem>
-          </TextField>
-
-          {filterMode === "month" ? (
-            <>
-              <TextField
-                label="Year"
-                type="number"
-                size="small"
-                value={year}
-                onChange={(e) => setYear(e.target.value)}
-                sx={{ width: 110 }}
-                slotProps={{ htmlInput: { min: 2000, max: 2099 } }}
-              />
-              <TextField
-                label="Month"
-                select
-                size="small"
-                value={month}
-                onChange={(e) => setMonth(e.target.value)}
-                sx={{ width: 140 }}
-              >
-                {Array.from({ length: 12 }, (_, i) => (
-                  <MenuItem key={i + 1} value={String(i + 1)}>
-                    {new Date(2000, i, 1).toLocaleString("default", { month: "long" })}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </>
-          ) : (
-            <Box sx={{ flex: { xs: "1 1 100%", md: "1 1 480px" }, minWidth: 0 }}>
-              <DateRangePicker
-                startDate={startDate}
-                endDate={endDate}
-                onStartDateChange={setStartDate}
-                onEndDateChange={setEndDate}
-              />
-            </Box>
-          )}
-
-          <TextField
-            label="Status"
-            select
-            size="small"
-            value={status}
-            onChange={(e) => setStatus(e.target.value as "" | AttendanceRecord["status"])}
-            sx={{ width: 160 }}
-          >
-            {STATUS_OPTIONS.map((opt) => (
-              <MenuItem key={opt.value || "all"} value={opt.value}>
-                {opt.label}
-              </MenuItem>
-            ))}
-          </TextField>
-
-          <Button
-            variant="contained"
-            startIcon={<SearchIcon />}
-            onClick={handleSearch}
-            sx={{ backgroundColor: "#2563eb" }}
-          >
-            Search
-          </Button>
-          <Button variant="outlined" onClick={handleClearFilters} sx={{ borderColor: "#94a3b8", color: "#64748b" }}>
-            Clear filters
-          </Button>
-        </Box>
+        {/* ── Filter bar ── */}
+        <AttendanceFilterBar
+          onSearch={handleSearch}
+          onClear={handleClear}
+          showEmployeeSearch
+          errorMessage={filterError}
+          onErrorClear={() => setFilterError("")}
+        />
       </Paper>
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
