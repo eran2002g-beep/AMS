@@ -44,8 +44,10 @@ router.post('/create', async (req, res) => {
 // -----------------------------------------------------------------------
 router.delete('/:employeeId', async (req, res) => {
     try {
+        // Extract employeeId from URL parameters
         const { employeeId } = req.params; 
         
+        // Execute soft delete logic from the service layer
         await employeeService.deleteEmployeeById(employeeId);
         
         return res.status(200).json({
@@ -53,6 +55,7 @@ router.delete('/:employeeId', async (req, res) => {
             message: `Employee ${employeeId} has been successfully deleted.`
         });
     } catch (err) {
+        // Return 404 if employee was not found, otherwise default to 500 server error
         const statusCode = err.message.includes('not found') ? 404 : 500;
         return res.status(statusCode).json({ 
             success: false, 
