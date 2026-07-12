@@ -40,7 +40,7 @@ router.post('/create', async (req, res) => {
 });
 
 // -----------------------------------------------------------------------
-// DELETE /employee/:employeeId - delete an employee record
+// DELETE /employee/:employeeId - delete an employee record (Soft Delete)
 // -----------------------------------------------------------------------
 router.delete('/:employeeId', async (req, res) => {
     try {
@@ -80,6 +80,43 @@ router.patch('/:employeeId', async (req, res) => {
         return res.status(400).json({ 
             success: false, 
             error: err.message 
+        });
+    }
+});
+
+// -----------------------------------------------------------------------
+// GET /employee/:employeeId/attendance-summary - Get calculated metrics
+// -----------------------------------------------------------------------
+router.get('/:employeeId/attendance-summary', async (req, res) => {
+    try {
+        const { employeeId } = req.params;
+        const { startDate, endDate, shiftStartTime } = req.query;
+
+        if (!startDate || !endDate) {
+            return res.status(400).json({
+                success: false,
+                error: "Both 'startDate' and 'endDate' query parameters are required."
+            });
+        }
+
+        const metrics = await employeeService.calculateAttendanceMetrics(
+            employeeId, 
+            startDate, 
+            endDate, 
+            shiftStartTime || "09:00"
+        );
+
+        return res.status(200).json({
+            success: true,
+            employeeId,
+            period: { startDate, endDate },
+            data: metrics
+        });
+    } catch (err) {
+        const statusCode = err.message.includes('not found') ? 404 : 500;
+        return res.status(statusCode).json({
+            success: false,
+            error: err.message
         });
     }
 });

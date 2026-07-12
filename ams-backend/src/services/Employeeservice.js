@@ -1,11 +1,11 @@
 // src/services/employeeService.js - handles business logic for employee operations
 // sits between the controller and the model - controller handles HTTP, service handles logic
 
-// Import the Employee model to interact with the employees table
+// Import the Employee and Attendance models to interact with the database
 const Employee = require('../models/Employee');
 const Attendance = require('../models/Attendance');
 const { validateEmployeePayload } = require('./employeeValidation');
-
+const { Op } = require('sequelize');
 // createEmployee - validates input and creates a new employee record
 // receives plain data object from the controller, returns the created employee
 const createEmployee = async (data) => {
@@ -22,8 +22,8 @@ const createEmployee = async (data) => {
     // findOne returns the matching record or null if not found
     const existingEmployee = await Employee.findOne({ where: { email: validatedEmail } });
 
-    // If a record was found, this email is already taken
     if (existingEmployee) {
+        // If a record was found, this email is already taken
         throw new Error('An employee with this email already exists');
     }
 
@@ -50,8 +50,6 @@ const createEmployee = async (data) => {
 //  searchEmployees - Fetches active employee records with optional filters
 //  Supports: q (search across firstName,lastName,email,employeeId), department, role, pagination
 // -----------------------------------------------------------------------
-const { Op } = require('sequelize');
-
 const searchEmployees = async (opts = {}) => {
     try {
         const {
@@ -96,6 +94,8 @@ const searchEmployees = async (opts = {}) => {
 };
 
 // -----------------------------------------------------------------------
+
+
 // Soft Delete Employee - Sets isActive to false using employeeId
 // -----------------------------------------------------------------------
 const deleteEmployeeById = async (employeeId) => {
@@ -193,7 +193,7 @@ const getEmployeeAttendance = async (employeeId, filters = {}) => {
 
     if (filters.startDate && filters.endDate) {
         where.date = {
-            [require('sequelize').Op.between]: [filters.startDate, filters.endDate],
+            [Op.between]: [filters.startDate, filters.endDate],
         };
     }
 
@@ -201,6 +201,58 @@ const getEmployeeAttendance = async (employeeId, filters = {}) => {
         where,
         order: [['date', 'DESC']],
     });
+};
+
+// -----------------------------------------------------------------------
+// calculateAttendanceMetrics - Core math logic for summary dashboards
+// -----------------------------------------------------------------------
+const calculateAttendanceMetrics = async (employeeId, startDate, endDate, shiftStartTime = "09:00") => {
+    if (!startDate || !endDate) {
+        throw new Error('Both startDate and endDate are required for metric calculations.');
+    }
+
+    const records = await getEmployeeAttendance(employeeId, { startDate, endDate });
+
+    let totalPresentDays = 0;
+    let totalWorkingHours = 0;
+    let totalLateMinutes = 0;
+
+    records.forEach(record => {
+        if (!record.checkIn) return; 
+
+        totalPresentDays++;
+
+        // 1. Calculate working hours duration
+        if (record.checkOut) {
+            const checkInTime = new Date(record.checkIn);
+            const checkOutTime = new Date(record.checkOut);
+            
+            const hoursWorked = (checkOutTime - checkInTime) / (1000 * 60 * 60);
+            totalWorkingHours += parseFloat(hoursWorked.toFixed(2));
+        }
+
+        // 2. Calculate late time shifts
+        const actualCheckIn = new Date(record.checkIn);
+        const [expectedHour, expectedMinute] = shiftStartTime.split(":").map(Number);
+        
+        const expectedCheckInTimeToday = new Date(actualCheckIn);
+        expectedCheckInTimeToday.setHours(expectedHour, expectedMinute, 0, 0);
+
+        if (actualCheckIn > expectedCheckInTimeToday) {
+            const lateMs = actualCheckIn - expectedCheckInTimeToday;
+            const lateMins = Math.floor(lateMs / (1000 * 60));
+            totalLateMinutes += lateMins;
+        }
+    });
+
+    return {
+        totalPresentDays,
+        totalWorkingHours: parseFloat(totalWorkingHours.toFixed(2)),
+        totalLateMinutes,
+        attendancePercentage: records.length > 0 
+            ? parseFloat(((totalPresentDays / records.length) * 100).toFixed(2)) 
+            : 0
+    };
 };
 
 // Export all service functions - add new ones here as we build more features
@@ -211,4 +263,5 @@ module.exports = {
     updateEmployee,
     deleteEmployeeById,
     getEmployeeAttendance,
+    calculateAttendanceMetrics,
 };
