@@ -2,7 +2,10 @@
 const express = require('express');
 const router  = express.Router();
 
+const isAdmin = require('../middleware/isAdmin');
 const attendanceController = require('../controllers/attendanceController');
+
+router.use(isAdmin);
 
 // POST /attendance/process - process normal attendance for non-roster employees
 // Body or query: date | month+year | startDate+endDate

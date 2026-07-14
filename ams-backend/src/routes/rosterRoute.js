@@ -4,21 +4,19 @@ const router  = express.Router();
 const { upload } = require('../utils/rosterParser');
 const rosterService = require('../services/rosterService');
 const attendanceController = require('../controllers/attendanceController');
-
-
-//Ahamed's Updates............*****
-//Roster dlete implementation by Ahamed..
-const isAdmin = require("../middleware/isAdmin");
+const isAdmin = require('../middleware/isAdmin');
 const {
   deleteRosterByDate,
   deleteRostersByMonth,
-} = require("../controllers/rosterController");
+} = require('../controllers/rosterController');
 
-// dlete bydDate=YYYY-MM-DD....
-router.delete("/by-date", isAdmin, deleteRosterByDate);
+router.use(isAdmin);
 
-// dlete byMonth=MM&year=YYYY.....
-router.delete("/by-month", isAdmin, deleteRostersByMonth);
+// DELETE /roster/by-date?date=YYYY-MM-DD
+router.delete('/by-date', deleteRosterByDate);
+
+// DELETE /roster/by-month?month=MM&year=YYYY
+router.delete('/by-month', deleteRostersByMonth);
 
 
 

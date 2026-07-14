@@ -2,7 +2,10 @@
 const express = require('express');
 const router = express.Router();
 
+const isAdmin = require('../middleware/isAdmin');
 const employeeService = require('../services/employeeService');
+
+router.use(isAdmin);
 
 // -----------------------------------------------------------------------
 // GET /employee - Retrieve all employee records API

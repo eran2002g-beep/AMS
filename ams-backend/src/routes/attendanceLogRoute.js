@@ -2,7 +2,10 @@
 const express = require('express');
 const router = express.Router();
 
+const isAdmin = require('../middleware/isAdmin');
 const attendanceLogService = require('../services/attendanceLogService');
+
+router.use(isAdmin);
 
 // -----------------------------------------------------------------------
 // POST /attendance-log/create - Create a new attendance log record
