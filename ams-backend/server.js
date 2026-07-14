@@ -23,6 +23,7 @@ const employeeRoutes = require('./src/routes/employeeRoute');
 const rosterRoutes = require('./src/routes/rosterRoute');
 const attendanceLogRoutes = require('./src/routes/attendanceLogRoute');
 const attendanceRoutes = require('./src/routes/attendanceRoute');
+const authRoutes     = require('./src/routes/authRoute');
 
 // ----------------------- Error Logging Middleware -----------------------
 const { errorLogger, notFoundLogger } = require('./src/middleware/errorLogger');
@@ -42,6 +43,7 @@ app.use(cors({
 }));
 
 // ----------------------- Routes -----------------------
+app.use('/auth',     authRoutes);      // POST /auth/login, POST /auth/logout
 
 // Mount employee routes under /employee
 app.use('/employee', employeeRoutes);
