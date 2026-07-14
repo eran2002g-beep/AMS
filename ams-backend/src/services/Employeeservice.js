@@ -122,45 +122,70 @@ const deleteEmployeeById = async (employeeId) => {
 };
 
 // -----------------------------------------------------------------------
+// getEmployeeById - Retrieve a single employee by employeeId
+// Returns full employee details or throws error if not found
+// -----------------------------------------------------------------------
+const getEmployeeById = async (employeeId) => {
+    // Validate that employeeId is provided
+    if (!employeeId || typeof employeeId !== 'string') {
+        throw new Error('Valid Employee ID is required.');
+    }
+
+    // Query for the employee by employeeId
+    const employee = await Employee.findOne({ 
+        where: { employeeId, isActive: true } 
+    });
+
+    // If not found, throw a 404-like error
+    if (!employee) {
+        throw new Error(`Employee with ID ${employeeId} not found.`);
+    }
+
+    return employee;
+};
+
+// -----------------------------------------------------------------------
 // updates an existing employee record
 // accepts employeeId and a data object with fields to update
 // returns the updated employee object
+// 
+// Fields that CAN be updated: firstName, lastName, email, phone, department, role, roster
+// Fields that CANNOT be updated: employeeId, id, isActive, createdAt, updatedAt
 // -----------------------------------------------------------------------
 const updateEmployee = async (employeeId, updateData) => {
-
-    // Check that the employee exists first
-    const employee = await Employee.findOne({ where: { employeeId } });
-    
-    if (!employee) {
-        throw new Error(`Employee with ID ${employeeId} not found`);
+    // Validate that employeeId is provided
+    if (!employeeId || typeof employeeId !== 'string') {
+        throw new Error('Valid Employee ID is required.');
     }
 
-    // Destructure only the fields we allow to be updated
-    const { firstName, lastName, email, phone, department, role, roster } = updateData;
+    // Check that the employee exists first
+    const employee = await Employee.findOne({ where: { employeeId, isActive: true } });
+    
+    if (!employee) {
+        throw new Error(`Employee with ID ${employeeId} not found.`);
+    }
 
-    const validatedData = validateEmployeePayload(updateData);
-    const { firstName: validatedFirstName, lastName: validatedLastName, email: validatedEmail, phone: validatedPhone, department: validatedDepartment, role: validatedRole, roster: validatedRoster } = validatedData;
+    // Prevent updating immutable fields
+    const immutableFields = ['employeeId', 'id', 'isActive', 'createdAt', 'updatedAt'];
+    const attemptedImmutable = Object.keys(updateData).filter(key => immutableFields.includes(key));
+    
+    if (attemptedImmutable.length > 0) {
+        throw new Error(`Cannot update immutable fields: ${attemptedImmutable.join(', ')}`);
+    }
+
+    // Validate all provided data
+    const validatedData = validateEmployeePayload(updateData, { requireAllFields: false });
 
     // If email is being changed, check if the new email already exists
-    if (validatedEmail && validatedEmail !== employee.email) {
-        const existingEmployee = await Employee.findOne({ where: { email: validatedEmail } });
+    if (validatedData.email && validatedData.email !== employee.email) {
+        const existingEmployee = await Employee.findOne({ where: { email: validatedData.email } });
         if (existingEmployee) {
-            throw new Error('An employee with this email already exists');
+            throw new Error('An employee with this email already exists.');
         }
     }
 
-    // Build the update object - only include fields that were provided
-    const updateFields = {};
-    if (firstName !== undefined) updateFields.firstName = validatedFirstName;
-    if (lastName !== undefined) updateFields.lastName = validatedLastName;
-    if (email !== undefined) updateFields.email = validatedEmail;
-    if (phone !== undefined) updateFields.phone = validatedPhone;
-    if (department !== undefined) updateFields.department = validatedDepartment;
-    if (role !== undefined) updateFields.role = validatedRole;
-    if (roster !== undefined) updateFields.roster = validatedRoster;
-
-    // Update the employee record with the new values
-    const updatedEmployee = await employee.update(updateFields);
+    // Update the employee record with validated values
+    const updatedEmployee = await employee.update(validatedData);
 
     return updatedEmployee;
 };
@@ -208,6 +233,7 @@ module.exports = {
     createEmployee,
     getAllEmployees,
     searchEmployees,
+    getEmployeeById,
     updateEmployee,
     deleteEmployeeById,
     getEmployeeAttendance,
