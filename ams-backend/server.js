@@ -26,7 +26,9 @@ const attendanceRoutes = require('./src/routes/attendanceRoute');
 const authRoutes     = require('./src/routes/authRoute');
 
 // ----------------------- Error Logging Middleware -----------------------
+const requestLogger = require('./src/middleware/requestLogger'); 
 const { errorLogger, notFoundLogger } = require('./src/middleware/errorLogger');
+
 
 const app = express();
 
@@ -41,6 +43,8 @@ app.use(cors({
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     credentials: true
 }));
+
+app.use(requestLogger); //logs method, route, status code, response time
 
 // ----------------------- Routes -----------------------
 app.use('/auth',     authRoutes);      // POST /auth/login, POST /auth/logout
@@ -136,6 +140,8 @@ sequelize.authenticate()
         app.listen(PORT, () => {
             console.log('-------------------------------------------------------');
             console.log(`Server running on http://localhost:${PORT}`);
+            console.log('-------------------------------------------------------');
+            console.log('');
         });
     })
 
