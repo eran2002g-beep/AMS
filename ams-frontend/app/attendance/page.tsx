@@ -23,12 +23,11 @@ import AttendanceForm, { type AttendanceFormData } from "@/components/Attendance
 const DEFAULT_PAGE_SIZE = 20;
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
-const TODAY = getTodayDateString();
-
 type AppliedFilters = AttendanceFilters & { page: number; limit: number };
 
+/** Load all records on first visit; date/status filters apply only after Search. */
 function defaultApplied(): AppliedFilters {
-  return { startDate: TODAY, endDate: TODAY, page: 1, limit: DEFAULT_PAGE_SIZE };
+  return { page: 1, limit: DEFAULT_PAGE_SIZE };
 }
 
 export default function AllAttendancePage() {

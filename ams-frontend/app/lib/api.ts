@@ -50,6 +50,8 @@ export type EmployeeFormData = {
   department: string;
   roster: boolean;
   role?: "admin" | "employee";
+  /** Required when creating; optional when editing (leave blank to keep current). */
+  password?: string;
 };
 
 export type EmployeeUpdatePayload = Partial<{
@@ -60,6 +62,7 @@ export type EmployeeUpdatePayload = Partial<{
   department: string | null;
   role: "admin" | "employee";
   roster: boolean;
+  password: string;
 }>;
 
 export function buildEmployeeUpdatePayload(
@@ -80,6 +83,7 @@ export function buildEmployeeUpdatePayload(
   if (department !== (original.department ?? "")) changes.department = department || null;
   if (form.roster !== original.roster) changes.roster = form.roster;
   if (form.role && form.role !== original.role) changes.role = form.role;
+  if (form.password) changes.password = form.password;
 
   return changes;
 }
@@ -194,6 +198,7 @@ export const employeeApi = {
       firstName: payload.firstName,
       lastName: payload.lastName,
       email: payload.email,
+      password: payload.password,
       roster: payload.roster,
       ...(payload.phone ? { phone: payload.phone } : {}),
       ...(payload.department ? { department: payload.department } : {}),
@@ -715,7 +720,9 @@ export const attendanceApi = {
     if (filters.page != null) params.page = filters.page;
     if (filters.limit != null) params.limit = filters.limit;
 
-    const response = await api.get<AllAttendanceResponse>("/attendance", {
+    // Use /attendance/view so the request is proxied to Express.
+    // Bare GET /attendance is the Next.js page route and returns HTML.
+    const response = await api.get<AllAttendanceResponse>("/attendance/view", {
       params,
     });
 

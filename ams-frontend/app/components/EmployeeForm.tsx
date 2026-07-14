@@ -9,7 +9,13 @@ import {
 import type { Employee, EmployeeFormData } from "@/lib/api";
 
 const EMPTY: EmployeeFormData = {
-  firstName: "", lastName: "", email: "", phone: "", department: "", roster: false,
+  firstName: "",
+  lastName: "",
+  email: "",
+  phone: "",
+  department: "",
+  roster: false,
+  password: "",
 };
 
 const FIELDS = [
@@ -29,6 +35,7 @@ function employeeToForm(employee: Employee): EmployeeFormData {
     department: employee.department ?? "",
     roster: employee.roster,
     role: employee.role,
+    password: "",
   };
 }
 
@@ -67,6 +74,14 @@ export default function EmployeeForm({ open, onClose, onSubmit, submitting, empl
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
       newErrors.email = "Enter a valid email address";
 
+    if (!isEdit) {
+      if (!form.password) newErrors.password = "Password is required";
+      else if (form.password.length < 8)
+        newErrors.password = "Password must be at least 8 characters";
+    } else if (form.password && form.password.length < 8) {
+      newErrors.password = "Password must be at least 8 characters";
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -82,6 +97,7 @@ export default function EmployeeForm({ open, onClose, onSubmit, submitting, empl
       department: form.department.trim(),
       roster: form.roster,
       ...(isEdit && form.role ? { role: form.role } : {}),
+      ...(form.password ? { password: form.password } : {}),
     };
 
     try {
@@ -144,6 +160,31 @@ export default function EmployeeForm({ open, onClose, onSubmit, submitting, empl
               }}
             />
           ))}
+          <TextField
+            fullWidth
+            label={isEdit ? "New Password (optional)" : "Password"}
+            name="password"
+            type="password"
+            value={form.password ?? ""}
+            onChange={handle}
+            error={!!errors.password}
+            helperText={
+              errors.password
+                || (isEdit ? "Leave blank to keep the current password" : "At least 8 characters")
+            }
+            size="small"
+            margin="none"
+            autoComplete={isEdit ? "new-password" : "new-password"}
+            sx={{ gridColumn: { xs: "1", sm: "1 / -1" } }}
+            slotProps={{
+              inputLabel: {
+                sx: {
+                  backgroundColor: "#fff",
+                  px: 0.5,
+                },
+              },
+            }}
+          />
           {isEdit && (
             <FormControl fullWidth size="small" sx={{ gridColumn: { xs: "1", sm: "1 / -1" } }}>
               <InputLabel>Role</InputLabel>

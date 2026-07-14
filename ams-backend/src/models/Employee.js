@@ -47,6 +47,12 @@ const Employee = sequelize.define('Employee', {
         },
     },
 
+    // password - bcrypt hash used for login (Epic 3); never returned in API responses
+    password: {
+        type: DataTypes.STRING,
+        allowNull: false,
+    },
+
     // phone - optional contact number for HR use
     phone: {
         type: DataTypes.STRING,
@@ -85,6 +91,17 @@ const Employee = sequelize.define('Employee', {
     // Auto-adds createdAt and updatedAt columns to track when records change
     timestamps: true,
 
+    // Never include password hash in default queries / JSON responses
+    defaultScope: {
+        attributes: { exclude: ['password'] },
+    },
+
+    scopes: {
+        withPassword: {
+            attributes: { include: ['password'] },
+        },
+    },
+
     // hooks run automatically at specific points in a record's lifecycle
     hooks: {
 
@@ -101,6 +118,13 @@ const Employee = sequelize.define('Employee', {
         },
     },
 });
+
+// Strip password from every JSON serialization (create/update responses included)
+Employee.prototype.toJSON = function toJSON() {
+    const values = { ...this.get() };
+    delete values.password;
+    return values;
+};
 
 // Export so the controller can call Employee.create(), findAll(), update(), destroy(), etc.
 module.exports = Employee;

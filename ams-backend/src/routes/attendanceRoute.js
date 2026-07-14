@@ -2,7 +2,6 @@
 const express = require('express');
 const router  = express.Router();
 
-const isAdmin = require('../middleware/isAdmin');
 const attendanceController = require('../controllers/attendanceController');
 
 // POST /attendance/process - process normal attendance for non-roster employees
@@ -17,26 +16,27 @@ router.post('/process-roster', attendanceController.processRosterAttendance);
 router.post('/process-roster/:rosterId', attendanceController.processRosterAttendance);
 
 // -----------------------------------------------------------------------
-// GET /attendance - Retrieve all attendance records (admin only)
+// GET /attendance - Retrieve all attendance records
 // Supports optional q, employeeId, month, year, status, startDate, endDate, page, and limit filters
+// Prefer /attendance/view from the Next.js admin UI — bare /attendance collides with the page route.
 // -----------------------------------------------------------------------
-router.get('/', isAdmin, attendanceController.getAllAttendance);
+router.get('/', attendanceController.getAllAttendance);
 
 // GET /attendance/employee/:employeeId - Retrieve attendance records for one employee
 // Supports optional month, year, status, startDate, endDate, page, and limit filters
 // -----------------------------------------------------------------------
 router.get('/employee/:employeeId', attendanceController.getEmployeeAttendance);
 
-router.get('/view', isAdmin, attendanceController.getAllAttendance);
+router.get('/view', attendanceController.getAllAttendance);
 
 router.post('/create', attendanceController.createAttendanceRecord);
 
-router.get('/:attendanceId', isAdmin, attendanceController.getAttendanceById);
+router.get('/:attendanceId', attendanceController.getAttendanceById);
 
-// PUT /attendance/:attendanceId - update an attendance record (admin only)
+// PUT /attendance/:attendanceId - update an attendance record
 router.put('/:attendanceId', attendanceController.updateAttendance);
 
-// DELETE /attendance/:attendanceId - permanently remove an attendance record (admin only)
-router.delete('/:attendanceId', isAdmin, attendanceController.deleteAttendance);
+// DELETE /attendance/:attendanceId - permanently remove an attendance record
+router.delete('/:attendanceId', attendanceController.deleteAttendance);
 
 module.exports = router;

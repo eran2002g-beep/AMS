@@ -66,16 +66,43 @@ const PORT = process.env.PORT || 5000;
 // Step 1 - test the database connection
 sequelize.authenticate()
 
-    // Step 2 - create or update tables to match model definitions
-    // alter: true updates existing tables safely without deleting data
+    // Step 2 - add password column and backfill before sync enforces NOT NULL
     .then(() => {
         console.log('');
         console.log('-------------------------------------------------------');
         console.log('Neon database connected successfully.');
-        return sequelize.sync({ alter: true });
+        return sequelize.query(`
+            ALTER TABLE employees
+            ADD COLUMN IF NOT EXISTS password VARCHAR(255);
+        `);
     })
+    .then(async () => {
+        const [results] = await sequelize.query(`
+            SELECT COUNT(*)::int AS count
+            FROM employees
+            WHERE password IS NULL OR password = '';
+        `);
+        const missingCount = results[0]?.count ?? 0;
+        if (missingCount === 0) return;
 
-    // Step 3 - apply known schema patches (sync alter alone is unreliable on PostgreSQL)
+        const bcrypt = require('bcrypt');
+        const placeholderHash = await bcrypt.hash('ChangeMe123!', 10);
+        await sequelize.query(
+            `UPDATE employees SET password = :hash WHERE password IS NULL OR password = '';`,
+            { replacements: { hash: placeholderHash } },
+        );
+        console.log(`Backfilled password for ${missingCount} employee(s) with temporary default.`);
+    })
+    .then(() => sequelize.query(`
+        ALTER TABLE employees
+        ALTER COLUMN password SET NOT NULL;
+    `))
+
+    // Step 3 - create or update tables to match model definitions
+    // alter: true updates existing tables safely without deleting data
+    .then(() => sequelize.sync({ alter: true }))
+
+    // Step 4 - apply known schema patches (sync alter alone is unreliable on PostgreSQL)
     .then(() => sequelize.query(`
         ALTER TABLE employees
         ADD COLUMN IF NOT EXISTS roster BOOLEAN NOT NULL DEFAULT false;
@@ -100,7 +127,7 @@ sequelize.authenticate()
         ADD COLUMN IF NOT EXISTS "dayType" "enum_attendance_dayType";
     `))
 
-    // Step 4 - start the server only after the database is ready
+    // Step 5 - start the server only after the database is ready
     .then(() => {
         console.log('-------------------------------------------------------');
         console.log('Models synced with the database.');
