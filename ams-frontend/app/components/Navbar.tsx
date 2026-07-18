@@ -5,11 +5,20 @@ import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
 import Box from "@mui/material/Box";
+import Divider from "@mui/material/Divider";
+import LogoutIcon from "@mui/icons-material/Logout";
 import { useRouter, usePathname } from "next/navigation";
+import { useAuth } from "@/lib/auth";
 
 export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
+  const { user, isAuthenticated, logout } = useAuth();
+
+  // AC1/AC4: no session, or on the login page itself — nothing to navigate to yet.
+  if (!isAuthenticated || pathname === "/login") {
+    return null;
+  }
 
   const navItems = [
     { label: "Employees", path: "/employees" },
@@ -40,6 +49,21 @@ export default function Navbar() {
             </Button>
           ))}
         </Box>
+
+        <Divider orientation="vertical" flexItem sx={{ mx: 2, borderColor: "rgba(255,255,255,0.2)" }} />
+
+        <Typography variant="body2" sx={{ color: "#cbd5e1", mr: 2 }}>
+          {user?.firstName} {user?.lastName}
+          <Box component="span" sx={{ color: "#64748b" }}> · {user?.role}</Box>
+        </Typography>
+
+        <Button
+          onClick={logout}
+          startIcon={<LogoutIcon />}
+          sx={{ color: "#fff", borderRadius: 0 }}
+        >
+          Logout
+        </Button>
       </Toolbar>
     </AppBar>
   );
