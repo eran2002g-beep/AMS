@@ -4,14 +4,13 @@
 const express        = require('express');
 const router         = express.Router();
 const authController = require('../controllers/authController');
-const { verifyToken } = require('../middleware/authMiddleware');
 
 // POST /auth/login - public route, no token needed
 // body: { email, password }
 router.post('/login', authController.login);
 
-// POST /auth/logout - protected route, token required to confirm valid session
-// verifyToken runs first to confirm the user is actually logged in before logging out
-router.post('/logout', verifyToken, authController.logout);
+// Refresh and logout authenticate with the HttpOnly refresh-token cookie.
+router.post('/refresh', authController.refresh);
+router.post('/logout', authController.logout);
 
 module.exports = router;

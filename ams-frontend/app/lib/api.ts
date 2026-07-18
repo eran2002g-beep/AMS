@@ -1,16 +1,23 @@
-import axios from "axios";
+import axios, { type InternalAxiosRequestConfig } from "axios";
 
 // Empty base URL uses Next.js rewrites (same origin) to avoid CORS issues.
 export const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
 
 export const api = axios.create({
   baseURL: apiBaseUrl,
+  withCredentials: true,
 });
 
 // Storage keys are also used by app/lib/auth.tsx — kept here so this module
 // stays the single source of truth for how the token is persisted.
-const TOKEN_STORAGE_KEY = "ams_token";
-const USER_STORAGE_KEY = "ams_user";
+export const TOKEN_STORAGE_KEY = "ams_token";
+export const USER_STORAGE_KEY = "ams_user";
+export const AUTH_LOGOUT_EVENT = "ams:logout";
+
+function clearStoredSession() {
+  localStorage.removeItem(TOKEN_STORAGE_KEY);
+  localStorage.removeItem(USER_STORAGE_KEY);
+}
 
 // Attach "Authorization: Bearer <token>" to every outgoing request when a
 // session exists. authMiddleware.js on the backend rejects requests without it.
@@ -25,23 +32,58 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// A 401 means the token is missing, expired, or invalid (see authMiddleware.js).
-// Clear the stale session and send the user back to /login rather than
-// leaving them on a screen that will keep failing every request.
+// On a protected-request 401, rotate the refresh cookie once and retry every
+// request that was waiting for it. Log out only when refreshing also fails.
+type RetryableRequest = InternalAxiosRequestConfig & {
+  _retry?: boolean;
+};
+
+let refreshRequest: Promise<SessionResponse> | null = null;
+let redirectingToLogin = false;
+
+function refreshSession() {
+  refreshRequest ??= axios
+    .post<SessionResponse>(`${apiBaseUrl}/auth/refresh`, undefined, { withCredentials: true })
+    .then(({ data }) => {
+      localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
+      return data;
+    })
+    .finally(() => {
+      refreshRequest = null;
+    });
+  return refreshRequest;
+}
+
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (
-      typeof window !== "undefined" &&
-      axios.isAxiosError(error) &&
-      error.response?.status === 401 &&
-      !window.location.pathname.startsWith("/login")
-    ) {
-      localStorage.removeItem(TOKEN_STORAGE_KEY);
-      localStorage.removeItem(USER_STORAGE_KEY);
-      window.location.href = "/login";
+  async (error) => {
+    if (typeof window === "undefined" || !axios.isAxiosError(error) || error.response?.status !== 401) {
+      return Promise.reject(error);
     }
-    return Promise.reject(error);
+
+    const original = error.config as RetryableRequest | undefined;
+    const url = original?.url ?? "";
+    const isAuthEndpoint = ["/auth/login", "/auth/refresh", "/auth/logout"].some((path) =>
+      url.includes(path),
+    );
+
+    if (!original || original._retry || isAuthEndpoint) return Promise.reject(error);
+    original._retry = true;
+
+    try {
+      const session = await refreshSession();
+      original.headers.Authorization = `Bearer ${session.token}`;
+      return api.request(original);
+    } catch {
+      clearStoredSession();
+      window.dispatchEvent(new Event(AUTH_LOGOUT_EVENT));
+      if (!redirectingToLogin) {
+        redirectingToLogin = true;
+        const next = `${window.location.pathname}${window.location.search}`;
+        window.location.href = `/login?next=${encodeURIComponent(next)}`;
+      }
+      return Promise.reject(error);
+    }
   },
 );
 
@@ -224,9 +266,10 @@ export type AuthUser = {
 
 // Shape of the JSON body returned by POST /auth/login (see authController.js).
 // message + token + role + employeeId + firstName + lastName are spread from authService.login().
-export type LoginResponse = {
-  message: string;
+export type SessionResponse = {
+  message?: string;
   token: string;
+  sessionExpiresAt: string;
   role: "admin" | "employee";
   employeeId: string;
   firstName: string;
@@ -244,13 +287,15 @@ export const authApi = {
   // Throws (via axios) on 401 with the generic "Invalid email or password"
   // message the backend intentionally uses for both bad email and bad password (AC2).
   async login(email: string, password: string) {
-    const response = await api.post<LoginResponse>("/auth/login", { email, password });
+    const response = await api.post<SessionResponse>("/auth/login", { email, password });
     return response.data;
   },
 
-  // POST /auth/logout — protected route; verifyToken just confirms the session
-  // was valid before confirming termination. JWTs are stateless (AC4), so the
-  // actual sign-out is the caller removing the token from storage.
+  async refresh() {
+    return refreshSession();
+  },
+
+  // POST /auth/logout revokes the refresh session and clears its HttpOnly cookie.
   async logout() {
     const response = await api.post<LogoutResponse>("/auth/logout");
     return response.data;
@@ -521,9 +566,9 @@ function normalizeOnShiftTimeline(
   clockIn: string,
   clockOut: string,
 ) {
-  let startMins = timeToMinutes(scheduledStart);
+  const startMins = timeToMinutes(scheduledStart);
   let endMins = timeToMinutes(scheduledEnd);
-  let inMins = timeToMinutes(clockIn);
+  const inMins = timeToMinutes(clockIn);
   let outMins = timeToMinutes(clockOut);
 
   if (endMins <= startMins) endMins += MINUTES_PER_DAY;

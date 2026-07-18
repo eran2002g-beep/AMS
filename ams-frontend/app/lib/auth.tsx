@@ -4,6 +4,7 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -11,16 +12,19 @@ import {
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
-import { authApi, type AuthUser } from "./api";
-
-// Keep these keys in sync with the ones api.ts reads inside its interceptors.
-const TOKEN_STORAGE_KEY = "ams_token";
-const USER_STORAGE_KEY = "ams_user";
+import {
+  AUTH_LOGOUT_EVENT,
+  TOKEN_STORAGE_KEY,
+  USER_STORAGE_KEY,
+  authApi,
+  type AuthUser,
+  type SessionResponse,
+} from "./api";
 
 type AuthContextValue = {
   user: AuthUser | null;
   isAuthenticated: boolean;
-  /** true only while the initial session restore from localStorage is running */
+  /** true while the initial refresh-cookie session check is running */
   isLoading: boolean;
   login: (email: string, password: string) => Promise<AuthUser>;
   logout: () => void;
@@ -28,51 +32,71 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+const userFromSession = (session: SessionResponse): AuthUser => ({
+  employeeId: session.employeeId,
+  firstName: session.firstName,
+  lastName: session.lastName,
+  role: session.role,
+});
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [sessionExpiresAt, setSessionExpiresAt] = useState<number | null>(null);
   const router = useRouter();
 
-  // Restore an existing session on first render so a page refresh doesn't
-  // bounce a still-logged-in user back to /login.
+  // Validate the HttpOnly refresh cookie on startup instead of trusting stale
+  // localStorage. This also rotates the refresh token on every page reload.
   useEffect(() => {
-    try {
-      const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
-      const storedUser = localStorage.getItem(USER_STORAGE_KEY);
-      if (storedToken && storedUser) {
-        setUser(JSON.parse(storedUser) as AuthUser);
+    let active = true;
+
+    const restore = async () => {
+      try {
+        const session = await authApi.refresh();
+        if (!active) return;
+        const nextUser = userFromSession(session);
+        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(nextUser));
+        setUser(nextUser);
+        setSessionExpiresAt(Date.parse(session.sessionExpiresAt));
+      } catch {
+        localStorage.removeItem(TOKEN_STORAGE_KEY);
+        localStorage.removeItem(USER_STORAGE_KEY);
+        if (active) setUser(null);
+      } finally {
+        if (active) setIsLoading(false);
       }
-    } catch {
-      // Corrupted storage — treat as logged out rather than throwing.
-      localStorage.removeItem(TOKEN_STORAGE_KEY);
-      localStorage.removeItem(USER_STORAGE_KEY);
-    } finally {
-      setIsLoading(false);
-    }
+    };
+
+    const handleForcedLogout = () => {
+      setUser(null);
+      setSessionExpiresAt(null);
+    };
+    window.addEventListener(AUTH_LOGOUT_EVENT, handleForcedLogout);
+    void restore();
+
+    return () => {
+      active = false;
+      window.removeEventListener(AUTH_LOGOUT_EVENT, handleForcedLogout);
+    };
   }, []);
 
   // AC1/AC2: calls POST /auth/login, throws on invalid credentials (401),
   // otherwise persists the token + role so the frontend can gate routes/features.
-  const login = async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     const result = await authApi.login(email, password);
 
-    const nextUser: AuthUser = {
-      employeeId: result.employeeId,
-      firstName: result.firstName,
-      lastName: result.lastName,
-      role: result.role,
-    };
+    const nextUser = userFromSession(result);
 
     localStorage.setItem(TOKEN_STORAGE_KEY, result.token);
     localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(nextUser));
     setUser(nextUser);
+    setSessionExpiresAt(Date.parse(result.sessionExpiresAt));
 
     return nextUser;
-  };
+  }, []);
 
-  // AC4: session terminated. JWTs are stateless, so removing the token client-side
-  // is what actually ends the session; the /auth/logout call is best-effort housekeeping.
-  const logout = () => {
+  // Revoke the server-side refresh session and always clear local state.
+  const logout = useCallback(() => {
     authApi.logout().catch(() => {
       // Token may already be expired/invalid — that's fine, we're clearing it anyway.
     });
@@ -80,8 +104,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(TOKEN_STORAGE_KEY);
     localStorage.removeItem(USER_STORAGE_KEY);
     setUser(null);
+    setSessionExpiresAt(null);
     router.push("/login");
-  };
+  }, [router]);
+
+  useEffect(() => {
+    if (sessionExpiresAt == null) return;
+    let timer: number;
+    const schedule = () => {
+      const remaining = sessionExpiresAt - Date.now();
+      if (remaining <= 0) {
+        logout();
+        return;
+      }
+      timer = window.setTimeout(schedule, Math.min(remaining, 2_147_483_647));
+    };
+    schedule();
+    return () => window.clearTimeout(timer);
+  }, [logout, sessionExpiresAt]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -91,8 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       logout,
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [user, isLoading],
+    [user, isLoading, login, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

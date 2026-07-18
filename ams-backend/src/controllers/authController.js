@@ -3,6 +3,37 @@
 
 const authService = require('../services/authService');
 
+const REFRESH_COOKIE_NAME = process.env.REFRESH_COOKIE_NAME || 'ams_refresh';
+const refreshCookieOptions = {
+    httpOnly: true,
+    secure: process.env.COOKIE_SECURE === 'true' || process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/auth',
+    maxAge: authService.durationToMilliseconds(process.env.REFRESH_TOKEN_EXPIRES_IN || '7d'),
+};
+
+const getRefreshCookie = (req) => {
+    const cookies = req.headers.cookie;
+    if (!cookies) return null;
+
+    for (const item of cookies.split(';')) {
+        const [rawName, ...rawValue] = item.trim().split('=');
+        if (rawName === REFRESH_COOKIE_NAME) {
+            return decodeURIComponent(rawValue.join('='));
+        }
+    }
+    return null;
+};
+
+const setRefreshCookie = (res, refreshToken) => {
+    res.cookie(REFRESH_COOKIE_NAME, refreshToken, refreshCookieOptions);
+};
+
+const clearRefreshCookie = (res) => {
+    const { maxAge, ...options } = refreshCookieOptions;
+    res.clearCookie(REFRESH_COOKIE_NAME, options);
+};
+
 // --- LOGIN CONTROLLER ----------------------------------------
 // login - receives POST /auth/login, validates body, calls service, returns token
 const login = async (req, res) => {
@@ -10,7 +41,8 @@ const login = async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        const result = await authService.login(email, password);
+        const { refreshToken, ...result } = await authService.login(email, password);
+        setRefreshCookie(res, refreshToken);
 
         // AC1: authentication successful — return 200 with token and role info
         return res.status(200).json({
@@ -25,12 +57,23 @@ const login = async (req, res) => {
     }
 };
 
+const refresh = async (req, res) => {
+    try {
+        const { refreshToken, ...result } = await authService.refresh(getRefreshCookie(req));
+        setRefreshCookie(res, refreshToken);
+        return res.status(200).json(result);
+    } catch (err) {
+        return res.status(401).json({ message: err.message });
+    }
+};
+
 // --- LOGOUT CONTROLLER ----------------------------------------
 // logout - receives POST /auth/logout, confirms session termination
-const logout = (req, res) => {
+const logout = async (req, res) => {
 
     try {
-        const result = authService.logout();
+        const result = await authService.logout(getRefreshCookie(req));
+        clearRefreshCookie(res);
 
         // AC4: session terminated — return 200 with confirmation
         return res.status(200).json(result);
@@ -42,5 +85,6 @@ const logout = (req, res) => {
 
 module.exports = {
     login,
+    refresh,
     logout,
 };

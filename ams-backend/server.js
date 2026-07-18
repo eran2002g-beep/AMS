@@ -14,6 +14,7 @@ require('dotenv').config();
 // Every new model you add must be registered here
 
 const Employee = require('./src/models/Employee');
+const AuthSession = require('./src/models/AuthSession');
 const Roster   = require('./src/models/Roster');
 const AttendanceLog = require('./src/models/AttendanceLog'); // Each punch card swipe from IoT or manual entry
 const Attendance = require('./src/models/Attendance');    // final calculated attendance record per employee per day
@@ -39,7 +40,7 @@ app.use(express.json());
 
 // FIX: Enable CORS BEFORE routes
 app.use(cors({
-    origin: 'http://localhost:3000',
+    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     credentials: true
 }));

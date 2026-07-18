@@ -1,17 +1,18 @@
-// src/middleware/authMiddleware.js - verifies JWT token on every protected route
+// src/middleware/authMiddleware.js - decrypts JWT tokens on protected routes
 // runs BEFORE the controller — if token is missing or invalid, request is blocked here
 
-const jwt = require('jsonwebtoken');
+const { decryptToken } = require('../services/tokenService');
+const { getActiveSessionUser } = require('../services/authService');
 
 // --- VERIFY TOKEN --------------------------------------------
 // verifyToken - checks that a valid JWT exists in the Authorization header
 // usage in routes: router.get('/protected', verifyToken, controller)
-const verifyToken = (req, res, next) => {
+const verifyToken = async (req, res, next) => {
 
     // Token must be sent in the Authorization header as: Bearer <token>
     const authHeader = req.headers['authorization'];
 
-    if (!authHeader) {
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return res.status(401).json({ message: 'Access denied. No token provided.' });
     }
 
@@ -23,20 +24,24 @@ const verifyToken = (req, res, next) => {
     }
 
     try {
-        // Verify the token against JWT_SECRET — throws if expired or tampered
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        // Decrypt and authenticate the JWE — throws if expired or tampered
+        const decoded = await decryptToken(token);
+        const activeUser = await getActiveSessionUser(decoded);
+        if (!activeUser) {
+            return res.status(401).json({ message: 'Session is no longer active.' });
+        }
 
         // Attach the decoded payload to req.user so controllers can access it
         // e.g. req.user.role, req.user.employeeId
-        req.user = decoded;
+        req.user = activeUser;
 
         // Token is valid — pass control to the next middleware or controller
         next();
 
     } catch (err) {
 
-        // TokenExpiredError means the 8h window has passed (AC4: session terminated)
-        if (err.name === 'TokenExpiredError') {
+        // An expired access token can normally be renewed through /auth/refresh.
+        if (err.code === 'ERR_JWT_EXPIRED') {
             return res.status(401).json({ message: 'Session expired. Please log in again.' });
         }
 
