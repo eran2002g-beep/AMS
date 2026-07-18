@@ -6,6 +6,11 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       {
+        // POST /auth/login (public) and POST /auth/logout (protected) — see authRoute.js
+        source: "/auth/:path*",
+        destination: `${backendUrl}/auth/:path*`,
+      },
+      {
         source: "/employee",
         destination: `${backendUrl}/employee`,
       },
