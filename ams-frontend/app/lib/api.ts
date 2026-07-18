@@ -7,6 +7,44 @@ export const api = axios.create({
   baseURL: apiBaseUrl,
 });
 
+// Storage keys are also used by app/lib/auth.tsx — kept here so this module
+// stays the single source of truth for how the token is persisted.
+const TOKEN_STORAGE_KEY = "ams_token";
+const USER_STORAGE_KEY = "ams_user";
+
+// Attach "Authorization: Bearer <token>" to every outgoing request when a
+// session exists. authMiddleware.js on the backend rejects requests without it.
+api.interceptors.request.use((config) => {
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (token) {
+      config.headers = config.headers ?? {};
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+  }
+  return config;
+});
+
+// A 401 means the token is missing, expired, or invalid (see authMiddleware.js).
+// Clear the stale session and send the user back to /login rather than
+// leaving them on a screen that will keep failing every request.
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (
+      typeof window !== "undefined" &&
+      axios.isAxiosError(error) &&
+      error.response?.status === 401 &&
+      !window.location.pathname.startsWith("/login")
+    ) {
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+      localStorage.removeItem(USER_STORAGE_KEY);
+      window.location.href = "/login";
+    }
+    return Promise.reject(error);
+  },
+);
+
 type ApiErrorBody = {
   error?: string;
   message?: string;
@@ -171,6 +209,52 @@ export type AttendanceLogCreatePayload = {
   punchTime: string;
   punchType?: "in" | "out";
   source?: "iot" | "manual";
+};
+
+// ─────────────────────────────────── Auth types ───────────────────────────────────
+
+// Mirrors the payload authService.js signs into the JWT (id/employeeId/email/role),
+// minus the fields the frontend doesn't need to hold onto.
+export type AuthUser = {
+  employeeId: string;
+  firstName: string;
+  lastName: string;
+  role: "admin" | "employee";
+};
+
+// Shape of the JSON body returned by POST /auth/login (see authController.js).
+// message + token + role + employeeId + firstName + lastName are spread from authService.login().
+export type LoginResponse = {
+  message: string;
+  token: string;
+  role: "admin" | "employee";
+  employeeId: string;
+  firstName: string;
+  lastName: string;
+};
+
+export type LogoutResponse = {
+  message: string;
+};
+
+// ─────────────────────────────────── Auth API ───────────────────────────────────
+
+export const authApi = {
+  // POST /auth/login — public route, no token required.
+  // Throws (via axios) on 401 with the generic "Invalid email or password"
+  // message the backend intentionally uses for both bad email and bad password (AC2).
+  async login(email: string, password: string) {
+    const response = await api.post<LoginResponse>("/auth/login", { email, password });
+    return response.data;
+  },
+
+  // POST /auth/logout — protected route; verifyToken just confirms the session
+  // was valid before confirming termination. JWTs are stateless (AC4), so the
+  // actual sign-out is the caller removing the token from storage.
+  async logout() {
+    const response = await api.post<LogoutResponse>("/auth/logout");
+    return response.data;
+  },
 };
 
 // ─────────────────────────────────── Employee API ───────────────────────────────────
