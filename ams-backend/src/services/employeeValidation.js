@@ -1,4 +1,4 @@
-const VALID_ROLES = ['admin', 'employee'];
+const VALID_ROLES = ['employee', 'manager', 'admin-manager', 'admin', 'super-admin'];
 const MIN_PASSWORD_LENGTH = 8;
 
 const normalizeString = (value) => {
@@ -97,9 +97,21 @@ const validateEmployeePayload = (data = {}, { requireAllFields = false } = {}) =
     if (data.role !== undefined) {
         const role = normalizeString(data.role).toLowerCase();
         if (!VALID_ROLES.includes(role)) {
-            errors.push('role must be either admin or employee');
+            errors.push(`role must be one of: ${VALID_ROLES.join(', ')}`);
         } else {
             normalized.role = role;
+        }
+    }
+
+    for (const relationship of ['hod', 'supervisor']) {
+        if (data[relationship] === undefined) continue;
+
+        if (data[relationship] === null) {
+            normalized[relationship] = null;
+        } else if (!Number.isInteger(data[relationship]) || data[relationship] <= 0) {
+            errors.push(`${relationship} must be a positive Employee id or null`);
+        } else {
+            normalized[relationship] = data[relationship];
         }
     }
 

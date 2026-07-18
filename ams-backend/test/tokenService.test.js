@@ -33,6 +33,23 @@ test('marks generated access tokens with their token type and session', async ()
     assert.equal(decrypted.sid, 'session-1');
 });
 
+test('preserves every employee role in access-token claims', async () => {
+    const roles = ['employee', 'manager', 'admin-manager', 'admin', 'super-admin'];
+
+    for (const role of roles) {
+        const token = await createAccessToken({
+            id: 1,
+            employeeId: 'EMP001',
+            sid: `session-${role}`,
+            role,
+        });
+        const decrypted = await decryptToken(token);
+
+        assert.equal(decrypted.role, role);
+        assert.equal(decrypted.employeeId, 'EMP001');
+    }
+});
+
 test('rejects a token when its ciphertext is altered', async () => {
     const token = await encryptToken({ id: 'employee-1', role: 'employee' });
     const parts = token.split('.');

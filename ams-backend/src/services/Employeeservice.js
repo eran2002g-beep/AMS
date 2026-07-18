@@ -7,6 +7,36 @@ const Attendance = require('../models/Attendance');
 const { validateEmployeePayload } = require('./employeeValidation');
 const { hashPassword } = require('./passwordService');
 const { Op } = require('sequelize');
+
+const REPORTING_RELATIONSHIPS = [
+    { model: Employee, as: 'hodEmployee' },
+    { model: Employee, as: 'supervisorEmployee' },
+];
+
+const validateReportingRelationships = async ({ hod, supervisor }, currentEmployeeId) => {
+    const reportingIds = [...new Set([hod, supervisor].filter((id) => id !== undefined && id !== null))];
+
+    if (currentEmployeeId && reportingIds.includes(currentEmployeeId)) {
+        throw new Error('An employee cannot be their own HOD or supervisor');
+    }
+    if (reportingIds.length === 0) return;
+
+    const reportingEmployees = await Employee.findAll({
+        attributes: ['id'],
+        where: {
+            id: { [Op.in]: reportingIds },
+            isActive: true,
+        },
+        raw: true,
+    });
+    const foundIds = new Set(reportingEmployees.map(({ id }) => id));
+    const missingIds = reportingIds.filter((id) => !foundIds.has(id));
+
+    if (missingIds.length > 0) {
+        throw new Error(`Active reporting employee(s) not found: ${missingIds.join(', ')}`);
+    }
+};
+
 // createEmployee - validates input and creates a new employee record
 // receives plain data object from the controller, returns the created employee
 const createEmployee = async (data) => {
@@ -23,6 +53,8 @@ const createEmployee = async (data) => {
         role: validatedRole,
         roster: validatedRoster,
         password: validatedPassword,
+        hod: validatedHod,
+        supervisor: validatedSupervisor,
     } = validatedData;
 
     // Check if an employee with this email already exists
@@ -33,6 +65,11 @@ const createEmployee = async (data) => {
         // If a record was found, this email is already taken
         throw new Error('An employee with this email already exists');
     }
+
+    await validateReportingRelationships({
+        hod: validatedHod,
+        supervisor: validatedSupervisor,
+    });
 
     // ---------------------------- Create Record ----------------------------
 
@@ -49,7 +86,11 @@ const createEmployee = async (data) => {
         department: validatedDepartment,
         role: validatedRole,
         roster: validatedRoster,
+        hod: validatedHod,
+        supervisor: validatedSupervisor,
     });
+
+    await employee.reload({ include: REPORTING_RELATIONSHIPS });
 
     // Return the newly created employee object back to the controller
     return employee;
@@ -88,6 +129,7 @@ const searchEmployees = async (opts = {}) => {
 
         const { rows: employees, count: total } = await Employee.findAndCountAll({
             where,
+            include: REPORTING_RELATIONSHIPS,
             limit: parseInt(limit, 10) || 50,
             offset,
             order: [['lastName', 'ASC'], ['firstName', 'ASC']],
@@ -101,6 +143,17 @@ const searchEmployees = async (opts = {}) => {
         throw new Error("Database Retrieval Error: " + error.message);
     }
 };
+
+// -----------------------------------------------------------------------
+
+const getAdministrativeEmployees = async () => Employee.findAll({
+    where: {
+        isActive: true,
+        role: { [Op.in]: ['admin', 'admin-manager'] },
+    },
+    include: REPORTING_RELATIONSHIPS,
+    order: [['lastName', 'ASC'], ['firstName', 'ASC']],
+});
 
 // -----------------------------------------------------------------------
 
@@ -154,7 +207,14 @@ const updateEmployee = async (employeeId, updateData) => {
         role: validatedRole,
         roster: validatedRoster,
         password: validatedPassword,
+        hod: validatedHod,
+        supervisor: validatedSupervisor,
     } = validatedData;
+
+    await validateReportingRelationships({
+        hod: validatedHod,
+        supervisor: validatedSupervisor,
+    }, employee.id);
 
     // If email is being changed, check if the new email already exists
     if (validatedEmail && validatedEmail !== employee.email) {
@@ -173,12 +233,15 @@ const updateEmployee = async (employeeId, updateData) => {
     if (updateData.department !== undefined) updateFields.department = validatedDepartment;
     if (updateData.role !== undefined) updateFields.role = validatedRole;
     if (updateData.roster !== undefined) updateFields.roster = validatedRoster;
+    if (updateData.hod !== undefined) updateFields.hod = validatedHod;
+    if (updateData.supervisor !== undefined) updateFields.supervisor = validatedSupervisor;
     if (validatedPassword !== undefined) {
         updateFields.password = await hashPassword(validatedPassword);
     }
 
     // Update the employee record with the new values
     const updatedEmployee = await employee.update(updateFields);
+    await updatedEmployee.reload({ include: REPORTING_RELATIONSHIPS });
 
     return updatedEmployee;
 };
@@ -277,7 +340,9 @@ const calculateAttendanceMetrics = async (employeeId, startDate, endDate, shiftS
 module.exports = {
     createEmployee,
     getAllEmployees,
+    getAdministrativeEmployees,
     searchEmployees,
+    validateReportingRelationships,
     updateEmployee,
     deleteEmployeeById,
     getEmployeeAttendance,

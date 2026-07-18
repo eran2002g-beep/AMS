@@ -8,6 +8,25 @@ const employeeService = require('../services/employeeService');
 router.use(isAdmin);
 
 // -----------------------------------------------------------------------
+// GET /employee/admins - Retrieve active admin and admin-manager employees
+// -----------------------------------------------------------------------
+router.get('/admins', async (req, res) => {
+    try {
+        const employees = await employeeService.getAdministrativeEmployees();
+        return res.status(200).json({
+            success: true,
+            count: employees.length,
+            data: employees,
+        });
+    } catch (err) {
+        return res.status(500).json({
+            success: false,
+            error: err.message,
+        });
+    }
+});
+
+// -----------------------------------------------------------------------
 // GET /employee - Retrieve all employee records API
 // -----------------------------------------------------------------------
 router.get('/', async (req, res) => {
