@@ -104,47 +104,12 @@ sequelize.authenticate()
         ALTER TABLE employees
         ALTER COLUMN password SET NOT NULL;
     `))
-    .then(() => sequelize.query(`
-        ALTER TYPE "enum_employees_role" ADD VALUE IF NOT EXISTS 'manager';
-        ALTER TYPE "enum_employees_role" ADD VALUE IF NOT EXISTS 'admin-manager';
-        ALTER TYPE "enum_employees_role" ADD VALUE IF NOT EXISTS 'super-admin';
-    `))
 
     // Step 3 - create or update tables to match model definitions
     // alter: true updates existing tables safely without deleting data
     .then(() => sequelize.sync({ alter: true }))
 
     // Step 4 - apply known schema patches (sync alter alone is unreliable on PostgreSQL)
-    .then(() => sequelize.query(`
-        ALTER TABLE employees
-        ADD COLUMN IF NOT EXISTS hod INTEGER,
-        ADD COLUMN IF NOT EXISTS supervisor INTEGER;
-    `))
-    .then(() => sequelize.query(`
-        DO $$ BEGIN
-            IF NOT EXISTS (
-                SELECT 1 FROM pg_constraint WHERE conname = 'employees_hod_fkey'
-            ) THEN
-                ALTER TABLE employees
-                ADD CONSTRAINT employees_hod_fkey
-                FOREIGN KEY (hod) REFERENCES employees(id)
-                ON UPDATE CASCADE ON DELETE SET NULL;
-            END IF;
-
-            IF NOT EXISTS (
-                SELECT 1 FROM pg_constraint WHERE conname = 'employees_supervisor_fkey'
-            ) THEN
-                ALTER TABLE employees
-                ADD CONSTRAINT employees_supervisor_fkey
-                FOREIGN KEY (supervisor) REFERENCES employees(id)
-                ON UPDATE CASCADE ON DELETE SET NULL;
-            END IF;
-        END $$;
-    `))
-    .then(() => sequelize.query(`
-        CREATE INDEX IF NOT EXISTS employees_hod_idx ON employees(hod);
-        CREATE INDEX IF NOT EXISTS employees_supervisor_idx ON employees(supervisor);
-    `))
     .then(() => sequelize.query(`
         ALTER TABLE employees
         ADD COLUMN IF NOT EXISTS roster BOOLEAN NOT NULL DEFAULT false;
