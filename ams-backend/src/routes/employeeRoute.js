@@ -9,7 +9,6 @@ const { CAN_MANAGE_EMPLOYEES, CAN_VIEW_ATTENDANCE } = require("../../config/role
 // -----------------------------------------------------------------------
 // GET /employee - Retrieve all employee records API
 // Read access: any authenticated admin-tier role needs the directory to do
-// their job (e.g. a manager looking up whose leave request they're
 // -----------------------------------------------------------------------
 router.get('/', verifyToken, async (req, res) => {
     try {
@@ -25,6 +24,51 @@ router.get('/', verifyToken, async (req, res) => {
         });
     } catch (err) {
         return res.status(500).json({ 
+            success: false, 
+            error: err.message 
+        });
+    }
+});
+
+// -----------------------------------------------------------------------
+// PUT /employee/:employeeId/hierarchy - Update Role and Reporting Structure (NEW)
+// EMPLOYEE CRUD -> admin/super_admin only (via CAN_MANAGE_EMPLOYEES permissions)
+// -----------------------------------------------------------------------
+router.put('/:employeeId/hierarchy', verifyToken, authorizeRoles(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
+    try {
+        const { employeeId } = req.params;
+        // hierarchyData: { role, hod, supervisor }
+        const updatedEmployee = await employeeService.updateEmployeeHierarchy(employeeId, req.body);
+        
+        return res.status(200).json({
+            success: true,
+            message: 'Employee role management and hierarchy lines updated successfully.',
+            data: updatedEmployee
+        });
+    } catch (err) {
+        return res.status(400).json({ 
+            success: false, 
+            error: err.message 
+        });
+    }
+});
+
+// -----------------------------------------------------------------------
+// GET /employee/:managerId/subordinates - Get all direct reports for a manager (NEW)
+// Allowed for authenticated users to view organizational structure
+// -----------------------------------------------------------------------
+router.get('/:managerId/subordinates', verifyToken, async (req, res) => {
+    try {
+        const { managerId } = req.params;
+        const subordinates = await employeeService.getDirectReports(managerId);
+        
+        return res.status(200).json({
+            success: true,
+            count: subordinates.length,
+            data: subordinates
+        });
+    } catch (err) {
+        return res.status(404).json({ 
             success: false, 
             error: err.message 
         });
@@ -52,7 +96,6 @@ router.delete('/:employeeId', verifyToken, authorizeRoles(...CAN_MANAGE_EMPLOYEE
     try {
         // Extract employeeId from URL parameters
         const { employeeId } = req.params; 
-        
         
         await employeeService.deleteEmployeeById(employeeId);
         
