@@ -53,7 +53,7 @@ router.delete('/:employeeId', verifyToken, authorizeRoles(...CAN_MANAGE_EMPLOYEE
         // Extract employeeId from URL parameters
         const { employeeId } = req.params; 
         
-        // Execute soft delete logic from the service layer
+        
         await employeeService.deleteEmployeeById(employeeId);
         
         return res.status(200).json({
