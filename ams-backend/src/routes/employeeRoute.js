@@ -95,7 +95,6 @@ router.patch('/:employeeId', verifyToken, authorizeRoles(...CAN_MANAGE_EMPLOYEES
 // -----------------------------------------------------------------------
 // GET /employee/:employeeId/attendance-summary - Get calculated metrics
 // Follows the "view attendance" permission (admin, admin_manager) rather than
-// EMPLOYEE CRUD mutation restrictions.
 // -----------------------------------------------------------------------
 router.get('/:employeeId/attendance-summary', verifyToken, authorizeRoles(...CAN_VIEW_ATTENDANCE), async (req, res) => {
     try {
