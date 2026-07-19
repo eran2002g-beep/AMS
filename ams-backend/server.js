@@ -14,7 +14,6 @@ require('dotenv').config();
 // Every new model you add must be registered here
 
 const Employee = require('./src/models/Employee');
-const AuthSession = require('./src/models/AuthSession');
 const Roster   = require('./src/models/Roster');
 const AttendanceLog = require('./src/models/AttendanceLog'); // Each punch card swipe from IoT or manual entry
 const Attendance = require('./src/models/Attendance');    // final calculated attendance record per employee per day
@@ -40,7 +39,7 @@ app.use(express.json());
 
 // FIX: Enable CORS BEFORE routes
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: 'http://localhost:3000',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     credentials: true
 }));
@@ -133,6 +132,14 @@ sequelize.authenticate()
         ALTER TABLE attendance
         ADD COLUMN IF NOT EXISTS "dayType" "enum_attendance_dayType";
     `))
+
+    // RBAC: employees.role enum previously only had 'admin' and 'employee'.
+    // ALTER TYPE ... ADD VALUE cannot run inside the implicit sync transaction
+    // and errors if the value already exists, so each is its own statement
+    // guarded by a catch that ignores "already exists" (duplicate_object).
+    .then(() => sequelize.query(`ALTER TYPE "enum_employees_role" ADD VALUE IF NOT EXISTS 'super_admin';`).catch(() => {}))
+    .then(() => sequelize.query(`ALTER TYPE "enum_employees_role" ADD VALUE IF NOT EXISTS 'manager';`).catch(() => {}))
+    .then(() => sequelize.query(`ALTER TYPE "enum_employees_role" ADD VALUE IF NOT EXISTS 'admin_manager';`).catch(() => {}))
 
     // Step 5 - start the server only after the database is ready
     .then(() => {
