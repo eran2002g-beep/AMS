@@ -4,7 +4,7 @@ const router  = express.Router();
 
 const attendanceController = require('../controllers/attendanceController');
 const { verifyToken, authorizeRoles } = require('../middleware/authMiddleware');
-const { CAN_EDIT_ATTENDANCE, CAN_VIEW_ATTENDANCE } = require('../config/roles');
+const { CAN_EDIT_ATTENDANCE, CAN_VIEW_ATTENDANCE } = require("../../config/roles");
 
 // POST /attendance/process - process normal attendance for non-roster employees
 // Body or query: date | month+year | startDate+endDate

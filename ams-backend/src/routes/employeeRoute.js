@@ -4,7 +4,7 @@ const router = express.Router();
 
 const employeeService = require('../services/employeeService');
 const { verifyToken, authorizeRoles } = require('../middleware/authMiddleware');
-const { CAN_MANAGE_EMPLOYEES, CAN_VIEW_ATTENDANCE } = require('../config/roles');
+const { CAN_MANAGE_EMPLOYEES, CAN_VIEW_ATTENDANCE } = require("../../config/roles");
 
 // -----------------------------------------------------------------------
 // GET /employee - Retrieve all employee records API

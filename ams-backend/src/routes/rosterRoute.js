@@ -14,7 +14,7 @@ const attendanceController = require('../controllers/attendanceController');
 // verifyToken + authorizeRoles(super_admin) pattern as the rest of ROSTER.
 // isAdmin.js is no longer used anywhere and can be removed.
 const { verifyToken, authorizeRoles } = require("../middleware/authMiddleware");
-const { CAN_MANAGE_ROSTER } = require("../config/roles");
+const { CAN_MANAGE_ROSTER } = require("../../config/roles");
 const {
   deleteRosterByDate,
   deleteRostersByMonth,
