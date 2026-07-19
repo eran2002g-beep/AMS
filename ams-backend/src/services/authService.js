@@ -1,82 +1,189 @@
-// src/services/authService.js - business logic for login and logout
-// handles credential validation, JWT generation and session termination
-
-const jwt = require('jsonwebtoken');
-
+const { createHash, randomBytes, randomUUID, timingSafeEqual } = require('node:crypto');
 const Employee = require('../models/Employee');
+const AuthSession = require('../models/AuthSession');
+const sequelize = require('../../config/db');
 const { comparePassword } = require('./passwordService');
+const { createAccessToken } = require('./tokenService');
+
+const REFRESH_TOKEN_TTL = process.env.REFRESH_TOKEN_EXPIRES_IN || '7d';
+
+const durationToMilliseconds = (duration) => {
+    const match = /^(\d+)(s|m|h|d)$/.exec(duration);
+    if (!match) {
+        throw new Error('REFRESH_TOKEN_EXPIRES_IN must use s, m, h, or d (for example: 7d)');
+    }
+    const multipliers = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 };
+    return Number(match[1]) * multipliers[match[2]];
+};
+
+const hashRefreshSecret = (secret) => createHash('sha256')
+    .update(`${secret}${process.env.REFRESH_TOKEN_PEPPER || ''}`)
+    .digest('hex');
+
+const hashesMatch = (left, right) => {
+    const leftBuffer = Buffer.from(left, 'hex');
+    const rightBuffer = Buffer.from(right, 'hex');
+    return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
+};
+
+const parseRefreshToken = (token) => {
+    if (!token || typeof token !== 'string') return null;
+    const separator = token.indexOf('.');
+    if (separator < 1) return null;
+    const sessionId = token.slice(0, separator);
+    const secret = token.slice(separator + 1);
+    return sessionId && secret ? { sessionId, secret } : null;
+};
+
+const createRefreshCredentials = (sessionId) => {
+    const secret = randomBytes(32).toString('base64url');
+    return {
+        token: `${sessionId}.${secret}`,
+        hash: hashRefreshSecret(secret),
+    };
+};
+
+const employeeResponse = (employee, token, refreshToken, sessionExpiresAt) => ({
+    token,
+    refreshToken,
+    sessionExpiresAt: new Date(sessionExpiresAt).toISOString(),
+    role: employee.role,
+    employeeId: employee.employeeId,
+    firstName: employee.firstName,
+    lastName: employee.lastName,
+});
+
+const createAccessTokenFor = (employee, sessionId) => createAccessToken({
+    id: employee.id,
+    employeeId: employee.employeeId,
+    email: employee.email,
+    role: employee.role,
+    sid: sessionId,
+});
 
 // --- LOGIN ---------------------------------------------------
-// login - validates credentials and returns a signed JWT token
+// login - validates credentials and returns an encrypted JWT token
 // called by authController when POST /auth/login is received
 const login = async (email, password) => {
-
-    // AC2: return error if email or password is missing
     if (!email || !password) {
         throw new Error('Email and password are required');
     }
 
-    // Load the password hash explicitly because the default scope excludes it
     const employee = await Employee.scope('withPassword').findOne({ where: { email } });
-
-    // AC2: return generic message so attackers can't tell which field is wrong
     if (!employee) {
         throw new Error('Invalid email or password');
     }
 
-    // Reject login if the account has been deactivated (soft deleted)
     if (!employee.isActive) {
         throw new Error('Your account has been deactivated. Contact your administrator.');
     }
 
-    // Compare the plain-text password against the stored hashed password
     const isPasswordValid = await comparePassword(password, employee.password);
-
-    // AC2: wrong password — same generic message as wrong email
     if (!isPasswordValid) {
         throw new Error('Invalid email or password');
     }
 
-    // Build the JWT payload — what gets encoded inside the token
-    // keep it small: only store what middleware needs to check permissions
-    const payload = {
-        id:         employee.id,
-        employeeId: employee.employeeId,
-        email:      employee.email,
-        role:       employee.role, // one of src/config/roles.js ROLES — used for RBAC in middleware
-    };
+    const sessionId = randomUUID();
+    const refreshCredentials = createRefreshCredentials(sessionId);
+    const expiresAt = new Date(Date.now() + durationToMilliseconds(REFRESH_TOKEN_TTL));
 
-    if (!process.env.JWT_SECRET) {
-        throw new Error('JWT_SECRET is not configured');
-    }
-
-    // Sign the token using the secret from .env
-    // expiresIn means the token automatically becomes invalid after 8 hours (AC4)
-    const token = jwt.sign(payload, process.env.JWT_SECRET, {
-        expiresIn: process.env.JWT_EXPIRES_IN || '8h',
+    await AuthSession.create({
+        id: sessionId,
+        employeeId: employee.id,
+        refreshTokenHash: refreshCredentials.hash,
+        expiresAt,
     });
 
-    // AC3: return role so the frontend can redirect to the correct dashboard
-    return {
-        token,
-        role:       employee.role,
-        employeeId: employee.employeeId,
-        firstName:  employee.firstName,
-        lastName:   employee.lastName,
-    };
+    const token = await createAccessTokenFor(employee, sessionId);
+    return employeeResponse(employee, token, refreshCredentials.token, expiresAt);
 };
 
-// --- LOGOUT --------------------------------------------------
-// logout - JWT is stateless so we cannot invalidate a token server-side by default
-// the frontend is responsible for deleting the token from storage
-// this function exists as a clean endpoint for the frontend to call on logout (AC4)
-const logout = () => {
-    // Return a confirmation message — actual session termination happens on the client
-    // by removing the token from localStorage or cookies
-    return { message: 'Logged out successfully. Please remove the token from client storage.' };
+const refresh = async (refreshToken) => {
+    const parsed = parseRefreshToken(refreshToken);
+    if (!parsed) throw new Error('Refresh token is missing or invalid');
+
+    const result = await sequelize.transaction(async (transaction) => {
+        const session = await AuthSession.findByPk(parsed.sessionId, {
+            transaction,
+            lock: transaction.LOCK.UPDATE,
+        });
+
+        if (!session || session.revokedAt || session.expiresAt <= new Date()) {
+            return { invalid: true };
+        }
+
+        const presentedHash = hashRefreshSecret(parsed.secret);
+        if (!hashesMatch(session.refreshTokenHash, presentedHash)) {
+            return { invalid: true };
+        }
+
+        const employee = await Employee.findByPk(session.employeeId, { transaction });
+        if (!employee || !employee.isActive) {
+            await session.update({
+                revokedAt: new Date(),
+                revocationReason: 'Employee inactive or missing',
+            }, { transaction });
+            return { invalid: true };
+        }
+
+        const nextRefresh = createRefreshCredentials(session.id);
+        await session.update({
+            refreshTokenHash: nextRefresh.hash,
+            lastUsedAt: new Date(),
+        }, { transaction });
+
+        const token = await createAccessTokenFor(employee, session.id);
+        return employeeResponse(employee, token, nextRefresh.token, session.expiresAt);
+    });
+
+    if (result.invalid) throw new Error('Refresh token is expired or invalid');
+    return result;
+};
+
+const logout = async (refreshToken) => {
+    const parsed = parseRefreshToken(refreshToken);
+    if (parsed) {
+        const session = await AuthSession.findByPk(parsed.sessionId);
+        if (session && !session.revokedAt) {
+            const presentedHash = hashRefreshSecret(parsed.secret);
+            if (hashesMatch(session.refreshTokenHash, presentedHash)) {
+                await session.update({
+                    revokedAt: new Date(),
+                    revocationReason: 'User logged out',
+                });
+            }
+        }
+    }
+    return { message: 'Logged out successfully.' };
+};
+
+const getActiveSessionUser = async (claims) => {
+    if (claims.tokenType !== 'access' || !claims.sid || !claims.id) return null;
+
+    const session = await AuthSession.findOne({
+        where: {
+            id: claims.sid,
+            employeeId: claims.id,
+            revokedAt: null,
+        },
+    });
+    if (!session || session.expiresAt <= new Date()) return null;
+
+    const employee = await Employee.findByPk(claims.id);
+    if (!employee || !employee.isActive) return null;
+
+    return {
+        ...claims,
+        employeeId: employee.employeeId,
+        email: employee.email,
+        role: employee.role,
+    };
 };
 
 module.exports = {
     login,
+    refresh,
     logout,
+    getActiveSessionUser,
+    durationToMilliseconds,
 };

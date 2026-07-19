@@ -1,4 +1,4 @@
-const { ALL_ROLES } = require('../config/roles');
+const { ALL_ROLES } = require('../../config/roles');
 
 // Re-exported for backward compatibility with anything importing VALID_ROLES directly.
 const VALID_ROLES = ALL_ROLES;

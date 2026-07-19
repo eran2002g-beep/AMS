@@ -2,10 +2,11 @@
 const express = require('express');
 const router = express.Router();
 
-const isAdmin = require('../middleware/isAdmin');
+const { verifyToken, authorizeRoles } = require('../middleware/authMiddleware');
+const { CAN_EDIT_ATTENDANCE } = require('../../config/roles');
 const attendanceLogService = require('../services/attendanceLogService');
 
-router.use(isAdmin);
+router.use(verifyToken, authorizeRoles(...CAN_EDIT_ATTENDANCE));
 
 // -----------------------------------------------------------------------
 // POST /attendance-log/create - Create a new attendance log record

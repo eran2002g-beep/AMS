@@ -6,7 +6,7 @@ const { DataTypes } = require('sequelize');
 // Import the shared DB connection - this tells Sequelize which database to use
 const sequelize = require('../../config/db');
 const { generateNextEmployeeId } = require('../services/employeeIdGenerator');
-const { ROLES, ALL_ROLES } = require('../config/roles');
+const { ROLES, ALL_ROLES } = require('../../config/roles');
 
 // Define the Employee model - each property below becomes a column in the table
 const Employee = sequelize.define('Employee', {
