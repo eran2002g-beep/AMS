@@ -1,14 +1,14 @@
 // src/config/roles.js - single source of truth for role names and permission groups
 // Route files import the *_ROLES groups below instead of hardcoding role strings,
 // so the whole permission table stays readable in one place and can't drift
-// between files (e.g. one route saying 'admin_manager', another 'adminManager').
+// between files (e.g. one route saying 'admin-manager', another 'adminManager').
 
 const ROLES = {
     EMPLOYEE:       'employee',       // base role - login only, views own attendance (no admin endpoints)
-    SUPER_ADMIN:    'super_admin',    // full employee CRUD + roster management
-    ADMIN:          'admin',          // edit/view attendance
     MANAGER:        'manager',        // accept leave requests + resolve unauthorized leave
-    ADMIN_MANAGER:  'admin_manager',  // edit/view attendance AND accept/resolve leave
+    ADMIN_MANAGER:  'admin-manager',  // edit/view attendance AND accept/resolve leave
+    ADMIN:          'admin',          // edit/view attendance
+    SUPER_ADMIN:    'super-admin',    // full employee CRUD + roster management
 };
 
 // All role values the Employee.role ENUM accepts - kept as an array so

@@ -114,6 +114,18 @@ const validateEmployeePayload = (data = {}, { requireAllFields = false } = {}) =
         }
     }
 
+    for (const field of ['hod', 'supervisor']) {
+        if (data[field] === undefined) continue;
+
+        if (data[field] === null) {
+            normalized[field] = null;
+        } else if (!Number.isInteger(data[field]) || data[field] <= 0) {
+            errors.push(`${field} must be a positive Employee id or null`);
+        } else {
+            normalized[field] = data[field];
+        }
+    }
+
     if (errors.length > 0) {
         throw new Error(errors.join('; '));
     }

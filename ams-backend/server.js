@@ -137,9 +137,9 @@ sequelize.authenticate()
     // ALTER TYPE ... ADD VALUE cannot run inside the implicit sync transaction
     // and errors if the value already exists, so each is its own statement
     // guarded by a catch that ignores "already exists" (duplicate_object).
-    .then(() => sequelize.query(`ALTER TYPE "enum_employees_role" ADD VALUE IF NOT EXISTS 'super_admin';`).catch(() => {}))
+    .then(() => sequelize.query(`ALTER TYPE "enum_employees_role" ADD VALUE IF NOT EXISTS 'super-admin';`).catch(() => {}))
     .then(() => sequelize.query(`ALTER TYPE "enum_employees_role" ADD VALUE IF NOT EXISTS 'manager';`).catch(() => {}))
-    .then(() => sequelize.query(`ALTER TYPE "enum_employees_role" ADD VALUE IF NOT EXISTS 'admin_manager';`).catch(() => {}))
+    .then(() => sequelize.query(`ALTER TYPE "enum_employees_role" ADD VALUE IF NOT EXISTS 'admin-manager';`).catch(() => {}))
 
     // Step 5 - start the server only after the database is ready
     .then(() => {

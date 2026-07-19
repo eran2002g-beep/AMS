@@ -8,9 +8,9 @@ const { CAN_MANAGE_EMPLOYEES, CAN_VIEW_ATTENDANCE } = require("../../config/role
 
 // -----------------------------------------------------------------------
 // GET /employee - Retrieve all employee records API
-// Read access: any authenticated admin-tier role needs the directory to do
+// EMPLOYEE READ -> super-admin only
 // -----------------------------------------------------------------------
-router.get('/', verifyToken, async (req, res) => {
+router.get('/', verifyToken, authorizeRoles(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
     try {
         const { q, department, role, page, limit } = req.query;
 
@@ -55,9 +55,9 @@ router.put('/:employeeId/hierarchy', verifyToken, authorizeRoles(...CAN_MANAGE_E
 
 // -----------------------------------------------------------------------
 // GET /employee/:managerId/subordinates - Get all direct reports for a manager (NEW)
-// Allowed for authenticated users to view organizational structure
+// EMPLOYEE HIERARCHY READ -> super-admin only
 // -----------------------------------------------------------------------
-router.get('/:managerId/subordinates', verifyToken, async (req, res) => {
+router.get('/:managerId/subordinates', verifyToken, authorizeRoles(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
     try {
         const { managerId } = req.params;
         const subordinates = await employeeService.getDirectReports(managerId);

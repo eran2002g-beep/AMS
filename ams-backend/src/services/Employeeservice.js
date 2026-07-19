@@ -7,6 +7,7 @@ const Attendance = require('../models/Attendance');
 const { validateEmployeePayload } = require('./employeeValidation');
 const { hashPassword } = require('./passwordService');
 const { Op } = require('sequelize');
+const { ROLES } = require('../../config/roles');
 
 const REPORTING_RELATIONSHIPS = [
     { model: Employee, as: 'hodEmployee' },
@@ -140,7 +141,7 @@ const searchEmployees = async (opts = {}) => {
 const getAdministrativeEmployees = async () => Employee.findAll({
     where: {
         isActive: true,
-        role: { [Op.in]: ['admin', 'admin-manager'] },
+        role: { [Op.in]: [ROLES.ADMIN, ROLES.ADMIN_MANAGER] },
     },
     include: REPORTING_RELATIONSHIPS,
     order: [['lastName', 'ASC'], ['firstName', 'ASC']],
@@ -150,7 +151,7 @@ const getAdministrativeEmployees = async () => Employee.findAll({
 // updateEmployeeHierarchy - Role updates and HOD/Supervisor changes (NEW)
 // -----------------------------------------------------------------------
 const updateEmployeeHierarchy = async (employeeId, hierarchyData) => {
-    const { role, hod, supervisor } = hierarchyData;
+    const { role, hod, supervisor } = validateEmployeePayload(hierarchyData);
 
     const employee = await Employee.findOne({ where: { employeeId, isActive: true } });
     if (!employee) {

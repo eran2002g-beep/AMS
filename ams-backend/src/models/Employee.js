@@ -74,21 +74,34 @@ const Employee = sequelize.define('Employee', {
 
     // role - controls what the user can access (Epic 3 RBAC)
     // ENUM restricts the value to the role set defined in src/config/roles.js:
-    // employee | super_admin | admin | manager | admin_manager
+    // employee | super-admin | admin | manager | admin-manager
     role: {
         type: DataTypes.ENUM(...ALL_ROLES),
         defaultValue: ROLES.EMPLOYEE, // new users get least privilege by default
     },
 
-    // reportsTo - Foreign Key linking back to Employee.employeeId for Line Manager Hierarchy (NEW)
-    // This defines who the employee directly reports to in the organizational structure.
-    reportsTo: {
-        type: DataTypes.STRING,
+    // HOD and supervisor store the internal employee primary keys. These
+    // columns and their foreign keys are created by the reporting migration.
+    hod: {
+        type: DataTypes.INTEGER,
         allowNull: true,
         references: {
             model: 'employees', // actual database table name
-            key: 'employeeId'
-        }
+            key: 'id',
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL',
+    },
+
+    supervisor: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+            model: 'employees',
+            key: 'id',
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL',
     },
 
     // isActive - false = soft deleted, keeps attendance history intact
@@ -140,10 +153,12 @@ Employee.prototype.toJSON = function toJSON() {
 };
 
 // --- SELF-REFERENTIAL ASSOCIATIONS (NEW) ----------------------
-// Defines the reporting hierarchy lines using the public employeeId string.
-// An employee belongs to one Manager, and a Manager can have many Subordinates.
-Employee.hasMany(Employee, { as: 'subordinates', foreignKey: 'reportsTo', sourceKey: 'employeeId' });
-Employee.belongsTo(Employee, { as: 'manager', foreignKey: 'reportsTo', targetKey: 'employeeId' });
+// The aliases must match the includes used by employeeService. Explicit aliases
+// are required because Employee is associated with itself more than once.
+Employee.belongsTo(Employee, { as: 'hodEmployee', foreignKey: 'hod' });
+Employee.belongsTo(Employee, { as: 'supervisorEmployee', foreignKey: 'supervisor' });
+Employee.hasMany(Employee, { as: 'hodReports', foreignKey: 'hod' });
+Employee.hasMany(Employee, { as: 'supervisorReports', foreignKey: 'supervisor' });
 
 // Export so the controller can call Employee.create(), findAll(), update(), destroy(), etc.
 module.exports = Employee;
