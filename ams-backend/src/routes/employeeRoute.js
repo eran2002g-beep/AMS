@@ -10,7 +10,6 @@ const { CAN_MANAGE_EMPLOYEES, CAN_VIEW_ATTENDANCE } = require('../config/roles')
 // GET /employee - Retrieve all employee records API
 // Read access: any authenticated admin-tier role needs the directory to do
 // their job (e.g. a manager looking up whose leave request they're
-// resolving) - only mutating the employee table is super_admin-only.
 // -----------------------------------------------------------------------
 router.get('/', verifyToken, async (req, res) => {
     try {
