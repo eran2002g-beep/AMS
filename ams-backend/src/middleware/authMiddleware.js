@@ -67,7 +67,15 @@ const authorizeRoles = (...allowedRoles) => {
     };
 };
 
+// --- ADMIN SPECIFIC GUARD (NEW) ------------------------------
+// authorizeAdmin - shorthand wrapper specifically for administrator restrictions
+const authorizeAdmin = (req, res, next) => {
+    // Reuses the existing authorizeRoles logic specifically for 'admin'
+    return authorizeRoles('admin')(req, res, next);
+};
+
 module.exports = {
     verifyToken,
     authorizeRoles,
+    authorizeAdmin, // අලුතින් Export කලා
 };

@@ -9,8 +9,6 @@ const { CAN_MANAGE_EMPLOYEES, CAN_VIEW_ATTENDANCE } = require("../../config/role
 // -----------------------------------------------------------------------
 // GET /employee - Retrieve all employee records API
 // Read access: any authenticated admin-tier role needs the directory to do
-// their job (e.g. a manager looking up whose leave request they're
-// resolving) - only mutating the employee table is super_admin-only.
 // -----------------------------------------------------------------------
 router.get('/', verifyToken, async (req, res) => {
     try {
@@ -33,8 +31,53 @@ router.get('/', verifyToken, async (req, res) => {
 });
 
 // -----------------------------------------------------------------------
+// PUT /employee/:employeeId/hierarchy - Update Role and Reporting Structure (NEW)
+// EMPLOYEE CRUD -> admin/super_admin only (via CAN_MANAGE_EMPLOYEES permissions)
+// -----------------------------------------------------------------------
+router.put('/:employeeId/hierarchy', verifyToken, authorizeRoles(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
+    try {
+        const { employeeId } = req.params;
+        // hierarchyData: { role, hod, supervisor }
+        const updatedEmployee = await employeeService.updateEmployeeHierarchy(employeeId, req.body);
+        
+        return res.status(200).json({
+            success: true,
+            message: 'Employee role management and hierarchy lines updated successfully.',
+            data: updatedEmployee
+        });
+    } catch (err) {
+        return res.status(400).json({ 
+            success: false, 
+            error: err.message 
+        });
+    }
+});
+
+// -----------------------------------------------------------------------
+// GET /employee/:managerId/subordinates - Get all direct reports for a manager (NEW)
+// Allowed for authenticated users to view organizational structure
+// -----------------------------------------------------------------------
+router.get('/:managerId/subordinates', verifyToken, async (req, res) => {
+    try {
+        const { managerId } = req.params;
+        const subordinates = await employeeService.getDirectReports(managerId);
+        
+        return res.status(200).json({
+            success: true,
+            count: subordinates.length,
+            data: subordinates
+        });
+    } catch (err) {
+        return res.status(404).json({ 
+            success: false, 
+            error: err.message 
+        });
+    }
+});
+
+// -----------------------------------------------------------------------
 // POST /employee/create - Create a new employee record
-// EMPLOYEE CRUD -> super_admin only
+// EMPLOYEE CRUD -> super_admin only (via CAN_MANAGE_EMPLOYEES permissions)
 // -----------------------------------------------------------------------
 router.post('/create', verifyToken, authorizeRoles(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
     try {
@@ -47,14 +90,13 @@ router.post('/create', verifyToken, authorizeRoles(...CAN_MANAGE_EMPLOYEES), asy
 
 // -----------------------------------------------------------------------
 // DELETE /employee/:employeeId - delete an employee record (Soft Delete)
-// EMPLOYEE CRUD -> super_admin only
+// EMPLOYEE CRUD -> super_admin only (via CAN_MANAGE_EMPLOYEES permissions)
 // -----------------------------------------------------------------------
 router.delete('/:employeeId', verifyToken, authorizeRoles(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
     try {
         // Extract employeeId from URL parameters
         const { employeeId } = req.params; 
         
-        // Execute soft delete logic from the service layer
         await employeeService.deleteEmployeeById(employeeId);
         
         return res.status(200).json({
@@ -73,7 +115,7 @@ router.delete('/:employeeId', verifyToken, authorizeRoles(...CAN_MANAGE_EMPLOYEE
 
 // -----------------------------------------------------------------------
 // PATCH /employee/:employeeId - Update an existing employee record
-// EMPLOYEE CRUD -> super_admin only
+// EMPLOYEE CRUD -> super_admin only 
 // -----------------------------------------------------------------------
 router.patch('/:employeeId', verifyToken, authorizeRoles(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
     try {
@@ -94,15 +136,14 @@ router.patch('/:employeeId', verifyToken, authorizeRoles(...CAN_MANAGE_EMPLOYEES
 
 // -----------------------------------------------------------------------
 // GET /employee/:employeeId/attendance-summary - Get calculated metrics
-// This returns attendance data, not employee-directory data, so it follows
-// the "view attendance" permission (admin, admin_manager) rather than
-// EMPLOYEE CRUD.
+// Follows the "view attendance" permission (admin, admin_manager) rather than
 // -----------------------------------------------------------------------
 router.get('/:employeeId/attendance-summary', verifyToken, authorizeRoles(...CAN_VIEW_ATTENDANCE), async (req, res) => {
     try {
         const { employeeId } = req.params;
         const { startDate, endDate, shiftStartTime } = req.query;
 
+        // Ensure date range params are supplied
         if (!startDate || !endDate) {
             return res.status(400).json({
                 success: false,
@@ -110,6 +151,7 @@ router.get('/:employeeId/attendance-summary', verifyToken, authorizeRoles(...CAN
             });
         }
 
+        // Run core mathematical metrics calculation from service layer
         const metrics = await employeeService.calculateAttendanceMetrics(
             employeeId, 
             startDate, 
