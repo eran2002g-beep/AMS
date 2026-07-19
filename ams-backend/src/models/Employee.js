@@ -80,6 +80,17 @@ const Employee = sequelize.define('Employee', {
         defaultValue: ROLES.EMPLOYEE, // new users get least privilege by default
     },
 
+    // reportsTo - Foreign Key linking back to Employee.employeeId for Line Manager Hierarchy (NEW)
+    // This defines who the employee directly reports to in the organizational structure.
+    reportsTo: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        references: {
+            model: 'employees', // actual database table name
+            key: 'employeeId'
+        }
+    },
+
     // isActive - false = soft deleted, keeps attendance history intact
     isActive: {
         type: DataTypes.BOOLEAN,
@@ -127,6 +138,12 @@ Employee.prototype.toJSON = function toJSON() {
     delete values.password;
     return values;
 };
+
+// --- SELF-REFERENTIAL ASSOCIATIONS (NEW) ----------------------
+// Defines the reporting hierarchy lines using the public employeeId string.
+// An employee belongs to one Manager, and a Manager can have many Subordinates.
+Employee.hasMany(Employee, { as: 'subordinates', foreignKey: 'reportsTo', sourceKey: 'employeeId' });
+Employee.belongsTo(Employee, { as: 'manager', foreignKey: 'reportsTo', targetKey: 'employeeId' });
 
 // Export so the controller can call Employee.create(), findAll(), update(), destroy(), etc.
 module.exports = Employee;
