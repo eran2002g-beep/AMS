@@ -6,6 +6,7 @@ const { DataTypes } = require('sequelize');
 // Import the shared DB connection - this tells Sequelize which database to use
 const sequelize = require('../../config/db');
 const { generateNextEmployeeId } = require('../services/employeeIdGenerator');
+const { ROLES, ALL_ROLES } = require('../config/roles');
 
 // Define the Employee model - each property below becomes a column in the table
 const Employee = sequelize.define('Employee', {
@@ -72,33 +73,11 @@ const Employee = sequelize.define('Employee', {
     },
 
     // role - controls what the user can access (Epic 3 RBAC)
-    // ENUM restricts the value to the supported roles, enforced by the database
+    // ENUM restricts the value to the role set defined in src/config/roles.js:
+    // employee | super_admin | admin | manager | admin_manager
     role: {
-        type: DataTypes.ENUM('employee', 'manager', 'admin-manager', 'admin', 'super-admin'),
-        defaultValue: 'employee', // new users get least privilege by default
-    },
-
-    // Internal Employee IDs for the employee's reporting relationships
-    hod: {
-        type: DataTypes.INTEGER,
-        allowNull: true,
-        references: {
-            model: 'employees',
-            key: 'id',
-        },
-        onUpdate: 'CASCADE',
-        onDelete: 'SET NULL',
-    },
-
-    supervisor: {
-        type: DataTypes.INTEGER,
-        allowNull: true,
-        references: {
-            model: 'employees',
-            key: 'id',
-        },
-        onUpdate: 'CASCADE',
-        onDelete: 'SET NULL',
+        type: DataTypes.ENUM(...ALL_ROLES),
+        defaultValue: ROLES.EMPLOYEE, // new users get least privilege by default
     },
 
     // isActive - false = soft deleted, keeps attendance history intact
@@ -125,11 +104,6 @@ const Employee = sequelize.define('Employee', {
         },
     },
 
-    indexes: [
-        { fields: ['hod'] },
-        { fields: ['supervisor'] },
-    ],
-
     // hooks run automatically at specific points in a record's lifecycle
     hooks: {
 
@@ -145,23 +119,6 @@ const Employee = sequelize.define('Employee', {
             employee.employeeId = generateNextEmployeeId(existingEmployeeIds.map((item) => item.employeeId));
         },
     },
-});
-
-Employee.belongsTo(Employee, {
-    as: 'hodEmployee',
-    foreignKey: 'hod',
-});
-Employee.hasMany(Employee, {
-    as: 'hodReports',
-    foreignKey: 'hod',
-});
-Employee.belongsTo(Employee, {
-    as: 'supervisorEmployee',
-    foreignKey: 'supervisor',
-});
-Employee.hasMany(Employee, {
-    as: 'supervisorReports',
-    foreignKey: 'supervisor',
 });
 
 // Strip password from every JSON serialization (create/update responses included)

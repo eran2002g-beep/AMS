@@ -2,34 +2,17 @@
 const express = require('express');
 const router = express.Router();
 
-const isAdmin = require('../middleware/isAdmin');
 const employeeService = require('../services/employeeService');
-
-router.use(isAdmin);
-
-// -----------------------------------------------------------------------
-// GET /employee/admins - Retrieve active admin and admin-manager employees
-// -----------------------------------------------------------------------
-router.get('/admins', async (req, res) => {
-    try {
-        const employees = await employeeService.getAdministrativeEmployees();
-        return res.status(200).json({
-            success: true,
-            count: employees.length,
-            data: employees,
-        });
-    } catch (err) {
-        return res.status(500).json({
-            success: false,
-            error: err.message,
-        });
-    }
-});
+const { verifyToken, authorizeRoles } = require('../middleware/authMiddleware');
+const { CAN_MANAGE_EMPLOYEES, CAN_VIEW_ATTENDANCE } = require('../config/roles');
 
 // -----------------------------------------------------------------------
 // GET /employee - Retrieve all employee records API
+// Read access: any authenticated admin-tier role needs the directory to do
+// their job (e.g. a manager looking up whose leave request they're
+// resolving) - only mutating the employee table is super_admin-only.
 // -----------------------------------------------------------------------
-router.get('/', async (req, res) => {
+router.get('/', verifyToken, async (req, res) => {
     try {
         const { q, department, role, page, limit } = req.query;
 
@@ -51,8 +34,9 @@ router.get('/', async (req, res) => {
 
 // -----------------------------------------------------------------------
 // POST /employee/create - Create a new employee record
+// EMPLOYEE CRUD -> super_admin only
 // -----------------------------------------------------------------------
-router.post('/create', async (req, res) => {
+router.post('/create', verifyToken, authorizeRoles(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
     try {
         const employee = await employeeService.createEmployee(req.body);
         return res.status(201).json(employee);
@@ -63,8 +47,9 @@ router.post('/create', async (req, res) => {
 
 // -----------------------------------------------------------------------
 // DELETE /employee/:employeeId - delete an employee record (Soft Delete)
+// EMPLOYEE CRUD -> super_admin only
 // -----------------------------------------------------------------------
-router.delete('/:employeeId', async (req, res) => {
+router.delete('/:employeeId', verifyToken, authorizeRoles(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
     try {
         // Extract employeeId from URL parameters
         const { employeeId } = req.params; 
@@ -88,8 +73,9 @@ router.delete('/:employeeId', async (req, res) => {
 
 // -----------------------------------------------------------------------
 // PATCH /employee/:employeeId - Update an existing employee record
+// EMPLOYEE CRUD -> super_admin only
 // -----------------------------------------------------------------------
-router.patch('/:employeeId', async (req, res) => {
+router.patch('/:employeeId', verifyToken, authorizeRoles(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
     try {
         const { employeeId } = req.params;
         const updatedEmployee = await employeeService.updateEmployee(employeeId, req.body);
@@ -108,8 +94,11 @@ router.patch('/:employeeId', async (req, res) => {
 
 // -----------------------------------------------------------------------
 // GET /employee/:employeeId/attendance-summary - Get calculated metrics
+// This returns attendance data, not employee-directory data, so it follows
+// the "view attendance" permission (admin, admin_manager) rather than
+// EMPLOYEE CRUD.
 // -----------------------------------------------------------------------
-router.get('/:employeeId/attendance-summary', async (req, res) => {
+router.get('/:employeeId/attendance-summary', verifyToken, authorizeRoles(...CAN_VIEW_ATTENDANCE), async (req, res) => {
     try {
         const { employeeId } = req.params;
         const { startDate, endDate, shiftStartTime } = req.query;

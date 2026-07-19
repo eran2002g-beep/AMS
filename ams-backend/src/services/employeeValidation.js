@@ -1,4 +1,7 @@
-const VALID_ROLES = ['employee', 'manager', 'admin-manager', 'admin', 'super-admin'];
+const { ALL_ROLES } = require('../config/roles');
+
+// Re-exported for backward compatibility with anything importing VALID_ROLES directly.
+const VALID_ROLES = ALL_ROLES;
 const MIN_PASSWORD_LENGTH = 8;
 
 const normalizeString = (value) => {
@@ -100,18 +103,6 @@ const validateEmployeePayload = (data = {}, { requireAllFields = false } = {}) =
             errors.push(`role must be one of: ${VALID_ROLES.join(', ')}`);
         } else {
             normalized.role = role;
-        }
-    }
-
-    for (const relationship of ['hod', 'supervisor']) {
-        if (data[relationship] === undefined) continue;
-
-        if (data[relationship] === null) {
-            normalized[relationship] = null;
-        } else if (!Number.isInteger(data[relationship]) || data[relationship] <= 0) {
-            errors.push(`${relationship} must be a positive Employee id or null`);
-        } else {
-            normalized[relationship] = data[relationship];
         }
     }
 
