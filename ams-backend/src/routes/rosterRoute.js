@@ -4,19 +4,27 @@ const router  = express.Router();
 const { upload } = require('../utils/rosterParser');
 const rosterService = require('../services/rosterService');
 const attendanceController = require('../controllers/attendanceController');
-const isAdmin = require('../middleware/isAdmin');
+
+
+//Ahamed's Updates............*****
+//Roster dlete implementation by Ahamed..
+// RBAC: isAdmin.js checked role === 'admin' under the old 2-role system.
+// Under the new role set 'admin' no longer means "super user" (it's the
+// attendance-edit role), so roster deletion now goes through the same
+// verifyToken + authorizeRoles(super_admin) pattern as the rest of ROSTER.
+// isAdmin.js is no longer used anywhere and can be removed.
+const { verifyToken, authorizeRoles } = require("../middleware/authMiddleware");
+const { CAN_MANAGE_ROSTER } = require("../config/roles");
 const {
   deleteRosterByDate,
   deleteRostersByMonth,
-} = require('../controllers/rosterController');
+} = require("../controllers/rosterController");
 
-router.use(isAdmin);
+// dlete bydDate=YYYY-MM-DD....
+router.delete("/by-date", verifyToken, authorizeRoles(...CAN_MANAGE_ROSTER), deleteRosterByDate);
 
-// DELETE /roster/by-date?date=YYYY-MM-DD
-router.delete('/by-date', deleteRosterByDate);
-
-// DELETE /roster/by-month?month=MM&year=YYYY
-router.delete('/by-month', deleteRostersByMonth);
+// dlete byMonth=MM&year=YYYY.....
+router.delete("/by-month", verifyToken, authorizeRoles(...CAN_MANAGE_ROSTER), deleteRostersByMonth);
 
 
 
@@ -42,7 +50,7 @@ router.delete('/by-month', deleteRostersByMonth);
 //   year  - e.g. 2025
 //   month - e.g. 6
 //   year + month together - e.g. ?year=2025&month=6
-router.get('/view', async (req, res) => {
+router.get('/view', verifyToken, authorizeRoles(...CAN_MANAGE_ROSTER), async (req, res) => {
     try {
         const { entries, applied } = await rosterService.getRosterView(req.query);
 
@@ -62,6 +70,11 @@ router.get('/view', async (req, res) => {
 
 router.post(
     '/upload',
+
+    // ROSTER -> super_admin only. Runs before multer so an unauthorized
+    // caller is rejected without the file even being parsed/written to disk.
+    verifyToken,
+    authorizeRoles(...CAN_MANAGE_ROSTER),
 
     // ---------------------------- Middleware 1: multer file handling ----------------------------
     (req, res, next) => {
@@ -94,6 +107,8 @@ router.post(
 );
 
 // POST /roster/process/:rosterId - legacy alias for /attendance/process-roster/:rosterId
-router.post('/process/:rosterId', attendanceController.processRosterAttendance);
+// Kept under ROSTER permission (super_admin) for consistency with /upload above,
+// since this is triggered as part of the same roster-ingestion workflow.
+router.post('/process/:rosterId', verifyToken, authorizeRoles(...CAN_MANAGE_ROSTER), attendanceController.processRosterAttendance);
 
 module.exports = router;
