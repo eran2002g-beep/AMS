@@ -73,7 +73,7 @@ router.delete('/:employeeId', verifyToken, authorizeRoles(...CAN_MANAGE_EMPLOYEE
 
 // -----------------------------------------------------------------------
 // PATCH /employee/:employeeId - Update an existing employee record
-// EMPLOYEE CRUD -> super_admin only (via CAN_MANAGE_EMPLOYEES permissions)
+// EMPLOYEE CRUD -> super_admin only 
 // -----------------------------------------------------------------------
 router.patch('/:employeeId', verifyToken, authorizeRoles(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
     try {
