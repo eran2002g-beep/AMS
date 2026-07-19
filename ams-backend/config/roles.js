@@ -20,6 +20,7 @@ const ALL_ROLES = Object.values(ROLES);
 // Super admin -> EMPLOYEE CRUD, ROSTER
 const CAN_MANAGE_EMPLOYEES = [ROLES.SUPER_ADMIN];
 const CAN_MANAGE_ROSTER    = [ROLES.SUPER_ADMIN];
+const CAN_VIEW_EMPLOYEES   = [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.ADMIN_MANAGER];
 
 // Admin -> can edit attendance, view attendance
 // Admin-Manager -> can edit attendance, view attendance & accept/resolve leave
@@ -39,6 +40,7 @@ module.exports = {
     ALL_ROLES,
     CAN_MANAGE_EMPLOYEES,
     CAN_MANAGE_ROSTER,
+    CAN_VIEW_EMPLOYEES,
     CAN_EDIT_ATTENDANCE,
     CAN_VIEW_ATTENDANCE,
     CAN_MANAGE_LEAVE,

@@ -4,13 +4,17 @@ const router = express.Router();
 
 const employeeService = require('../services/employeeService');
 const { verifyToken, authorizeRoles } = require('../middleware/authMiddleware');
-const { CAN_MANAGE_EMPLOYEES, CAN_VIEW_ATTENDANCE } = require("../../config/roles");
+const {
+    CAN_MANAGE_EMPLOYEES,
+    CAN_VIEW_EMPLOYEES,
+    CAN_VIEW_ATTENDANCE,
+} = require("../../config/roles");
 
 // -----------------------------------------------------------------------
 // GET /employee - Retrieve all employee records API
-// EMPLOYEE READ -> super-admin only
+// EMPLOYEE READ -> super-admin, admin, and admin-manager
 // -----------------------------------------------------------------------
-router.get('/', verifyToken, authorizeRoles(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
+router.get('/', verifyToken, authorizeRoles(...CAN_VIEW_EMPLOYEES), async (req, res) => {
     try {
         const { q, department, role, page, limit } = req.query;
 
@@ -72,6 +76,19 @@ router.get('/:managerId/subordinates', verifyToken, authorizeRoles(...CAN_MANAGE
             success: false, 
             error: err.message 
         });
+    }
+});
+
+// -----------------------------------------------------------------------
+// GET /employee/:employeeId - Retrieve one active employee
+// EMPLOYEE READ -> super-admin, admin, and admin-manager
+// -----------------------------------------------------------------------
+router.get('/:employeeId', verifyToken, authorizeRoles(...CAN_VIEW_EMPLOYEES), async (req, res) => {
+    try {
+        const employee = await employeeService.getEmployeeById(req.params.employeeId);
+        return res.status(200).json({ success: true, data: employee });
+    } catch (err) {
+        return res.status(404).json({ success: false, error: err.message });
     }
 });
 

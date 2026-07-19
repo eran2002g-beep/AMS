@@ -283,6 +283,19 @@ const getAllEmployees = async () => {
     return result.employees;
 };
 
+const getEmployeeById = async (employeeId) => {
+    const employee = await Employee.findOne({
+        where: { employeeId, isActive: true },
+        include: REPORTING_RELATIONSHIPS,
+    });
+
+    if (!employee) {
+        throw new Error(`Active employee with ID ${employeeId} not found.`);
+    }
+
+    return employee;
+};
+
 // -----------------------------------------------------------------------
 // getEmployeeAttendance - fetch attendance records tied to an employee
 // -----------------------------------------------------------------------
@@ -368,6 +381,7 @@ const calculateAttendanceMetrics = async (employeeId, startDate, endDate, shiftS
 module.exports = {
     createEmployee,
     getAllEmployees,
+    getEmployeeById,
     getAdministrativeEmployees,
     searchEmployees,
     validateReportingRelationships,
