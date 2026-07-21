@@ -14,7 +14,6 @@ import {
   attendanceApi,
   buildAttendanceUpdatePayload,
   getErrorMessage,
-  isForbiddenError,
   getTodayDateString,
   type AttendanceRecord,
   type EmployeeAttendanceResponse,
@@ -46,7 +45,6 @@ export default function EmployeeAttendancePage() {
   const [showBackLink, setShowBackLink] = useState(false);
   const [response, setResponse]     = useState<EmployeeAttendanceResponse | null>(null);
   const [loading, setLoading]       = useState(true);
-  const [accessDenied, setAccessDenied] = useState(false);
   const [error, setError]           = useState("");
   const [success, setSuccess]       = useState("");
   const [formOpen, setFormOpen]     = useState(false);
@@ -74,11 +72,6 @@ export default function EmployeeAttendancePage() {
       setResponse(result);
     } catch (err) {
       setResponse(null);
-      if (isForbiddenError(err)) {
-        setAccessDenied(true);
-        router.replace("/access-denied");
-        return;
-      }
       setError(getErrorMessage(err));
     } finally {
       setLoading(false);

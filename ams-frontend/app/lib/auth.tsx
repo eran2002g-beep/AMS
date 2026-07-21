@@ -13,6 +13,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import {
+  ACCESS_DENIED_EVENT,
   AUTH_LOGOUT_EVENT,
   TOKEN_STORAGE_KEY,
   USER_STORAGE_KEY,
@@ -20,6 +21,7 @@ import {
   type AuthUser,
   type SessionResponse,
 } from "./api";
+import AccessDeniedDialog from "@/components/AccessDeniedDialog";
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -43,6 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [sessionExpiresAt, setSessionExpiresAt] = useState<number | null>(null);
+  const [accessDeniedMessage, setAccessDeniedMessage] = useState<string | null>(null);
   const router = useRouter();
 
   // Validate the HttpOnly refresh cookie on startup instead of trusting stale
@@ -71,12 +74,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       setSessionExpiresAt(null);
     };
+
+    const handleAccessDenied = (event: Event) => {
+      const message = (event as CustomEvent<{ message?: string }>).detail?.message;
+      setAccessDeniedMessage(message ?? "Access denied. Please log in again.");
+    };
+
     window.addEventListener(AUTH_LOGOUT_EVENT, handleForcedLogout);
+    window.addEventListener(ACCESS_DENIED_EVENT, handleAccessDenied as EventListener);
     void restore();
 
     return () => {
       active = false;
       window.removeEventListener(AUTH_LOGOUT_EVENT, handleForcedLogout);
+      window.removeEventListener(ACCESS_DENIED_EVENT, handleAccessDenied as EventListener);
     };
   }, []);
 
@@ -105,6 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(USER_STORAGE_KEY);
     setUser(null);
     setSessionExpiresAt(null);
+    setAccessDeniedMessage(null);
     router.push("/login");
   }, [router]);
 
@@ -134,7 +146,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [user, isLoading, login, logout],
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  const handleAccessDeniedDialogClose = useCallback(() => {
+    logout();
+  }, [logout]);
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      <AccessDeniedDialog
+        open={!!accessDeniedMessage}
+        message={accessDeniedMessage ?? "Access denied. Please log in again."}
+        onClose={handleAccessDeniedDialogClose}
+      />
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {
