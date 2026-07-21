@@ -18,7 +18,6 @@ import {
   employeeApi,
   buildEmployeeUpdatePayload,
   getErrorMessage,
-  isForbiddenError,
   type Employee,
   type EmployeeFormData,
   type EmployeeListMeta,
@@ -51,7 +50,6 @@ export default function EmployeesPage() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(DEFAULT_PAGE_SIZE);
   const [loading, setLoading] = useState(true);
-  const [accessDenied, setAccessDenied] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [deletingEmployeeId, setDeletingEmployeeId] = useState<string | null>(null);
   const [processingAttendance, setProcessingAttendance] = useState(false);
@@ -81,11 +79,6 @@ export default function EmployeesPage() {
       setEmployees(result.employees);
       setMeta(result.meta);
     } catch (err) {
-      if (isForbiddenError(err)) {
-        setAccessDenied(true);
-        router.replace("/access-denied");
-        return;
-      }
       setError(getErrorMessage(err));
     } finally {
       setLoading(false);
@@ -102,14 +95,6 @@ export default function EmployeesPage() {
       .then((result) => setDepartments(getDepartmentsFromEmployees(result.employees)))
       .catch(() => {});
   }, []);
-
-  if (accessDenied) {
-    return (
-      <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
 
   const handleAdd = async (data: EmployeeFormData) => {
     setSubmitting(true);
