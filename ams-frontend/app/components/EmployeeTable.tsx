@@ -14,6 +14,7 @@ import FingerprintIcon from "@mui/icons-material/Fingerprint";
 import EventNoteIcon from "@mui/icons-material/EventNote";
 import { useRouter } from "next/navigation";
 import type { Employee } from "@/lib/api";
+import { ROLE_LABELS } from "@/lib/api";
 
 type Props = {
   employees: Employee[];
@@ -43,6 +44,14 @@ const COLUMNS: ColumnDef[] = [
   { id: "createdAt", label: "Created", sortable: "createdAt" },
   { id: "actions", label: "Actions" },
 ];
+
+const ROLE_CHIP_SX: Record<string, { backgroundColor: string; color: string }> = {
+  "super-admin": { backgroundColor: "#fce7f3", color: "#9d174d" },
+  admin: { backgroundColor: "#fef3c7", color: "#b45309" },
+  "admin-manager": { backgroundColor: "#e0e7ff", color: "#3730a3" },
+  manager: { backgroundColor: "#dbeafe", color: "#1d4ed8" },
+  employee: { backgroundColor: "#f1f5f9", color: "#64748b" },
+};
 
 const display = (value: string | null) => value || "—";
 
@@ -196,13 +205,9 @@ export default function EmployeeTable({ employees, onEdit, onDelete, deletingEmp
                 <TableCell>{emp.employeeId}</TableCell>
                 <TableCell>
                   <Chip
-                    label={emp.role}
+                    label={ROLE_LABELS[emp.role] ?? emp.role}
                     size="small"
-                    sx={{
-                      backgroundColor: emp.role === "admin" ? "#fef3c7" : "#f1f5f9",
-                      color: emp.role === "admin" ? "#b45309" : "#64748b",
-                      textTransform: "capitalize",
-                    }}
+                    sx={ROLE_CHIP_SX[emp.role] ?? ROLE_CHIP_SX.employee}
                   />
                 </TableCell>
                 <TableCell>{formatDate(emp.createdAt)}</TableCell>

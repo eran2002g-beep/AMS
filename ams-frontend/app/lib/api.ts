@@ -107,6 +107,39 @@ export function getErrorMessage(err: unknown): string {
 
 // ─────────────────────────────────── Types ───────────────────────────────────
 
+export type EmployeeRole =
+  | "employee"
+  | "manager"
+  | "admin-manager"
+  | "admin"
+  | "super-admin";
+
+export const EMPLOYEE_ROLES: EmployeeRole[] = [
+  "employee",
+  "manager",
+  "admin-manager",
+  "admin",
+  "super-admin",
+];
+
+export const ROLE_LABELS: Record<EmployeeRole, string> = {
+  employee: "Employee",
+  manager: "Manager",
+  "admin-manager": "Admin Manager",
+  admin: "Admin",
+  "super-admin": "Super Admin",
+};
+
+export type ReportingEmployee = {
+  id: number;
+  employeeId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  department: string | null;
+  role: EmployeeRole;
+};
+
 export type Employee = {
   id: number;
   employeeId: string;
@@ -115,8 +148,12 @@ export type Employee = {
   email: string;
   phone: string | null;
   department: string | null;
-  role: "admin" | "employee";
+  role: EmployeeRole;
   roster: boolean;
+  hod: number | null;
+  supervisor: number | null;
+  hodEmployee?: ReportingEmployee | null;
+  supervisorEmployee?: ReportingEmployee | null;
   isActive: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -129,7 +166,9 @@ export type EmployeeFormData = {
   phone: string;
   department: string;
   roster: boolean;
-  role?: "admin" | "employee";
+  role?: EmployeeRole;
+  hod?: number | null;
+  supervisor?: number | null;
   /** Required when creating; optional when editing (leave blank to keep current). */
   password?: string;
 };
@@ -140,8 +179,10 @@ export type EmployeeUpdatePayload = Partial<{
   email: string;
   phone: string | null;
   department: string | null;
-  role: "admin" | "employee";
+  role: EmployeeRole;
   roster: boolean;
+  hod: number | null;
+  supervisor: number | null;
   password: string;
 }>;
 
@@ -163,6 +204,10 @@ export function buildEmployeeUpdatePayload(
   if (department !== (original.department ?? "")) changes.department = department || null;
   if (form.roster !== original.roster) changes.roster = form.roster;
   if (form.role && form.role !== original.role) changes.role = form.role;
+  if (form.hod !== undefined && form.hod !== (original.hod ?? null)) changes.hod = form.hod;
+  if (form.supervisor !== undefined && form.supervisor !== (original.supervisor ?? null)) {
+    changes.supervisor = form.supervisor;
+  }
   if (form.password) changes.password = form.password;
 
   return changes;
@@ -211,7 +256,7 @@ export type RosterDeleteResponse = {
 export type EmployeeListParams = {
   q?: string;
   department?: string;
-  role?: "admin" | "employee";
+  role?: EmployeeRole;
   page?: number;
   limit?: number;
 };
@@ -261,7 +306,7 @@ export type AuthUser = {
   employeeId: string;
   firstName: string;
   lastName: string;
-  role: "admin" | "employee";
+  role: EmployeeRole;
 };
 
 // Shape of the JSON body returned by POST /auth/login (see authController.js).
@@ -270,7 +315,7 @@ export type SessionResponse = {
   message?: string;
   token: string;
   sessionExpiresAt: string;
-  role: "admin" | "employee";
+  role: EmployeeRole;
   employeeId: string;
   firstName: string;
   lastName: string;
@@ -304,6 +349,12 @@ export const authApi = {
 
 // ─────────────────────────────────── Employee API ───────────────────────────────────
 
+export type ManagersListResponse = {
+  success: boolean;
+  count: number;
+  data: ReportingEmployee[];
+};
+
 export const employeeApi = {
   async list(params: EmployeeListParams = {}) {
     const query: Record<string, string | number> = {
@@ -322,6 +373,15 @@ export const employeeApi = {
     return { employees: body.data, meta: body.meta };
   },
 
+  async listManagers() {
+    const response = await api.get<ManagersListResponse>("/employee/managers");
+    const body = response.data;
+    if (!body.success) {
+      throw new Error("Failed to load managers");
+    }
+    return body.data;
+  },
+
   async create(payload: EmployeeFormData) {
     const body = {
       firstName: payload.firstName,
@@ -331,6 +391,9 @@ export const employeeApi = {
       roster: payload.roster,
       ...(payload.phone ? { phone: payload.phone } : {}),
       ...(payload.department ? { department: payload.department } : {}),
+      ...(payload.role ? { role: payload.role } : {}),
+      ...(payload.hod !== undefined ? { hod: payload.hod } : {}),
+      ...(payload.supervisor !== undefined ? { supervisor: payload.supervisor } : {}),
     };
     const response = await api.post<Employee>("/employee/create", body);
     return response.data;

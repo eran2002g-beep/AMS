@@ -54,7 +54,7 @@ export default function Navbar() {
 
         <Typography variant="body2" sx={{ color: "#cbd5e1", mr: 2 }}>
           {user?.firstName} {user?.lastName}
-          <Box component="span" sx={{ color: "#64748b" }}> · {user?.role}</Box>
+          <Box component="span" sx={{ color: "#64748b" }}> · {user?.role?.replace(/-/g, " ")}</Box>
         </Typography>
 
         <Button

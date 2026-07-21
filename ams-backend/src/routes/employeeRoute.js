@@ -35,6 +35,28 @@ router.get('/', verifyToken, authorizeRoles(...CAN_VIEW_EMPLOYEES), async (req, 
 });
 
 // -----------------------------------------------------------------------
+// GET /employee/managers - Active manager + admin-manager employees
+// Used for supervisor / HOD assignment dropdowns
+// EMPLOYEE CRUD -> super-admin only
+// Must be registered before /:employeeId so "managers" is not treated as an id
+// -----------------------------------------------------------------------
+router.get('/managers', verifyToken, authorizeRoles(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
+    try {
+        const managers = await employeeService.getManagers();
+        return res.status(200).json({
+            success: true,
+            count: managers.length,
+            data: managers,
+        });
+    } catch (err) {
+        return res.status(500).json({
+            success: false,
+            error: err.message,
+        });
+    }
+});
+
+// -----------------------------------------------------------------------
 // PUT /employee/:employeeId/hierarchy - Update Role and Reporting Structure (NEW)
 // EMPLOYEE CRUD -> admin/super_admin only (via CAN_MANAGE_EMPLOYEES permissions)
 // -----------------------------------------------------------------------

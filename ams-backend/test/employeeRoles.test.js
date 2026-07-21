@@ -5,6 +5,7 @@ const { Op } = require('sequelize');
 const Employee = require('../src/models/Employee');
 const {
     getAdministrativeEmployees,
+    getManagers,
     validateReportingRelationships,
 } = require('../src/services/employeeService');
 const {
@@ -85,6 +86,29 @@ test('queries active admin and admin-manager employees with reporting objects', 
     assert.equal(query.where.isActive, true);
     assert.deepEqual(query.where.role[Op.in], ['admin', 'admin-manager']);
     assert.deepEqual(query.include.map(({ as }) => as), ['hodEmployee', 'supervisorEmployee']);
+    assert.deepEqual(query.order, [['lastName', 'ASC'], ['firstName', 'ASC']]);
+});
+
+test('queries active manager and admin-manager employees for hierarchy assignment', async (t) => {
+    const originalFindAll = Employee.findAll;
+    let query;
+    t.after(() => {
+        Employee.findAll = originalFindAll;
+    });
+    Employee.findAll = async (options) => {
+        query = options;
+        return [];
+    };
+
+    const managers = await getManagers();
+
+    assert.deepEqual(managers, []);
+    assert.equal(query.where.isActive, true);
+    assert.deepEqual(query.where.role[Op.in], ['manager', 'admin-manager']);
+    assert.deepEqual(
+        query.attributes,
+        ['id', 'employeeId', 'firstName', 'lastName', 'email', 'department', 'role'],
+    );
     assert.deepEqual(query.order, [['lastName', 'ASC'], ['firstName', 'ASC']]);
 });
 

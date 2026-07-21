@@ -15,13 +15,9 @@ const nextConfig: NextConfig = {
         destination: `${backendUrl}/employee`,
       },
       {
-        source: "/employee/create",
-        destination: `${backendUrl}/employee/create`,
-      },
-      {
-        // Single-segment paths only (e.g. /employee/EMP001) — does not match /employee/attendance/*
-        source: "/employee/:employeeId",
-        destination: `${backendUrl}/employee/:employeeId`,
+        // Covers /employee/create, /employee/managers, /employee/:id, /employee/:id/hierarchy, etc.
+        source: "/employee/:path*",
+        destination: `${backendUrl}/employee/:path*`,
       },
       {
         source: "/roster/:path*",

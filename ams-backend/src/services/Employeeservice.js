@@ -147,6 +147,16 @@ const getAdministrativeEmployees = async () => Employee.findAll({
     order: [['lastName', 'ASC'], ['firstName', 'ASC']],
 });
 
+// Active managers eligible for supervisor / HOD assignment
+const getManagers = async () => Employee.findAll({
+    where: {
+        isActive: true,
+        role: { [Op.in]: [ROLES.MANAGER, ROLES.ADMIN_MANAGER] },
+    },
+    attributes: ['id', 'employeeId', 'firstName', 'lastName', 'email', 'department', 'role'],
+    order: [['lastName', 'ASC'], ['firstName', 'ASC']],
+});
+
 // -----------------------------------------------------------------------
 // updateEmployeeHierarchy - Role updates and HOD/Supervisor changes (NEW)
 // -----------------------------------------------------------------------
@@ -383,6 +393,7 @@ module.exports = {
     getAllEmployees,
     getEmployeeById,
     getAdministrativeEmployees,
+    getManagers,
     searchEmployees,
     validateReportingRelationships,
     updateEmployee,

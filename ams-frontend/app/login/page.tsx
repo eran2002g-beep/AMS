@@ -55,8 +55,9 @@ export default function LoginPage() {
       // AC3: redirect to the correct destination based on role. If AuthGuard
       // sent the user here with a "next" target, honor that first.
       const next = searchParams.get("next");
+      const adminRoles = new Set(["super-admin", "admin", "admin-manager", "manager"]);
       const destination =
-        next || (user.role === "admin" ? "/employees" : `/employees/attendance/${user.employeeId}`);
+        next || (adminRoles.has(user.role) ? "/employees" : `/employees/attendance/${user.employeeId}`);
       router.replace(destination);
     } catch (err) {
       // AC2: backend returns a generic "Invalid email or password" for both a

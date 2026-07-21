@@ -2,11 +2,12 @@
 import {
   Box, TextField, FormControl, InputLabel, Select, MenuItem, Button,
 } from "@mui/material";
+import { EMPLOYEE_ROLES, ROLE_LABELS, type EmployeeRole } from "@/lib/api";
 
 export type EmployeeFilters = {
   search: string;
   department: string;
-  role: "" | "admin" | "employee";
+  role: "" | EmployeeRole;
 };
 
 export const EMPTY_FILTERS: EmployeeFilters = {
@@ -66,7 +67,7 @@ export default function EmployeeFilterBar({ filters, departments, onChange, onCl
         </Select>
       </FormControl>
 
-      <FormControl size="small" sx={{ minWidth: 160 }}>
+      <FormControl size="small" sx={{ minWidth: 180 }}>
         <InputLabel id="role-filter-label">Role</InputLabel>
         <Select
           labelId="role-filter-label"
@@ -75,8 +76,9 @@ export default function EmployeeFilterBar({ filters, departments, onChange, onCl
           onChange={(e) => update({ role: e.target.value as EmployeeFilters["role"] })}
         >
           <MenuItem value="">All</MenuItem>
-          <MenuItem value="admin">Admin</MenuItem>
-          <MenuItem value="employee">Employee</MenuItem>
+          {EMPLOYEE_ROLES.map((role) => (
+            <MenuItem key={role} value={role}>{ROLE_LABELS[role]}</MenuItem>
+          ))}
         </Select>
       </FormControl>
 

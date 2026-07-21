@@ -1,12 +1,23 @@
 // components/EmployeeForm.tsx
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Button, Box, CircularProgress,
   FormControlLabel, Checkbox, FormControl, InputLabel, Select, MenuItem,
+  Autocomplete, Alert,
 } from "@mui/material";
-import type { Employee, EmployeeFormData } from "@/lib/api";
+import {
+  EMPLOYEE_ROLES,
+  ROLE_LABELS,
+  employeeApi,
+  getErrorMessage,
+  type Employee,
+  type EmployeeFormData,
+  type EmployeeRole,
+  type ReportingEmployee,
+} from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 
 const EMPTY: EmployeeFormData = {
   firstName: "",
@@ -15,6 +26,9 @@ const EMPTY: EmployeeFormData = {
   phone: "",
   department: "",
   roster: false,
+  role: "employee",
+  hod: null,
+  supervisor: null,
   password: "",
 };
 
@@ -35,8 +49,22 @@ function employeeToForm(employee: Employee): EmployeeFormData {
     department: employee.department ?? "",
     roster: employee.roster,
     role: employee.role,
+    hod: employee.hod ?? null,
+    supervisor: employee.supervisor ?? null,
     password: "",
   };
+}
+
+function formatManagerOption(manager: ReportingEmployee) {
+  return `${manager.firstName} ${manager.lastName} · ${ROLE_LABELS[manager.role]} · ${manager.employeeId}`;
+}
+
+function findManager(
+  managers: ReportingEmployee[],
+  id: number | null | undefined,
+): ReportingEmployee | null {
+  if (id == null) return null;
+  return managers.find((manager) => manager.id === id) ?? null;
 }
 
 type Props = {
@@ -48,9 +76,14 @@ type Props = {
 };
 
 export default function EmployeeForm({ open, onClose, onSubmit, submitting, employee }: Props) {
+  const { user } = useAuth();
   const isEdit = !!employee;
+  const isSuperAdmin = user?.role === "super-admin";
   const [form, setForm] = useState<EmployeeFormData>(EMPTY);
   const [errors, setErrors] = useState<Partial<Record<keyof EmployeeFormData, string>>>({});
+  const [managers, setManagers] = useState<ReportingEmployee[]>([]);
+  const [loadingManagers, setLoadingManagers] = useState(false);
+  const [managersError, setManagersError] = useState("");
 
   useEffect(() => {
     if (open) {
@@ -58,6 +91,41 @@ export default function EmployeeForm({ open, onClose, onSubmit, submitting, empl
       setErrors({});
     }
   }, [open, employee]);
+
+  useEffect(() => {
+    if (!open || !isSuperAdmin) {
+      setManagers([]);
+      setManagersError("");
+      return;
+    }
+
+    let active = true;
+    setLoadingManagers(true);
+    setManagersError("");
+    employeeApi
+      .listManagers()
+      .then((data) => {
+        if (!active) return;
+        setManagers(data);
+        if (data.length === 0) {
+          setManagersError(
+            "No managers found. Assign someone the Manager or Admin Manager role first.",
+          );
+        }
+      })
+      .catch((err) => {
+        if (!active) return;
+        setManagers([]);
+        setManagersError(getErrorMessage(err) || "Failed to load supervisors / HODs.");
+      })
+      .finally(() => {
+        if (active) setLoadingManagers(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [open, isSuperAdmin]);
 
   const handle = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -96,7 +164,13 @@ export default function EmployeeForm({ open, onClose, onSubmit, submitting, empl
       phone: form.phone.trim(),
       department: form.department.trim(),
       roster: form.roster,
-      ...(isEdit && form.role ? { role: form.role } : {}),
+      ...(form.role ? { role: form.role } : {}),
+      ...(isSuperAdmin
+        ? {
+            supervisor: form.supervisor ?? null,
+            hod: form.hod ?? null,
+          }
+        : {}),
       ...(form.password ? { password: form.password } : {}),
     };
 
@@ -107,6 +181,42 @@ export default function EmployeeForm({ open, onClose, onSubmit, submitting, empl
       // Error surfaced by parent; keep dialog open
     }
   };
+
+  const managerOptions = useMemo(() => {
+    const byId = new Map<number, ReportingEmployee>();
+
+    for (const manager of managers) {
+      if (manager.id !== employee?.id) byId.set(manager.id, manager);
+    }
+
+    // Keep a currently assigned person visible even if their role changed.
+    const ensureAssigned = (assigned: ReportingEmployee | null | undefined) => {
+      if (!assigned || assigned.id === employee?.id) return;
+      if (!byId.has(assigned.id)) {
+        byId.set(assigned.id, {
+          id: assigned.id,
+          employeeId: assigned.employeeId,
+          firstName: assigned.firstName,
+          lastName: assigned.lastName,
+          email: assigned.email,
+          department: assigned.department ?? null,
+          role: assigned.role,
+        });
+      }
+    };
+
+    ensureAssigned(employee?.supervisorEmployee ?? undefined);
+    ensureAssigned(employee?.hodEmployee ?? undefined);
+
+    return Array.from(byId.values()).sort((a, b) =>
+      `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`, undefined, {
+        sensitivity: "base",
+      }),
+    );
+  }, [managers, employee]);
+
+  const selectedSupervisor = findManager(managerOptions, form.supervisor);
+  const selectedHod = findManager(managerOptions, form.hod);
 
   return (
     <Dialog
@@ -174,7 +284,7 @@ export default function EmployeeForm({ open, onClose, onSubmit, submitting, empl
             }
             size="small"
             margin="none"
-            autoComplete={isEdit ? "new-password" : "new-password"}
+            autoComplete="new-password"
             sx={{ gridColumn: { xs: "1", sm: "1 / -1" } }}
             slotProps={{
               inputLabel: {
@@ -185,21 +295,107 @@ export default function EmployeeForm({ open, onClose, onSubmit, submitting, empl
               },
             }}
           />
-          {isEdit && (
-            <FormControl fullWidth size="small" sx={{ gridColumn: { xs: "1", sm: "1 / -1" } }}>
-              <InputLabel>Role</InputLabel>
-              <Select
-                label="Role"
-                value={form.role ?? "employee"}
-                onChange={(e) =>
-                  setForm({ ...form, role: e.target.value as EmployeeFormData["role"] })
+          <FormControl fullWidth size="small" sx={{ gridColumn: { xs: "1", sm: "1 / -1" } }}>
+            <InputLabel>Role</InputLabel>
+            <Select
+              label="Role"
+              value={form.role ?? "employee"}
+              onChange={(e) =>
+                setForm({ ...form, role: e.target.value as EmployeeRole })
+              }
+            >
+              {EMPLOYEE_ROLES.map((role) => (
+                <MenuItem key={role} value={role}>{ROLE_LABELS[role]}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          {isSuperAdmin && (
+            <>
+              {managersError && (
+                <Alert severity="warning" sx={{ gridColumn: "1 / -1", py: 0 }}>
+                  {managersError}
+                </Alert>
+              )}
+
+              <Autocomplete
+                options={managerOptions}
+                loading={loadingManagers}
+                value={selectedSupervisor}
+                onChange={(_, value) =>
+                  setForm({ ...form, supervisor: value ? value.id : null })
                 }
-              >
-                <MenuItem value="employee">Employee</MenuItem>
-                <MenuItem value="admin">Admin</MenuItem>
-              </Select>
-            </FormControl>
+                getOptionLabel={(option) => formatManagerOption(option)}
+                isOptionEqualToValue={(option, value) => option.id === value.id}
+                filterOptions={(options, { inputValue }) => {
+                  const q = inputValue.trim().toLowerCase();
+                  if (!q) return options;
+                  return options.filter((option) => {
+                    const haystack = [
+                      option.firstName,
+                      option.lastName,
+                      option.email,
+                      option.employeeId,
+                      option.department ?? "",
+                      ROLE_LABELS[option.role],
+                    ]
+                      .join(" ")
+                      .toLowerCase();
+                    return haystack.includes(q);
+                  });
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Supervisor"
+                    size="small"
+                    placeholder="Search managers…"
+                    helperText="Search, assign, or clear a supervisor"
+                  />
+                )}
+                sx={{ gridColumn: { xs: "1", sm: "1 / -1" } }}
+              />
+
+              <Autocomplete
+                options={managerOptions}
+                loading={loadingManagers}
+                value={selectedHod}
+                onChange={(_, value) =>
+                  setForm({ ...form, hod: value ? value.id : null })
+                }
+                getOptionLabel={(option) => formatManagerOption(option)}
+                isOptionEqualToValue={(option, value) => option.id === value.id}
+                filterOptions={(options, { inputValue }) => {
+                  const q = inputValue.trim().toLowerCase();
+                  if (!q) return options;
+                  return options.filter((option) => {
+                    const haystack = [
+                      option.firstName,
+                      option.lastName,
+                      option.email,
+                      option.employeeId,
+                      option.department ?? "",
+                      ROLE_LABELS[option.role],
+                    ]
+                      .join(" ")
+                      .toLowerCase();
+                    return haystack.includes(q);
+                  });
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="HOD"
+                    size="small"
+                    placeholder="Search managers…"
+                    helperText="Search, assign, or clear a HOD"
+                  />
+                )}
+                sx={{ gridColumn: { xs: "1", sm: "1 / -1" } }}
+              />
+            </>
           )}
+
           <FormControlLabel
             control={
               <Checkbox
