@@ -13,6 +13,7 @@ export const api = axios.create({
 export const TOKEN_STORAGE_KEY = "ams_token";
 export const USER_STORAGE_KEY = "ams_user";
 export const AUTH_LOGOUT_EVENT = "ams:logout";
+export const ACCESS_DENIED_EVENT = "ams:accessDenied";
 
 function clearStoredSession() {
   localStorage.removeItem(TOKEN_STORAGE_KEY);
@@ -57,7 +58,18 @@ function refreshSession() {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (typeof window === "undefined" || !axios.isAxiosError(error) || error.response?.status !== 401) {
+    if (typeof window === "undefined" || !axios.isAxiosError(error)) {
+      return Promise.reject(error);
+    }
+
+    if (error.response?.status === 403) {
+      const data = error.response.data as ApiErrorBody | undefined;
+      const message = data?.message ?? "Access denied. You do not have permission to perform this action.";
+      window.dispatchEvent(new CustomEvent(ACCESS_DENIED_EVENT, { detail: { message } }));
+      return Promise.reject(error);
+    }
+
+    if (error.response?.status !== 401) {
       return Promise.reject(error);
     }
 

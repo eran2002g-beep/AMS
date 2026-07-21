@@ -13,7 +13,6 @@ import {
   employeeApi,
   buildAttendanceUpdatePayload,
   getErrorMessage,
-  isForbiddenError,
   getTodayDateString,
   type AttendanceRecord,
   type AllAttendanceResponse,
@@ -46,7 +45,6 @@ export default function AllAttendancePage() {
   const [employeesList, setEmployeesList] = useState<Employee[]>([]);
   const [employeesMap, setEmployeesMap] = useState<Record<string, Employee>>({});
   const [loading, setLoading] = useState(true);
-  const [accessDenied, setAccessDenied] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [formOpen, setFormOpen] = useState(false);
@@ -79,11 +77,6 @@ export default function AllAttendancePage() {
       setResponse(result);
     } catch (err) {
       setResponse(null);
-      if (isForbiddenError(err)) {
-        setAccessDenied(true);
-        router.replace("/access-denied");
-        return;
-      }
       setError(getErrorMessage(err));
     } finally {
       setLoading(false);
@@ -203,14 +196,6 @@ export default function AllAttendancePage() {
     setAppliedFilters((prev) => ({ ...prev, page: 1, limit: parseInt(e.target.value, 10) }));
 
   // ── Render ──────────────────────────────────────────────────────────────────
-
-  if (accessDenied) {
-    return (
-      <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
 
   const records    = response?.data ?? [];
   const meta       = response?.meta;

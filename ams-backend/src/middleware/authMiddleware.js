@@ -13,14 +13,24 @@ const verifyToken = async (req, res, next) => {
     const authHeader = req.headers['authorization'];
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({ message: 'Access denied. No token provided.' });
+        return res.status(401).json({
+            success: false,
+            status: 401,
+            code: 'AUTH_REQUIRED',
+            message: 'Access denied. No token provided.',
+        });
     }
 
     // Split "Bearer <token>" and take the second part
     const token = authHeader.split(' ')[1];
 
     if (!token) {
-        return res.status(401).json({ message: 'Access denied. Token format invalid.' });
+        return res.status(401).json({
+            success: false,
+            status: 401,
+            code: 'AUTH_REQUIRED',
+            message: 'Access denied. Token format invalid.',
+        });
     }
 
     try {
@@ -28,7 +38,12 @@ const verifyToken = async (req, res, next) => {
         const decoded = await decryptToken(token);
         const activeUser = await getActiveSessionUser(decoded);
         if (!activeUser) {
-            return res.status(401).json({ message: 'Session is no longer active.' });
+            return res.status(401).json({
+                success: false,
+                status: 401,
+                code: 'SESSION_INACTIVE',
+                message: 'Session is no longer active.',
+            });
         }
 
         // Attach the decoded payload to req.user so controllers can access it
@@ -42,11 +57,21 @@ const verifyToken = async (req, res, next) => {
 
         // An expired access token can normally be renewed through /auth/refresh.
         if (err.code === 'ERR_JWT_EXPIRED') {
-            return res.status(401).json({ message: 'Session expired. Please log in again.' });
+            return res.status(401).json({
+                success: false,
+                status: 401,
+                code: 'TOKEN_EXPIRED',
+                message: 'Session expired. Please log in again.',
+            });
         }
 
         // Any other JWT error means the token was tampered with or invalid
-        return res.status(401).json({ message: 'Invalid token.' });
+        return res.status(401).json({
+            success: false,
+            status: 401,
+            code: 'INVALID_TOKEN',
+            message: 'Invalid token.',
+        });
     }
 };
 
@@ -60,7 +85,12 @@ const authorizeRoles = (...allowedRoles) => {
         // req.user is set by verifyToken above — must run after verifyToken
         if (!req.user || !allowedRoles.includes(req.user.role)) {
             // AC2 Epic 3: restricted features shall not be accessible
-            return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
+            return res.status(403).json({
+                success: false,
+                status: 403,
+                code: 'FORBIDDEN',
+                message: 'Access denied. Insufficient permissions.',
+            });
         }
 
         next();
@@ -72,7 +102,12 @@ const authorizeRoles = (...allowedRoles) => {
 const authorizeOwnOrRoles = (...allowedRoles) => {
     return (req, res, next) => {
         if (!req.user) {
-            return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
+            return res.status(403).json({
+                success: false,
+                status: 403,
+                code: 'FORBIDDEN',
+                message: 'Access denied. Insufficient permissions.',
+            });
         }
 
         const targetId = req.params.employeeId;
@@ -84,7 +119,12 @@ const authorizeOwnOrRoles = (...allowedRoles) => {
             return next();
         }
 
-        return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
+        return res.status(403).json({
+            success: false,
+            status: 403,
+            code: 'FORBIDDEN',
+            message: 'Access denied. Insufficient permissions.',
+        });
     };
 };
 
