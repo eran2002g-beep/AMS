@@ -15,12 +15,13 @@ import SearchIcon from "@mui/icons-material/Search";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EventAvailableIcon from "@mui/icons-material/EventAvailable";
 import DateRangePicker from "@/components/DateRangePicker";
-import { rosterApi, attendanceApi, type RosterEntry, type RosterViewFilters, getErrorMessage } from "@/lib/api";
+import { rosterApi, attendanceApi, type RosterEntry, type RosterViewFilters, getErrorMessage, isForbiddenError } from "@/lib/api";
 import {
   formatDateRangeLabel,
   getThisMonthRange,
   parseDateRange,
 } from "@/lib/dateUtils";
+import { useRouter } from "next/navigation";
 
 const now = new Date();
 
@@ -47,6 +48,7 @@ function monthName(month: number): string {
 const defaultProcessRange = getThisMonthRange();
 
 export default function RostersPage() {
+  const router = useRouter();
   const [entries, setEntries] = useState<RosterEntry[]>([]);
   const [filterMode, setFilterMode] = useState<"month" | "date">("month");
   const [year, setYear] = useState(String(now.getFullYear()));
@@ -59,6 +61,7 @@ export default function RostersPage() {
   const [success, setSuccess] = useState("");
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [accessDenied, setAccessDenied] = useState(false);
   const [confirmDeleteMonth, setConfirmDeleteMonth] = useState(false);
   const [deletingMonth, setDeletingMonth] = useState(false);
   const [confirmDeleteDate, setConfirmDeleteDate] = useState<string | null>(null);
@@ -76,15 +79,28 @@ export default function RostersPage() {
       setEntries(response.data);
     } catch (err) {
       setEntries([]);
+      if (isForbiddenError(err)) {
+        setAccessDenied(true);
+        router.replace("/access-denied");
+        return;
+      }
       setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     loadRoster(appliedFilters);
   }, [appliedFilters, loadRoster]);
+
+  if (accessDenied) {
+    return (
+      <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   const handleSearch = () => {
     if (filterMode === "date") {

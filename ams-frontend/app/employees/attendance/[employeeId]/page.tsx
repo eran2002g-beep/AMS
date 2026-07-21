@@ -14,11 +14,14 @@ import {
   attendanceApi,
   buildAttendanceUpdatePayload,
   getErrorMessage,
+  isForbiddenError,
   getTodayDateString,
   type AttendanceRecord,
   type EmployeeAttendanceResponse,
 } from "@/lib/api";
 import AttendanceForm, { type AttendanceFormData } from "@/components/AttendanceForm";
+import { useAuth } from "@/lib/auth";
+import { canEditAttendance, canViewEmployees } from "@/lib/roles";
 
 const TODAY = getTodayDateString();
 const DEFAULT_PAGE_SIZE = 20;
@@ -33,6 +36,9 @@ function defaultApplied(): AppliedFilters {
 export default function EmployeeAttendancePage() {
   const params    = useParams();
   const router    = useRouter();
+  const { user } = useAuth();
+  const editAttendance = canEditAttendance(user?.role);
+  const viewEmployees = canViewEmployees(user?.role);
   const employeeId = typeof params.employeeId === "string" ? params.employeeId : "";
 
   const [appliedFilters, setAppliedFilters] = useState<AppliedFilters>(defaultApplied());
@@ -40,6 +46,7 @@ export default function EmployeeAttendancePage() {
   const [showBackLink, setShowBackLink] = useState(false);
   const [response, setResponse]     = useState<EmployeeAttendanceResponse | null>(null);
   const [loading, setLoading]       = useState(true);
+  const [accessDenied, setAccessDenied] = useState(false);
   const [error, setError]           = useState("");
   const [success, setSuccess]       = useState("");
   const [formOpen, setFormOpen]     = useState(false);
@@ -67,11 +74,16 @@ export default function EmployeeAttendancePage() {
       setResponse(result);
     } catch (err) {
       setResponse(null);
+      if (isForbiddenError(err)) {
+        setAccessDenied(true);
+        router.replace("/access-denied");
+        return;
+      }
       setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, [employeeId, appliedFilters]);
+  }, [employeeId, appliedFilters, router]);
 
   useEffect(() => { loadAttendance(); }, [loadAttendance]);
 
@@ -159,6 +171,14 @@ export default function EmployeeAttendancePage() {
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
+  if (accessDenied) {
+    return (
+      <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
   const employee   = response?.employee;
   const records    = response?.data ?? [];
   const meta       = response?.meta;
@@ -169,7 +189,7 @@ export default function EmployeeAttendancePage() {
     <Box>
       <Paper sx={{ p: 2, mb: 3, borderRadius: 2 }} elevation={1}>
         {/* Back link */}
-        {showBackLink && (
+        {showBackLink && viewEmployees && (
           <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
             <Button
               startIcon={<ArrowBackIcon />}
@@ -222,14 +242,16 @@ export default function EmployeeAttendancePage() {
             )}
           </Box>
 
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={openCreateForm}
-            sx={{ backgroundColor: "#16a34a", "&:hover": { backgroundColor: "#15803d" } }}
-          >
-            Add Attendance
-          </Button>
+          {editAttendance && (
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={openCreateForm}
+              sx={{ backgroundColor: "#16a34a", "&:hover": { backgroundColor: "#15803d" } }}
+            >
+              Add Attendance
+            </Button>
+          )}
         </Box>
 
         {/* Filter bar — employee search hidden since we're scoped to one employee */}
@@ -251,8 +273,8 @@ export default function EmployeeAttendancePage() {
         <>
           <AttendanceTable
             records={records}
-            onEdit={openEditForm}
-            onDelete={handleDeleteAttendance}
+            onEdit={editAttendance ? openEditForm : undefined}
+            onDelete={editAttendance ? handleDeleteAttendance : undefined}
             deletingAttendanceId={deletingAttendanceId}
           />
           {meta && (
@@ -274,14 +296,16 @@ export default function EmployeeAttendancePage() {
         </>
       )}
 
-      <AttendanceForm
-        open={formOpen}
-        onClose={closeForm}
-        onSubmit={editingRecord ? handleUpdateAttendance : handleAddAttendance}
-        submitting={submitting}
-        defaultDate={getTodayDateString()}
-        record={editingRecord}
-      />
+      {editAttendance && (
+        <AttendanceForm
+          open={formOpen}
+          onClose={closeForm}
+          onSubmit={editingRecord ? handleUpdateAttendance : handleAddAttendance}
+          submitting={submitting}
+          defaultDate={getTodayDateString()}
+          record={editingRecord}
+        />
+      )}
     </Box>
   );
 }

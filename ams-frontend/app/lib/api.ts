@@ -105,6 +105,11 @@ export function getErrorMessage(err: unknown): string {
   return "Something went wrong";
 }
 
+/** True when the API rejected the request for insufficient permissions (403). */
+export function isForbiddenError(err: unknown): boolean {
+  return axios.isAxiosError(err) && err.response?.status === 403;
+}
+
 // ─────────────────────────────────── Types ───────────────────────────────────
 
 export type EmployeeRole =

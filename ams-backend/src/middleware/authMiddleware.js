@@ -67,6 +67,27 @@ const authorizeRoles = (...allowedRoles) => {
     };
 };
 
+// authorizeOwnOrRoles - allow the named roles, or the signed-in user when the
+// :employeeId path param is their own employeeId (self-service attendance).
+const authorizeOwnOrRoles = (...allowedRoles) => {
+    return (req, res, next) => {
+        if (!req.user) {
+            return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
+        }
+
+        const targetId = req.params.employeeId;
+        if (targetId && req.user.employeeId === targetId) {
+            return next();
+        }
+
+        if (allowedRoles.includes(req.user.role)) {
+            return next();
+        }
+
+        return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
+    };
+};
+
 // --- ADMIN SPECIFIC GUARD (NEW) ------------------------------
 // authorizeAdmin - shorthand wrapper specifically for administrator restrictions
 const authorizeAdmin = (req, res, next) => {
@@ -77,5 +98,6 @@ const authorizeAdmin = (req, res, next) => {
 module.exports = {
     verifyToken,
     authorizeRoles,
+    authorizeOwnOrRoles,
     authorizeAdmin, // අලුතින් Export කලා
 };

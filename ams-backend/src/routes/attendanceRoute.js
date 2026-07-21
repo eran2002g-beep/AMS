@@ -3,7 +3,7 @@ const express = require('express');
 const router  = express.Router();
 
 const attendanceController = require('../controllers/attendanceController');
-const { verifyToken, authorizeRoles } = require('../middleware/authMiddleware');
+const { verifyToken, authorizeRoles, authorizeOwnOrRoles } = require('../middleware/authMiddleware');
 const { CAN_EDIT_ATTENDANCE, CAN_VIEW_ATTENDANCE } = require("../../config/roles");
 
 // POST /attendance/process - process normal attendance for non-roster employees
@@ -29,9 +29,9 @@ router.get('/', verifyToken, authorizeRoles(...CAN_VIEW_ATTENDANCE), attendanceC
 
 // GET /attendance/employee/:employeeId - Retrieve attendance records for one employee
 // Supports optional month, year, status, startDate, endDate, page, and limit filters
-// VIEW ATTENDANCE -> admin, admin_manager
+// Own record: any authenticated user. Others: VIEW ATTENDANCE -> admin, admin_manager
 // -----------------------------------------------------------------------
-router.get('/employee/:employeeId', verifyToken, authorizeRoles(...CAN_VIEW_ATTENDANCE), attendanceController.getEmployeeAttendance);
+router.get('/employee/:employeeId', verifyToken, authorizeOwnOrRoles(...CAN_VIEW_ATTENDANCE), attendanceController.getEmployeeAttendance);
 
 router.get('/view', verifyToken, authorizeRoles(...CAN_VIEW_ATTENDANCE), attendanceController.getAllAttendance);
 

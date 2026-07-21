@@ -7,6 +7,7 @@ import {
   FormControlLabel, Checkbox, FormControl, InputLabel, Select, MenuItem,
   Autocomplete, Alert,
 } from "@mui/material";
+import { useAuth } from "@/lib/auth";
 import {
   EMPLOYEE_ROLES,
   ROLE_LABELS,
@@ -17,7 +18,7 @@ import {
   type EmployeeRole,
   type ReportingEmployee,
 } from "@/lib/api";
-import { useAuth } from "@/lib/auth";
+import { canManageEmployees } from "@/lib/roles";
 
 const EMPTY: EmployeeFormData = {
   firstName: "",
@@ -78,7 +79,7 @@ type Props = {
 export default function EmployeeForm({ open, onClose, onSubmit, submitting, employee }: Props) {
   const { user } = useAuth();
   const isEdit = !!employee;
-  const isSuperAdmin = user?.role === "super-admin";
+  const isSuperAdmin = canManageEmployees(user?.role);
   const [form, setForm] = useState<EmployeeFormData>(EMPTY);
   const [errors, setErrors] = useState<Partial<Record<keyof EmployeeFormData, string>>>({});
   const [managers, setManagers] = useState<ReportingEmployee[]>([]);

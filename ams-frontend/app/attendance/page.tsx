@@ -13,12 +13,16 @@ import {
   employeeApi,
   buildAttendanceUpdatePayload,
   getErrorMessage,
+  isForbiddenError,
   getTodayDateString,
   type AttendanceRecord,
   type AllAttendanceResponse,
   type Employee,
 } from "@/lib/api";
 import AttendanceForm, { type AttendanceFormData } from "@/components/AttendanceForm";
+import { useAuth } from "@/lib/auth";
+import { canEditAttendance } from "@/lib/roles";
+import { useRouter } from "next/navigation";
 
 const DEFAULT_PAGE_SIZE = 20;
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
@@ -31,6 +35,10 @@ function defaultApplied(): AppliedFilters {
 }
 
 export default function AllAttendancePage() {
+  const router = useRouter();
+  const { user } = useAuth();
+  const editAttendance = canEditAttendance(user?.role);
+
   const [appliedFilters, setAppliedFilters] = useState<AppliedFilters>(defaultApplied());
   const [filterError, setFilterError] = useState("");
 
@@ -38,6 +46,7 @@ export default function AllAttendancePage() {
   const [employeesList, setEmployeesList] = useState<Employee[]>([]);
   const [employeesMap, setEmployeesMap] = useState<Record<string, Employee>>({});
   const [loading, setLoading] = useState(true);
+  const [accessDenied, setAccessDenied] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [formOpen, setFormOpen] = useState(false);
@@ -70,11 +79,16 @@ export default function AllAttendancePage() {
       setResponse(result);
     } catch (err) {
       setResponse(null);
+      if (isForbiddenError(err)) {
+        setAccessDenied(true);
+        router.replace("/access-denied");
+        return;
+      }
       setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, [appliedFilters]);
+  }, [appliedFilters, router]);
 
   useEffect(() => { loadAttendance(); }, [loadAttendance]);
 
@@ -190,6 +204,14 @@ export default function AllAttendancePage() {
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
+  if (accessDenied) {
+    return (
+      <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
   const records    = response?.data ?? [];
   const meta       = response?.meta;
   const page       = (appliedFilters.page ?? 1) - 1;
@@ -219,23 +241,27 @@ export default function AllAttendancePage() {
           </Box>
 
           <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.5 }}>
-            <Button
-              variant="outlined"
-              startIcon={processingAttendance ? <CircularProgress size={18} color="inherit" /> : <EventAvailableIcon />}
-              onClick={handleProcessAttendance}
-              disabled={processingAttendance}
-              sx={{ whiteSpace: "nowrap", borderColor: "#16a34a", color: "#16a34a" }}
-            >
-              Process Attendance
-            </Button>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={openCreateForm}
-              sx={{ backgroundColor: "#16a34a", "&:hover": { backgroundColor: "#15803d" } }}
-            >
-              Add Attendance
-            </Button>
+            {editAttendance && (
+              <>
+                <Button
+                  variant="outlined"
+                  startIcon={processingAttendance ? <CircularProgress size={18} color="inherit" /> : <EventAvailableIcon />}
+                  onClick={handleProcessAttendance}
+                  disabled={processingAttendance}
+                  sx={{ whiteSpace: "nowrap", borderColor: "#16a34a", color: "#16a34a" }}
+                >
+                  Process Attendance
+                </Button>
+                <Button
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  onClick={openCreateForm}
+                  sx={{ backgroundColor: "#16a34a", "&:hover": { backgroundColor: "#15803d" } }}
+                >
+                  Add Attendance
+                </Button>
+              </>
+            )}
           </Box>
         </Box>
 
@@ -260,8 +286,8 @@ export default function AllAttendancePage() {
         <>
           <AttendanceTable
             records={records}
-            onEdit={openEditForm}
-            onDelete={handleDeleteAttendance}
+            onEdit={editAttendance ? openEditForm : undefined}
+            onDelete={editAttendance ? handleDeleteAttendance : undefined}
             deletingAttendanceId={deletingAttendanceId}
             employeeMap={employeesMap}
           />
@@ -284,15 +310,17 @@ export default function AllAttendancePage() {
         </>
       )}
 
-      <AttendanceForm
-        open={formOpen}
-        onClose={closeForm}
-        onSubmit={editingRecord ? handleUpdateAttendance : handleAddAttendance}
-        submitting={submitting}
-        defaultDate={getTodayDateString()}
-        record={editingRecord}
-        employeesList={employeesList}
-      />
+      {editAttendance && (
+        <AttendanceForm
+          open={formOpen}
+          onClose={closeForm}
+          onSubmit={editingRecord ? handleUpdateAttendance : handleAddAttendance}
+          submitting={submitting}
+          defaultDate={getTodayDateString()}
+          record={editingRecord}
+          employeesList={employeesList}
+        />
+      )}
     </Box>
   );
 }

@@ -21,6 +21,8 @@ type Props = {
   onEdit?: (employee: Employee) => void;
   onDelete?: (employee: Employee) => Promise<void>;
   deletingEmployeeId?: string | null;
+  showAttendance?: boolean;
+  showMockPunch?: boolean;
 };
 
 type SortField = "name" | "email" | "createdAt";
@@ -101,7 +103,14 @@ const sortLabelSx = {
   "&.Mui-active .MuiTableSortLabel-icon": { color: "#fff !important" },
 };
 
-export default function EmployeeTable({ employees, onEdit, onDelete, deletingEmployeeId }: Props) {
+export default function EmployeeTable({
+  employees,
+  onEdit,
+  onDelete,
+  deletingEmployeeId,
+  showAttendance = false,
+  showMockPunch = false,
+}: Props) {
   const router = useRouter();
   const [confirmTarget, setConfirmTarget] = useState<Employee | null>(null);
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
@@ -236,35 +245,39 @@ export default function EmployeeTable({ employees, onEdit, onDelete, deletingEmp
                       </IconButton>
                     </Tooltip>
                   )}
-                  <Tooltip title="View attendance">
-                    <IconButton
-                      size="small"
-                      onClick={() => {
-                        sessionStorage.setItem("ams-from-employees", "1");
-                        router.push(
-                          `/employees/attendance/${encodeURIComponent(emp.employeeId)}`,
-                        );
-                      }}
-                      aria-label={`View attendance for ${emp.firstName} ${emp.lastName}`}
-                      sx={{ color: "#16a34a", ml: 0.5 }}
-                    >
-                      <EventNoteIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="Mock punch">
-                    <IconButton
-                      size="small"
-                      onClick={() =>
-                        router.push(
-                          `/mock/punch/system?employeeId=${encodeURIComponent(emp.employeeId)}`,
-                        )
-                      }
-                      aria-label={`Mock punch for ${emp.firstName} ${emp.lastName}`}
-                      sx={{ color: "#2563eb", ml: 0.5 }}
-                    >
-                      <FingerprintIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
+                  {showAttendance && (
+                    <Tooltip title="View attendance">
+                      <IconButton
+                        size="small"
+                        onClick={() => {
+                          sessionStorage.setItem("ams-from-employees", "1");
+                          router.push(
+                            `/employees/attendance/${encodeURIComponent(emp.employeeId)}`,
+                          );
+                        }}
+                        aria-label={`View attendance for ${emp.firstName} ${emp.lastName}`}
+                        sx={{ color: "#16a34a", ml: 0.5 }}
+                      >
+                        <EventNoteIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                  {showMockPunch && (
+                    <Tooltip title="Mock punch">
+                      <IconButton
+                        size="small"
+                        onClick={() =>
+                          router.push(
+                            `/mock/punch/system?employeeId=${encodeURIComponent(emp.employeeId)}`,
+                          )
+                        }
+                        aria-label={`Mock punch for ${emp.firstName} ${emp.lastName}`}
+                        sx={{ color: "#2563eb", ml: 0.5 }}
+                      >
+                        <FingerprintIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  )}
                 </TableCell>
               </TableRow>
             ))

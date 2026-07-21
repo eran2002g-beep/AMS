@@ -9,6 +9,8 @@ import Divider from "@mui/material/Divider";
 import LogoutIcon from "@mui/icons-material/Logout";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth";
+import { getNavItems } from "@/lib/roles";
+import { ROLE_LABELS } from "@/lib/api";
 
 export default function Navbar() {
   const router = useRouter();
@@ -20,11 +22,7 @@ export default function Navbar() {
     return null;
   }
 
-  const navItems = [
-    { label: "Employees", path: "/employees" },
-    { label: "Attendance", path: "/attendance" },
-    { label: "Rosters", path: "/rosters" },
-  ];
+  const navItems = getNavItems(user?.role);
 
   return (
     <AppBar position="static" sx={{ backgroundColor: "#1e293b" }}>
@@ -54,7 +52,9 @@ export default function Navbar() {
 
         <Typography variant="body2" sx={{ color: "#cbd5e1", mr: 2 }}>
           {user?.firstName} {user?.lastName}
-          <Box component="span" sx={{ color: "#64748b" }}> · {user?.role?.replace(/-/g, " ")}</Box>
+          <Box component="span" sx={{ color: "#64748b" }}>
+            {" "}· {user?.role ? ROLE_LABELS[user.role] ?? user.role : ""}
+          </Box>
         </Typography>
 
         <Button

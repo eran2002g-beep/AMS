@@ -18,6 +18,7 @@ import VisibilityOff from "@mui/icons-material/VisibilityOff";
 import LockOutlined from "@mui/icons-material/LockOutlined";
 import { useAuth } from "@/lib/auth";
 import { getErrorMessage } from "@/lib/api";
+import { canAccessPath, getHomePath } from "@/lib/roles";
 
 type FormErrors = { email?: string; password?: string };
 
@@ -52,12 +53,10 @@ export default function LoginPage() {
     try {
       const user = await login(email.trim(), password);
 
-      // AC3: redirect to the correct destination based on role. If AuthGuard
-      // sent the user here with a "next" target, honor that first.
+      // AC3: redirect by role. Honor a "next" target only if this role may open it.
       const next = searchParams.get("next");
-      const adminRoles = new Set(["super-admin", "admin", "admin-manager", "manager"]);
       const destination =
-        next || (adminRoles.has(user.role) ? "/employees" : `/employees/attendance/${user.employeeId}`);
+        next && canAccessPath(next, user) ? next : getHomePath(user);
       router.replace(destination);
     } catch (err) {
       // AC2: backend returns a generic "Invalid email or password" for both a

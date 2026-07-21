@@ -7,16 +7,19 @@ import { usePathname, useRouter } from "next/navigation";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
 import { useAuth } from "@/lib/auth";
+import { canAccessPath, getHomePath } from "@/lib/roles";
 
 // Routes reachable without a session. Extend this list if more public
 // pages (e.g. "/forgot-password") are added later.
 const PUBLIC_PATHS = ["/login"];
 
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const isPublicPath = PUBLIC_PATHS.includes(pathname);
+  const homePath = user ? getHomePath(user) : "/employees";
+  const allowed = !user || isPublicPath || canAccessPath(pathname, user);
 
   useEffect(() => {
     if (isLoading) return; // wait for the localStorage session check to finish
@@ -27,11 +30,18 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (isAuthenticated && isPublicPath) {
-      // Already logged in — no reason to show the login form again.
-      router.replace("/employees");
+    if (isAuthenticated && user && isPublicPath) {
+      // Already logged in — send them to their role home, not a fixed page.
+      router.replace(homePath);
+      return;
     }
-  }, [isAuthenticated, isLoading, isPublicPath, pathname, router]);
+
+    if (isAuthenticated && user && !allowed) {
+      // Role cannot open this route — show a dedicated error page, not the
+      // protected UI with an inline "Access denied" alert.
+      router.replace("/access-denied");
+    }
+  }, [isAuthenticated, isLoading, isPublicPath, pathname, router, user, homePath, allowed]);
 
   if (isLoading) {
     return (
@@ -43,7 +53,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
 
   // Redirect is in flight (see effect above) — render nothing so protected
   // content never flashes on screen before the redirect lands.
-  if ((!isAuthenticated && !isPublicPath) || (isAuthenticated && isPublicPath)) {
+  if ((!isAuthenticated && !isPublicPath) || (isAuthenticated && isPublicPath) || !allowed) {
     return null;
   }
 

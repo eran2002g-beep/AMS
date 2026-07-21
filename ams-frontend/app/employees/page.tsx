@@ -18,15 +18,29 @@ import {
   employeeApi,
   buildEmployeeUpdatePayload,
   getErrorMessage,
+  isForbiddenError,
   type Employee,
   type EmployeeFormData,
   type EmployeeListMeta,
 } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import {
+  canEditAttendance,
+  canManageEmployees,
+  canViewAttendance,
+} from "@/lib/roles";
+import { useRouter } from "next/navigation";
 
 const DEFAULT_PAGE_SIZE = 20;
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
 export default function EmployeesPage() {
+  const router = useRouter();
+  const { user } = useAuth();
+  const manageEmployees = canManageEmployees(user?.role);
+  const editAttendance = canEditAttendance(user?.role);
+  const viewAttendance = canViewAttendance(user?.role);
+
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [meta, setMeta] = useState<EmployeeListMeta>({ total: 0, page: 1, limit: DEFAULT_PAGE_SIZE });
   const [departments, setDepartments] = useState<string[]>([]);
@@ -37,6 +51,7 @@ export default function EmployeesPage() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(DEFAULT_PAGE_SIZE);
   const [loading, setLoading] = useState(true);
+  const [accessDenied, setAccessDenied] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [deletingEmployeeId, setDeletingEmployeeId] = useState<string | null>(null);
   const [processingAttendance, setProcessingAttendance] = useState(false);
@@ -66,11 +81,16 @@ export default function EmployeesPage() {
       setEmployees(result.employees);
       setMeta(result.meta);
     } catch (err) {
+      if (isForbiddenError(err)) {
+        setAccessDenied(true);
+        router.replace("/access-denied");
+        return;
+      }
       setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch, filters.department, filters.role, page, rowsPerPage]);
+  }, [debouncedSearch, filters.department, filters.role, page, rowsPerPage, router]);
 
   useEffect(() => {
     loadEmployees();
@@ -82,6 +102,14 @@ export default function EmployeesPage() {
       .then((result) => setDepartments(getDepartmentsFromEmployees(result.employees)))
       .catch(() => {});
   }, []);
+
+  if (accessDenied) {
+    return (
+      <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   const handleAdd = async (data: EmployeeFormData) => {
     setSubmitting(true);
@@ -200,23 +228,27 @@ export default function EmployeesPage() {
             Employee Management
           </Typography>
           <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.5, alignSelf: { xs: "flex-start", md: "center" } }}>
-            <Button
-              variant="outlined"
-              startIcon={processingAttendance ? <CircularProgress size={18} color="inherit" /> : <EventAvailableIcon />}
-              onClick={handleProcessAttendance}
-              disabled={processingAttendance}
-              sx={{ whiteSpace: "nowrap", borderColor: "#16a34a", color: "#16a34a" }}
-            >
-              Process Attendance
-            </Button>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={openCreateForm}
-              sx={{ backgroundColor: "#2563eb", whiteSpace: "nowrap" }}
-            >
-              Add Employee
-            </Button>
+            {editAttendance && (
+              <Button
+                variant="outlined"
+                startIcon={processingAttendance ? <CircularProgress size={18} color="inherit" /> : <EventAvailableIcon />}
+                onClick={handleProcessAttendance}
+                disabled={processingAttendance}
+                sx={{ whiteSpace: "nowrap", borderColor: "#16a34a", color: "#16a34a" }}
+              >
+                Process Attendance
+              </Button>
+            )}
+            {manageEmployees && (
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={openCreateForm}
+                sx={{ backgroundColor: "#2563eb", whiteSpace: "nowrap" }}
+              >
+                Add Employee
+              </Button>
+            )}
           </Box>
         </Box>
 
@@ -239,9 +271,11 @@ export default function EmployeesPage() {
         <>
           <EmployeeTable
             employees={employees}
-            onEdit={openEditForm}
-            onDelete={handleDelete}
+            onEdit={manageEmployees ? openEditForm : undefined}
+            onDelete={manageEmployees ? handleDelete : undefined}
             deletingEmployeeId={deletingEmployeeId}
+            showAttendance={viewAttendance}
+            showMockPunch={editAttendance}
           />
           <Paper sx={{ borderRadius: 2, mt: 0 }}>
             <TablePagination
@@ -260,13 +294,15 @@ export default function EmployeesPage() {
         </>
       )}
 
-      <EmployeeForm
-        open={formOpen}
-        onClose={closeForm}
-        onSubmit={editingEmployee ? handleUpdate : handleAdd}
-        submitting={submitting}
-        employee={editingEmployee}
-      />
+      {manageEmployees && (
+        <EmployeeForm
+          open={formOpen}
+          onClose={closeForm}
+          onSubmit={editingEmployee ? handleUpdate : handleAdd}
+          submitting={submitting}
+          employee={editingEmployee}
+        />
+      )}
     </Box>
   );
 }
