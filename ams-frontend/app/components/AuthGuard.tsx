@@ -19,7 +19,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const isPublicPath = PUBLIC_PATHS.includes(pathname);
-  const homePath = user ? getHomePath(user) : "/employees";
+  const homePath = user ? getHomePath(user) : "/dashboard";
   const allowed = !user || isPublicPath || canAccessPath(pathname, user);
 
   useEffect(() => {

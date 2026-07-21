@@ -18,6 +18,12 @@ const CAN_VIEW_EMPLOYEES: EmployeeRole[] = [
 ];
 const CAN_EDIT_ATTENDANCE: EmployeeRole[] = [ROLES.ADMIN, ROLES.ADMIN_MANAGER];
 const CAN_VIEW_ATTENDANCE: EmployeeRole[] = [ROLES.ADMIN, ROLES.ADMIN_MANAGER];
+/** Admin-tier roles that may open the Admin Panel hub. */
+const CAN_ACCESS_ADMIN_PANEL: EmployeeRole[] = [
+  ROLES.SUPER_ADMIN,
+  ROLES.ADMIN,
+  ROLES.ADMIN_MANAGER,
+];
 
 function hasRole(role: EmployeeRole | undefined, allowed: EmployeeRole[]) {
   return !!role && allowed.includes(role);
@@ -43,12 +49,13 @@ export function canViewAttendance(role?: EmployeeRole) {
   return hasRole(role, CAN_VIEW_ATTENDANCE);
 }
 
-/** Post-login / AuthGuard fallback destination for a role. */
-export function getHomePath(user: Pick<AuthUser, "role" | "employeeId">): string {
-  if (canViewEmployees(user.role)) return "/employees";
-  if (canViewAttendance(user.role)) return "/attendance";
-  if (canManageRoster(user.role)) return "/rosters";
-  return `/employees/attendance/${encodeURIComponent(user.employeeId)}`;
+export function canAccessAdminPanel(role?: EmployeeRole) {
+  return hasRole(role, CAN_ACCESS_ADMIN_PANEL);
+}
+
+/** Post-login / AuthGuard fallback — everyone lands on the shared dashboard. */
+export function getHomePath(_user: Pick<AuthUser, "role" | "employeeId">): string {
+  return "/dashboard";
 }
 
 /**
@@ -61,6 +68,14 @@ export function canAccessPath(
 ): boolean {
   if (pathname === "/login") return true;
   if (pathname === "/access-denied") return true;
+
+  if (pathname === "/dashboard" || pathname.startsWith("/dashboard?")) {
+    return true;
+  }
+
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+    return canAccessAdminPanel(user.role);
+  }
 
   if (pathname === "/employees" || pathname.startsWith("/employees?")) {
     return canViewEmployees(user.role);
@@ -97,10 +112,30 @@ export function canAccessPath(
 
 export type NavItem = { label: string; path: string };
 
-export function getNavItems(role?: EmployeeRole): NavItem[] {
-  const items: NavItem[] = [];
+/** Sidebar / menu items for the logged-in user. */
+export function getNavItems(user?: Pick<AuthUser, "role" | "employeeId"> | null): NavItem[] {
+  const items: NavItem[] = [{ label: "Dashboard", path: "/dashboard" }];
+  const role = user?.role;
+
   if (canViewEmployees(role)) items.push({ label: "Employees", path: "/employees" });
   if (canViewAttendance(role)) items.push({ label: "Attendance", path: "/attendance" });
   if (canManageRoster(role)) items.push({ label: "Rosters", path: "/rosters" });
+
+  if (canAccessAdminPanel(role)) {
+    items.push({ label: "Admin Panel", path: "/admin" });
+  }
+
+  // Employees / managers: link to their own attendance from the menu.
+  if (
+    user?.employeeId &&
+    !canViewAttendance(role) &&
+    !canViewEmployees(role)
+  ) {
+    items.push({
+      label: "My Attendance",
+      path: `/employees/attendance/${encodeURIComponent(user.employeeId)}`,
+    });
+  }
+
   return items;
 }
