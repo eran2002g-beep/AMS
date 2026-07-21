@@ -164,14 +164,6 @@ export default function EmployeeAttendancePage() {
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
-  if (accessDenied) {
-    return (
-      <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
-
   const employee   = response?.employee;
   const records    = response?.data ?? [];
   const meta       = response?.meta;
