@@ -7,7 +7,13 @@ const Attendance = require('../models/Attendance');
 const { validateEmployeePayload } = require('./employeeValidation');
 const { hashPassword } = require('./passwordService');
 const { Op } = require('sequelize');
-const { ROLES } = require('../../config/roles');
+const { 
+    ROLES,
+    CAN_MANAGE_EMPLOYEES,
+    CAN_VIEW_EMPLOYEES,
+    CAN_EDIT_ATTENDANCE,
+    CAN_MANAGE_LEAVE,
+} = require('../../config/roles');
 
 const REPORTING_RELATIONSHIPS = [
     { model: Employee, as: 'hodEmployee' },
@@ -387,6 +393,168 @@ const calculateAttendanceMetrics = async (employeeId, startDate, endDate, shiftS
     };
 };
 
+// -----------------------------------------------------------------------
+// ROLE MANAGEMENT - Methods to manage roles and permissions
+// -----------------------------------------------------------------------
+
+/**
+ * validateUserCanManageEmployees - Verify if a user has permission to manage employees
+ * @param {string} userRole - The role of the user attempting to manage employees
+ * @returns {boolean} - True if user can manage employees, false otherwise
+ */
+const validateUserCanManageEmployees = (userRole) => {
+    if (!userRole || !CAN_MANAGE_EMPLOYEES.includes(userRole)) {
+        throw new Error(`User role "${userRole}" does not have permission to manage employees. Only ${CAN_MANAGE_EMPLOYEES.join(', ')} roles can manage employees.`);
+    }
+    return true;
+};
+
+/**
+ * getRolePermissions - Get permission details for a specific role
+ * @param {string} role - The role to get permissions for
+ * @returns {object} - Object containing permission mappings for the role
+ */
+const getRolePermissions = (role) => {
+    if (!role) {
+        throw new Error('Role is required to retrieve permissions.');
+    }
+
+    const permissionMap = {
+        [ROLES.EMPLOYEE]: {
+            canManageEmployees: CAN_MANAGE_EMPLOYEES.includes(ROLES.EMPLOYEE),
+            canViewEmployees: CAN_VIEW_EMPLOYEES.includes(ROLES.EMPLOYEE),
+            canEditAttendance: CAN_EDIT_ATTENDANCE.includes(ROLES.EMPLOYEE),
+            canManageLeave: CAN_MANAGE_LEAVE.includes(ROLES.EMPLOYEE),
+            description: 'Base role - login only, views own attendance'
+        },
+        [ROLES.MANAGER]: {
+            canManageEmployees: CAN_MANAGE_EMPLOYEES.includes(ROLES.MANAGER),
+            canViewEmployees: CAN_VIEW_EMPLOYEES.includes(ROLES.MANAGER),
+            canEditAttendance: CAN_EDIT_ATTENDANCE.includes(ROLES.MANAGER),
+            canManageLeave: CAN_MANAGE_LEAVE.includes(ROLES.MANAGER),
+            description: 'Manager - accept leave requests and resolve unauthorized leave'
+        },
+        [ROLES.ADMIN_MANAGER]: {
+            canManageEmployees: CAN_MANAGE_EMPLOYEES.includes(ROLES.ADMIN_MANAGER),
+            canViewEmployees: CAN_VIEW_EMPLOYEES.includes(ROLES.ADMIN_MANAGER),
+            canEditAttendance: CAN_EDIT_ATTENDANCE.includes(ROLES.ADMIN_MANAGER),
+            canManageLeave: CAN_MANAGE_LEAVE.includes(ROLES.ADMIN_MANAGER),
+            description: 'Admin-Manager - edit/view attendance AND accept/resolve leave'
+        },
+        [ROLES.ADMIN]: {
+            canManageEmployees: CAN_MANAGE_EMPLOYEES.includes(ROLES.ADMIN),
+            canViewEmployees: CAN_VIEW_EMPLOYEES.includes(ROLES.ADMIN),
+            canEditAttendance: CAN_EDIT_ATTENDANCE.includes(ROLES.ADMIN),
+            canManageLeave: CAN_MANAGE_LEAVE.includes(ROLES.ADMIN),
+            description: 'Admin - edit/view attendance'
+        },
+        [ROLES.SUPER_ADMIN]: {
+            canManageEmployees: CAN_MANAGE_EMPLOYEES.includes(ROLES.SUPER_ADMIN),
+            canViewEmployees: CAN_VIEW_EMPLOYEES.includes(ROLES.SUPER_ADMIN),
+            canEditAttendance: CAN_EDIT_ATTENDANCE.includes(ROLES.SUPER_ADMIN),
+            canManageLeave: CAN_MANAGE_LEAVE.includes(ROLES.SUPER_ADMIN),
+            description: 'Super Admin - full employee CRUD + roster management'
+        }
+    };
+
+    if (!permissionMap[role]) {
+        throw new Error(`Invalid role: ${role}`);
+    }
+
+    return permissionMap[role];
+};
+
+/**
+ * getEmployeesByRole - Retrieve all active employees with a specific role
+ * @param {string} role - The role to filter by
+ * @returns {Promise<Array>} - Array of employees with the specified role
+ */
+const getEmployeesByRole = async (role) => {
+    if (!role) {
+        throw new Error('Role is required to filter employees.');
+    }
+
+    try {
+        getRolePermissions(role); // Validate role exists
+    } catch (error) {
+        throw error;
+    }
+
+    return Employee.findAll({
+        where: {
+            isActive: true,
+            role
+        },
+        include: REPORTING_RELATIONSHIPS,
+        order: [['lastName', 'ASC'], ['firstName', 'ASC']],
+    });
+};
+
+/**
+ * validateRoleAssignment - Verify if a requester can assign a role to an employee
+ * Only super-admin can assign roles (especially admin roles)
+ * @param {string} requesterRole - The role of the person making the assignment
+ * @param {string} targetRole - The role being assigned
+ * @returns {boolean} - True if assignment is allowed
+ */
+const validateRoleAssignment = (requesterRole, targetRole) => {
+    // Validate inputs
+    if (!requesterRole || !targetRole) {
+        throw new Error('Both requesterRole and targetRole are required.');
+    }
+
+    try {
+        getRolePermissions(targetRole); // Validate target role exists
+    } catch (error) {
+        throw error;
+    }
+
+    // Only super-admin can assign roles
+    if (requesterRole !== ROLES.SUPER_ADMIN) {
+        throw new Error(`Only ${ROLES.SUPER_ADMIN} can assign roles. User role "${requesterRole}" is not authorized.`);
+    }
+
+    return true;
+};
+
+/**
+ * getEmployeesByPermissionLevel - Get employees that have a specific permission
+ * @param {string} permissionKey - The permission key (e.g., 'canManageEmployees')
+ * @returns {Promise<Array>} - Array of employees with the specified permission
+ */
+const getEmployeesByPermissionLevel = async (permissionKey) => {
+    if (!permissionKey) {
+        throw new Error('Permission key is required.');
+    }
+
+    const allowedPermissions = ['canManageEmployees', 'canViewEmployees', 'canEditAttendance', 'canManageLeave'];
+    if (!allowedPermissions.includes(permissionKey)) {
+        throw new Error(`Invalid permission key: ${permissionKey}. Allowed: ${allowedPermissions.join(', ')}`);
+    }
+
+    // Get roles that have this permission
+    const rolesWithPermission = Object.entries(ROLES).reduce((acc, [key, role]) => {
+        const permissions = getRolePermissions(role);
+        if (permissions[permissionKey] === true) {
+            acc.push(role);
+        }
+        return acc;
+    }, []);
+
+    if (rolesWithPermission.length === 0) {
+        return [];
+    }
+
+    return Employee.findAll({
+        where: {
+            isActive: true,
+            role: { [Op.in]: rolesWithPermission }
+        },
+        include: REPORTING_RELATIONSHIPS,
+        order: [['lastName', 'ASC'], ['firstName', 'ASC']],
+    });
+};
+
 // Export all service functions - add new ones here as we build more features
 module.exports = {
     createEmployee,
@@ -402,4 +570,9 @@ module.exports = {
     deleteEmployeeById,
     getEmployeeAttendance,
     calculateAttendanceMetrics,
+    validateUserCanManageEmployees,
+    getRolePermissions,
+    getEmployeesByRole,
+    validateRoleAssignment,
+    getEmployeesByPermissionLevel,
 };
