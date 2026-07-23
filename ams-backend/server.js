@@ -47,7 +47,7 @@ app.use(cors({
 app.use(requestLogger); //logs method, route, status code, response time
 
 // ----------------------- Routes -----------------------
-app.use('/auth',     authRoutes);      // POST /auth/login, POST /auth/logout
+app.use('/auth',     authRoutes);      // POST /auth/login, POST /auth/logout, GET /auth/me
 
 // Mount employee routes under /employee
 app.use('/employee', employeeRoutes);

@@ -2,6 +2,7 @@
 // calls authService for business logic, never touches the database directly
 
 const authService = require('../services/authService');
+const employeeService = require('../services/employeeService');
 
 const REFRESH_COOKIE_NAME = process.env.REFRESH_COOKIE_NAME || 'ams_refresh';
 const refreshCookieOptions = {
@@ -83,8 +84,28 @@ const logout = async (req, res) => {
     }
 };
 
+// --- ME CONTROLLER --------------------------------------------
+// getMe - returns the full profile of the authenticated employee
+// requires a valid access token (verifyToken sets req.user)
+const getMe = async (req, res) => {
+    try {
+        const employee = await employeeService.getEmployeeById(req.user.employeeId);
+        return res.status(200).json({
+            success: true,
+            data: employee,
+        });
+    } catch (err) {
+        const statusCode = err.message.includes('not found') ? 404 : 500;
+        return res.status(statusCode).json({
+            success: false,
+            error: err.message,
+        });
+    }
+};
+
 module.exports = {
     login,
     refresh,
     logout,
+    getMe,
 };
