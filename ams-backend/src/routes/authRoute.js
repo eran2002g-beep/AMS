@@ -4,6 +4,7 @@
 const express        = require('express');
 const router         = express.Router();
 const authController = require('../controllers/authController');
+const { verifyToken } = require('../middleware/authMiddleware');
 
 // POST /auth/login - public route, no token needed
 // body: { email, password }
@@ -12,5 +13,8 @@ router.post('/login', authController.login);
 // Refresh and logout authenticate with the HttpOnly refresh-token cookie.
 router.post('/refresh', authController.refresh);
 router.post('/logout', authController.logout);
+
+// GET /auth/profile - return current user's profile (requires valid access token)
+router.get('/profile', verifyToken, authController.profile);
 
 module.exports = router;

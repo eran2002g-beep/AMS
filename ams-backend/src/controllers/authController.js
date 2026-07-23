@@ -2,6 +2,7 @@
 // calls authService for business logic, never touches the database directly
 
 const authService = require('../services/authService');
+const employeeService = require('../services/employeeService');
 
 const REFRESH_COOKIE_NAME = process.env.REFRESH_COOKIE_NAME || 'ams_refresh';
 const refreshCookieOptions = {
@@ -87,4 +88,18 @@ module.exports = {
     login,
     refresh,
     logout,
+    profile,
+};
+
+// --- PROFILE CONTROLLER --------------------------------------
+// profile - returns the signed-in user's full employee record
+const profile = async (req, res) => {
+    try {
+        // req.user is set by verifyToken middleware and contains employeeId
+        const employee = await employeeService.getEmployeeById(req.user.employeeId);
+        return res.status(200).json({ success: true, data: employee });
+    } catch (err) {
+        const status = err.message && err.message.includes('not found') ? 404 : 500;
+        return res.status(status).json({ success: false, error: err.message });
+    }
 };
