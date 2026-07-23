@@ -69,7 +69,16 @@ const login = async (email, password) => {
         throw new Error('Email and password are required');
     }
 
-    const employee = await Employee.scope('withPassword').findOne({ where: { email } });
+    const { Op } = require('sequelize');
+
+const employee = await Employee.scope('withPassword').findOne({
+    where: {
+        [Op.or]: [
+            { email },
+            { employeeId: email }
+        ]
+    }
+});
     if (!employee) {
         throw new Error('Invalid email or password');
     }
