@@ -97,6 +97,10 @@ const authorizeRoles = (...allowedRoles) => {
     };
 };
 
+// New alias: `authorize` — keeps the single-role contract (`req.user.role`) but
+// provides a clearer name used by route imports (authorize(...roles)).
+const authorize = (...allowedRoles) => authorizeRoles(...allowedRoles);
+
 // authorizeOwnOrRoles - allow the named roles, or the signed-in user when the
 // :employeeId path param is their own employeeId (self-service attendance).
 const authorizeOwnOrRoles = (...allowedRoles) => {
@@ -138,6 +142,7 @@ const authorizeAdmin = (req, res, next) => {
 module.exports = {
     verifyToken,
     authorizeRoles,
+    authorize,
     authorizeOwnOrRoles,
     authorizeAdmin, // අලුතින් Export කලා
 };

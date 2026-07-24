@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 
 const employeeService = require('../services/employeeService');
-const { verifyToken, authorizeRoles } = require('../middleware/authMiddleware');
+const { verifyToken, authorize } = require('../middleware/authMiddleware');
 const {
     CAN_MANAGE_EMPLOYEES,
     CAN_VIEW_EMPLOYEES,
@@ -14,7 +14,7 @@ const {
 // GET /employee - Retrieve all employee records API
 // EMPLOYEE READ -> super-admin, admin, and admin-manager
 // -----------------------------------------------------------------------
-router.get('/', verifyToken, authorizeRoles(...CAN_VIEW_EMPLOYEES), async (req, res) => {
+router.get('/', verifyToken, authorize(...CAN_VIEW_EMPLOYEES), async (req, res) => {
     try {
         const { q, department, role, page, limit } = req.query;
 
@@ -40,7 +40,7 @@ router.get('/', verifyToken, authorizeRoles(...CAN_VIEW_EMPLOYEES), async (req, 
 // EMPLOYEE CRUD -> super-admin only
 // Must be registered before /:employeeId so "managers" is not treated as an id
 // -----------------------------------------------------------------------
-router.get('/managers', verifyToken, authorizeRoles(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
+router.get('/managers', verifyToken, authorize(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
     try {
         const managers = await employeeService.getManagers();
         return res.status(200).json({
@@ -60,7 +60,7 @@ router.get('/managers', verifyToken, authorizeRoles(...CAN_MANAGE_EMPLOYEES), as
 // PUT /employee/:employeeId/hierarchy - Update Role and Reporting Structure (NEW)
 // EMPLOYEE CRUD -> admin/super_admin only (via CAN_MANAGE_EMPLOYEES permissions)
 // -----------------------------------------------------------------------
-router.put('/:employeeId/hierarchy', verifyToken, authorizeRoles(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
+router.put('/:employeeId/hierarchy', verifyToken, authorize(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
     try {
         const { employeeId } = req.params;
         // hierarchyData: { role, hod, supervisor }
@@ -83,7 +83,7 @@ router.put('/:employeeId/hierarchy', verifyToken, authorizeRoles(...CAN_MANAGE_E
 // GET /employee/:managerId/subordinates - Get all direct reports for a manager (NEW)
 // EMPLOYEE HIERARCHY READ -> super-admin only
 // -----------------------------------------------------------------------
-router.get('/:managerId/subordinates', verifyToken, authorizeRoles(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
+router.get('/:managerId/subordinates', verifyToken, authorize(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
     try {
         const { managerId } = req.params;
         const subordinates = await employeeService.getDirectReports(managerId);
@@ -105,7 +105,7 @@ router.get('/:managerId/subordinates', verifyToken, authorizeRoles(...CAN_MANAGE
 // GET /employee/:employeeId - Retrieve one active employee
 // EMPLOYEE READ -> super-admin, admin, and admin-manager
 // -----------------------------------------------------------------------
-router.get('/:employeeId', verifyToken, authorizeRoles(...CAN_VIEW_EMPLOYEES), async (req, res) => {
+router.get('/:employeeId', verifyToken, authorize(...CAN_VIEW_EMPLOYEES), async (req, res) => {
     try {
         const employee = await employeeService.getEmployeeById(req.params.employeeId);
         return res.status(200).json({ success: true, data: employee });
@@ -118,7 +118,7 @@ router.get('/:employeeId', verifyToken, authorizeRoles(...CAN_VIEW_EMPLOYEES), a
 // POST /employee/create - Create a new employee record
 // EMPLOYEE CRUD -> super_admin only (via CAN_MANAGE_EMPLOYEES permissions)
 // -----------------------------------------------------------------------
-router.post('/create', verifyToken, authorizeRoles(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
+router.post('/create', verifyToken, authorize(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
     try {
         const employee = await employeeService.createEmployee(req.body);
         return res.status(201).json(employee);
@@ -131,7 +131,7 @@ router.post('/create', verifyToken, authorizeRoles(...CAN_MANAGE_EMPLOYEES), asy
 // DELETE /employee/:employeeId - delete an employee record (Soft Delete)
 // EMPLOYEE CRUD -> super_admin only (via CAN_MANAGE_EMPLOYEES permissions)
 // -----------------------------------------------------------------------
-router.delete('/:employeeId', verifyToken, authorizeRoles(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
+router.delete('/:employeeId', verifyToken, authorize(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
     try {
         // Extract employeeId from URL parameters
         const { employeeId } = req.params; 
@@ -156,7 +156,7 @@ router.delete('/:employeeId', verifyToken, authorizeRoles(...CAN_MANAGE_EMPLOYEE
 // PATCH /employee/:employeeId - Update an existing employee record
 // EMPLOYEE CRUD -> super_admin only 
 // -----------------------------------------------------------------------
-router.patch('/:employeeId', verifyToken, authorizeRoles(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
+router.patch('/:employeeId', verifyToken, authorize(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
     try {
         const { employeeId } = req.params;
         const updatedEmployee = await employeeService.updateEmployee(employeeId, req.body);
@@ -177,7 +177,7 @@ router.patch('/:employeeId', verifyToken, authorizeRoles(...CAN_MANAGE_EMPLOYEES
 // GET /employee/:employeeId/attendance-summary - Get calculated metrics
 // Follows the "view attendance" permission (admin, admin_manager) rather than
 // -----------------------------------------------------------------------
-router.get('/:employeeId/attendance-summary', verifyToken, authorizeRoles(...CAN_VIEW_ATTENDANCE), async (req, res) => {
+router.get('/:employeeId/attendance-summary', verifyToken, authorize(...CAN_VIEW_ATTENDANCE), async (req, res) => {
     try {
         const { employeeId } = req.params;
         const { startDate, endDate, shiftStartTime } = req.query;
