@@ -6,6 +6,7 @@ import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
 import Box from "@mui/material/Box";
+import Avatar from "@mui/material/Avatar";
 import Divider from "@mui/material/Divider";
 import IconButton from "@mui/material/IconButton";
 import Drawer from "@mui/material/Drawer";
@@ -66,12 +67,32 @@ export default function Navbar() {
             AMS
           </Typography>
 
-          <Typography variant="body2" sx={{ color: "#cbd5e1", mr: 2, display: { xs: "none", sm: "block" } }}>
-            {user?.firstName} {user?.lastName}
-            <Box component="span" sx={{ color: "#94a3b8" }}>
-              {" "}· {user?.role ? ROLE_LABELS[user.role] ?? user.role : ""}
-            </Box>
-          </Typography>
+          <Box
+            onClick={() => router.push("/profile")}
+            role="button"
+            aria-label="View my profile"
+            sx={{
+              display: { xs: "none", sm: "flex" },
+              alignItems: "center",
+              gap: 1,
+              mr: 2,
+              px: 1,
+              py: 0.5,
+              borderRadius: 2,
+              cursor: "pointer",
+              "&:hover": { backgroundColor: "rgba(255,255,255,0.08)" },
+            }}
+          >
+            <Avatar sx={{ width: 30, height: 30, fontSize: 14, backgroundColor: "#38bdf8", color: "#0f172a" }}>
+              {`${user?.firstName?.[0] ?? ""}${user?.lastName?.[0] ?? ""}`.toUpperCase() || "?"}
+            </Avatar>
+            <Typography variant="body2" sx={{ color: "#cbd5e1" }}>
+              {user?.firstName} {user?.lastName}
+              <Box component="span" sx={{ color: "#94a3b8" }}>
+                {" "}· {user?.role ? ROLE_LABELS[user.role] ?? user.role : ""}
+              </Box>
+            </Typography>
+          </Box>
 
           <Button
             onClick={logout}
@@ -133,9 +154,13 @@ export default function Navbar() {
               >
                 <ListItemText
                   primary={item.label}
-                  primaryTypographyProps={{
-                    fontWeight: active ? 700 : 500,
-                    fontSize: 15,
+                  slotProps={{
+                    primary: {
+                      sx: {
+                        fontWeight: active ? 700 : 500,
+                        fontSize: 15,
+                      },
+                    },
                   }}
                 />
               </ListItemButton>

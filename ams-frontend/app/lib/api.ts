@@ -362,6 +362,13 @@ export const authApi = {
     const response = await api.post<LogoutResponse>("/auth/logout");
     return response.data;
   },
+
+  // GET /auth/me — returns the authenticated employee's full profile
+  // (see authController.getMe). Used by the Profile page.
+  async me() {
+    const response = await api.get<{ success: boolean; data: Employee }>("/auth/me");
+    return response.data.data;
+  },
 };
 
 // ─────────────────────────────────── Employee API ───────────────────────────────────
