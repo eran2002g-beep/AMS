@@ -18,4 +18,7 @@ router.post('/logout', authController.logout);
 // requires a valid Bearer access token
 router.get('/me', verifyToken, authController.getMe);
 
+// POST /auth/change-password - replace temporary / current password
+router.post('/change-password', verifyToken, authController.changePassword);
+
 module.exports = router;

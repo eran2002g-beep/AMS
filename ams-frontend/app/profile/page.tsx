@@ -8,7 +8,6 @@ import Avatar from "@mui/material/Avatar";
 import Chip from "@mui/material/Chip";
 import Alert from "@mui/material/Alert";
 import CircularProgress from "@mui/material/CircularProgress";
-import Divider from "@mui/material/Divider";
 import { authApi, getErrorMessage, ROLE_LABELS, type Employee } from "@/lib/api";
 
 const ROLE_CHIP_SX: Record<string, { backgroundColor: string; color: string }> = {
@@ -211,13 +210,6 @@ export default function ProfilePage() {
           <InfoField label="Last Updated" value={formatDate(employee.updatedAt)} />
         </SectionCard>
       </Box>
-
-      <Divider sx={{ display: { xs: "block", md: "none" } }} />
-
-      <Typography variant="caption" sx={{ color: "#94a3b8" }}>
-        Need to update these details? Contact your administrator — profile information is managed by
-        HR/Admin.
-      </Typography>
     </Box>
   );
 }

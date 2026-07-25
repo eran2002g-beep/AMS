@@ -55,7 +55,8 @@ export default function AdminPanelPage() {
           Admin Panel
         </Typography>
         <Typography variant="body2" sx={{ color: "#64748b" }}>
-          Administrative tools available for your role.
+          Administrative tools for your role. These links are only available from this panel —
+          not from the main menu.
         </Typography>
       </Paper>
 

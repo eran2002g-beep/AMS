@@ -273,7 +273,7 @@ export default function EmployeeForm({ open, onClose, onSubmit, submitting, empl
           ))}
           <TextField
             fullWidth
-            label={isEdit ? "New Password (optional)" : "Password"}
+            label={isEdit ? "Reset temporary password (optional)" : "Temporary password"}
             name="password"
             type="password"
             value={form.password ?? ""}
@@ -281,7 +281,9 @@ export default function EmployeeForm({ open, onClose, onSubmit, submitting, empl
             error={!!errors.password}
             helperText={
               errors.password
-                || (isEdit ? "Leave blank to keep the current password" : "At least 8 characters")
+                || (isEdit
+                  ? "Leave blank to keep the current password. If set, the employee must change it on next login."
+                  : "At least 8 characters. The employee must change this on first login.")
             }
             size="small"
             margin="none"

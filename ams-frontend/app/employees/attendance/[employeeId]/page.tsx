@@ -40,6 +40,12 @@ export default function EmployeeAttendancePage() {
   const viewEmployees = canViewEmployees(user?.role);
   const employeeId = typeof params.employeeId === "string" ? params.employeeId : "";
 
+  // My Attendance (own record from the normal menu) is view-only.
+  // Add / Edit / Delete only when an admin opens another employee's attendance
+  // from the Admin Panel → Employees flow.
+  const isOwnAttendance = !!user?.employeeId && user.employeeId === employeeId;
+  const allowAdminEdit = editAttendance && !isOwnAttendance;
+
   const [appliedFilters, setAppliedFilters] = useState<AppliedFilters>(defaultApplied());
 
   const [showBackLink, setShowBackLink] = useState(false);
@@ -199,7 +205,7 @@ export default function EmployeeAttendancePage() {
         >
           <Box>
             <Typography variant="h5" sx={{ fontWeight: 700, color: "#1e293b", mb: 1 }}>
-              Employee Attendance
+              {isOwnAttendance ? "My Attendance" : "Employee Attendance"}
             </Typography>
 
             {employee ? (
@@ -227,7 +233,7 @@ export default function EmployeeAttendancePage() {
             )}
           </Box>
 
-          {editAttendance && (
+          {allowAdminEdit && (
             <Button
               variant="contained"
               startIcon={<AddIcon />}
@@ -258,8 +264,8 @@ export default function EmployeeAttendancePage() {
         <>
           <AttendanceTable
             records={records}
-            onEdit={editAttendance ? openEditForm : undefined}
-            onDelete={editAttendance ? handleDeleteAttendance : undefined}
+            onEdit={allowAdminEdit ? openEditForm : undefined}
+            onDelete={allowAdminEdit ? handleDeleteAttendance : undefined}
             deletingAttendanceId={deletingAttendanceId}
           />
           {meta && (
@@ -281,7 +287,7 @@ export default function EmployeeAttendancePage() {
         </>
       )}
 
-      {editAttendance && (
+      {allowAdminEdit && (
         <AttendanceForm
           open={formOpen}
           onClose={closeForm}

@@ -68,8 +68,16 @@ export function canAccessPath(
 ): boolean {
   if (pathname === "/login") return true;
   if (pathname === "/access-denied") return true;
+  if (pathname === "/change-password" || pathname.startsWith("/change-password?")) {
+    return true;
+  }
 
   if (pathname === "/dashboard" || pathname.startsWith("/dashboard?")) {
+    return true;
+  }
+
+  // Own profile — any authenticated user.
+  if (pathname === "/profile" || pathname.startsWith("/profile?")) {
     return true;
   }
 
@@ -106,35 +114,51 @@ export function canAccessPath(
     return canEditAttendance(user.role);
   }
 
-  // Unknown authenticated routes — allow and let the page/API decide.
-  return true;
+  // Unknown path — not a known app route (Next.js will render not-found).
+  return false;
+}
+
+/**
+ * True for real AMS pages (including those the user may not be allowed to open).
+ * Used so AuthGuard does not hijack missing URLs with a login/access dialog.
+ */
+export function isKnownAppPath(pathname: string): boolean {
+  if (pathname === "/login" || pathname === "/access-denied") return true;
+  if (pathname === "/change-password" || pathname.startsWith("/change-password/")) return true;
+  if (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) return true;
+  if (pathname === "/profile" || pathname.startsWith("/profile/")) return true;
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) return true;
+  if (pathname === "/employees" || pathname.startsWith("/employees/")) return true;
+  if (pathname === "/attendance" || pathname.startsWith("/attendance/")) return true;
+  if (pathname === "/rosters" || pathname.startsWith("/rosters/")) return true;
+  if (pathname.startsWith("/mock/punch")) return true;
+  return false;
 }
 
 export type NavItem = { label: string; path: string };
 
-/** Sidebar / menu items for the logged-in user. */
+/**
+ * Main hamburger menu — shared employee items only.
+ * Admin tools (Employees / Attendance / Rosters) live inside the Admin Panel hub,
+ * not in this global menu.
+ */
 export function getNavItems(user?: Pick<AuthUser, "role" | "employeeId"> | null): NavItem[] {
-  const items: NavItem[] = [{ label: "Dashboard", path: "/dashboard" }];
-  const role = user?.role;
+  const items: NavItem[] = [
+    { label: "Dashboard", path: "/dashboard" },
+    { label: "My Profile", path: "/profile" },
+  ];
 
-  if (canViewEmployees(role)) items.push({ label: "Employees", path: "/employees" });
-  if (canViewAttendance(role)) items.push({ label: "Attendance", path: "/attendance" });
-  if (canManageRoster(role)) items.push({ label: "Rosters", path: "/rosters" });
-
-  if (canAccessAdminPanel(role)) {
-    items.push({ label: "Admin Panel", path: "/admin" });
-  }
-
-  // Employees / managers: link to their own attendance from the menu.
-  if (
-    user?.employeeId &&
-    !canViewAttendance(role) &&
-    !canViewEmployees(role)
-  ) {
+  // Every logged-in user can open their own attendance.
+  if (user?.employeeId) {
     items.push({
       label: "My Attendance",
       path: `/employees/attendance/${encodeURIComponent(user.employeeId)}`,
     });
+  }
+
+  // Admins get a single entry point — tools appear after opening Admin Panel.
+  if (canAccessAdminPanel(user?.role)) {
+    items.push({ label: "Admin Panel", path: "/admin" });
   }
 
   return items;

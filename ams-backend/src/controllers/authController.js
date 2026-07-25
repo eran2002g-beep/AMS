@@ -103,9 +103,35 @@ const getMe = async (req, res) => {
     }
 };
 
+// --- CHANGE PASSWORD ------------------------------------------
+// changePassword - authenticated user replaces a temporary / current password
+const changePassword = async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+        const result = await authService.changePassword(
+            req.user.employeeId,
+            currentPassword,
+            newPassword,
+            req.user.sid,
+        );
+
+        return res.status(200).json({
+            success: true,
+            ...result,
+        });
+    } catch (err) {
+        const status = err.status || err.statusCode || 500;
+        return res.status(status).json({
+            success: false,
+            message: err.message,
+        });
+    }
+};
+
 module.exports = {
     login,
     refresh,
     logout,
     getMe,
+    changePassword,
 };

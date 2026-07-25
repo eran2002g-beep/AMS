@@ -54,6 +54,13 @@ const Employee = sequelize.define('Employee', {
         allowNull: false,
     },
 
+    // mustChangePassword - true after create or admin reset; user must set a new password on login
+    mustChangePassword: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+    },
+
     // phone - optional contact number for HR use
     phone: {
         type: DataTypes.STRING,
