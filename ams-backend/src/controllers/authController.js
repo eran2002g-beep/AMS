@@ -84,6 +84,50 @@ const logout = async (req, res) => {
     }
 };
 
+// --- ME CONTROLLER --------------------------------------------
+// getMe - returns the full profile of the authenticated employee
+// requires a valid access token (verifyToken sets req.user)
+const getMe = async (req, res) => {
+    try {
+        const employee = await employeeService.getEmployeeById(req.user.employeeId);
+        return res.status(200).json({
+            success: true,
+            data: employee,
+        });
+    } catch (err) {
+        const statusCode = err.message.includes('not found') ? 404 : 500;
+        return res.status(statusCode).json({
+            success: false,
+            error: err.message,
+        });
+    }
+};
+
+// --- CHANGE PASSWORD ------------------------------------------
+// changePassword - authenticated user replaces a temporary / current password
+const changePassword = async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+        const result = await authService.changePassword(
+            req.user.employeeId,
+            currentPassword,
+            newPassword,
+            req.user.sid,
+        );
+
+        return res.status(200).json({
+            success: true,
+            ...result,
+        });
+    } catch (err) {
+        const status = err.status || err.statusCode || 500;
+        return res.status(status).json({
+            success: false,
+            message: err.message,
+        });
+    }
+};
+
 module.exports = {
     login,
     refresh,

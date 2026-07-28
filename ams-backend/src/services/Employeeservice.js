@@ -82,6 +82,7 @@ const createEmployee = async (data) => {
         lastName: validatedLastName,
         email: validatedEmail,
         password: await hashPassword(validatedPassword),
+        mustChangePassword: true,
         phone: validatedPhone,
         department: validatedDepartment,
         role: validatedRole,
@@ -285,6 +286,8 @@ const updateEmployee = async (employeeId, updateData) => {
     if (updateData.supervisor !== undefined) updateFields.supervisor = validatedSupervisor;
     if (validatedPassword !== undefined) {
         updateFields.password = await hashPassword(validatedPassword);
+        // Admin-set / reset password is temporary until the employee changes it.
+        updateFields.mustChangePassword = true;
     }
 
     const updatedEmployee = await employee.update(updateFields);

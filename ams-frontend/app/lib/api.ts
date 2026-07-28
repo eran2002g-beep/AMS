@@ -15,6 +15,9 @@ export const USER_STORAGE_KEY = "ams_user";
 export const AUTH_LOGOUT_EVENT = "ams:logout";
 export const ACCESS_DENIED_EVENT = "ams:accessDenied";
 
+/** Why the access-denied dialog opened — drives logout vs stay-signed-in. */
+export type AccessDeniedReason = "unauthenticated" | "forbidden";
+
 function clearStoredSession() {
   localStorage.removeItem(TOKEN_STORAGE_KEY);
   localStorage.removeItem(USER_STORAGE_KEY);
@@ -62,10 +65,9 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
+    // 403 is handled by the calling page via getErrorMessage — do not force a
+    // global dialog/logout (permission errors are not session failures).
     if (error.response?.status === 403) {
-      const data = error.response.data as ApiErrorBody | undefined;
-      const message = data?.message ?? "Access denied. You do not have permission to perform this action.";
-      window.dispatchEvent(new CustomEvent(ACCESS_DENIED_EVENT, { detail: { message } }));
       return Promise.reject(error);
     }
 
@@ -103,15 +105,36 @@ type ApiErrorBody = {
   error?: string;
   message?: string;
   success?: boolean;
-  status?: string;
+  status?: string | number;
 };
 
 export function getErrorMessage(err: unknown): string {
   if (axios.isAxiosError(err)) {
-    const data = err.response?.data as ApiErrorBody | undefined;
-    if (data?.message) return data.message;
-    if (data?.error) return data.error;
-    return err.message;
+    if (!err.response) {
+      return "Unable to reach the server. Check your connection and try again.";
+    }
+
+    const status = err.response.status;
+    const data = err.response.data as ApiErrorBody | undefined;
+    const serverMessage = data?.message || data?.error;
+
+    if (status === 404) {
+      return serverMessage && !/^Route not found/i.test(serverMessage)
+        ? serverMessage
+        : "The requested resource was not found.";
+    }
+    if (status === 403) {
+      return serverMessage ?? "You do not have permission to perform this action.";
+    }
+    if (status === 401) {
+      return serverMessage ?? "Your session has expired. Please sign in again.";
+    }
+    if (status >= 500) {
+      return serverMessage ?? "Something went wrong on the server. Please try again later.";
+    }
+
+    if (serverMessage) return serverMessage;
+    return err.message || "Something went wrong";
   }
   if (err instanceof Error) return err.message;
   return "Something went wrong";
@@ -120,6 +143,11 @@ export function getErrorMessage(err: unknown): string {
 /** True when the API rejected the request for insufficient permissions (403). */
 export function isForbiddenError(err: unknown): boolean {
   return axios.isAxiosError(err) && err.response?.status === 403;
+}
+
+/** True when the API responded with not found (404). */
+export function isNotFoundError(err: unknown): boolean {
+  return axios.isAxiosError(err) && err.response?.status === 404;
 }
 
 // ─────────────────────────────────── Types ───────────────────────────────────
@@ -167,6 +195,7 @@ export type Employee = {
   department: string | null;
   role: EmployeeRole;
   roster: boolean;
+  mustChangePassword?: boolean;
   hod: number | null;
   supervisor: number | null;
   hodEmployee?: ReportingEmployee | null;
@@ -324,6 +353,7 @@ export type AuthUser = {
   firstName: string;
   lastName: string;
   role: EmployeeRole;
+  mustChangePassword: boolean;
 };
 
 // Shape of the JSON body returned by POST /auth/login (see authController.js).
@@ -336,10 +366,22 @@ export type SessionResponse = {
   employeeId: string;
   firstName: string;
   lastName: string;
+  mustChangePassword: boolean;
 };
 
 export type LogoutResponse = {
   message: string;
+};
+
+export type ChangePasswordResponse = {
+  success: boolean;
+  message: string;
+  mustChangePassword: boolean;
+  employeeId: string;
+  firstName: string;
+  lastName: string;
+  role: EmployeeRole;
+  token?: string;
 };
 
 // ─────────────────────────────────── Auth API ───────────────────────────────────
@@ -360,6 +402,22 @@ export const authApi = {
   // POST /auth/logout revokes the refresh session and clears its HttpOnly cookie.
   async logout() {
     const response = await api.post<LogoutResponse>("/auth/logout");
+    return response.data;
+  },
+
+  // GET /auth/me — returns the authenticated employee's full profile
+  // (see authController.getMe). Used by the Profile page.
+  async me() {
+    const response = await api.get<{ success: boolean; data: Employee }>("/auth/me");
+    return response.data.data;
+  },
+
+  // POST /auth/change-password — replace temporary / current password.
+  async changePassword(currentPassword: string, newPassword: string) {
+    const response = await api.post<ChangePasswordResponse>("/auth/change-password", {
+      currentPassword,
+      newPassword,
+    });
     return response.data;
   },
 };
