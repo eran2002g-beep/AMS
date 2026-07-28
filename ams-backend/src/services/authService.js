@@ -2,7 +2,7 @@ const { createHash, randomBytes, randomUUID, timingSafeEqual } = require('node:c
 const Employee = require('../models/Employee');
 const AuthSession = require('../models/AuthSession');
 const sequelize = require('../../config/db');
-const { comparePassword } = require('./passwordService');
+const { comparePassword, hashPassword } = require('./passwordService');
 const { createAccessToken } = require('./tokenService');
 
 const REFRESH_TOKEN_TTL = process.env.REFRESH_TOKEN_EXPIRES_IN || '7d';
@@ -51,6 +51,7 @@ const employeeResponse = (employee, token, refreshToken, sessionExpiresAt) => ({
     employeeId: employee.employeeId,
     firstName: employee.firstName,
     lastName: employee.lastName,
+    mustChangePassword: !!employee.mustChangePassword,
 });
 
 const createAccessTokenFor = (employee, sessionId) => createAccessToken({
@@ -58,6 +59,7 @@ const createAccessTokenFor = (employee, sessionId) => createAccessToken({
     employeeId: employee.employeeId,
     email: employee.email,
     role: employee.role,
+    mustChangePassword: !!employee.mustChangePassword,
     sid: sessionId,
 });
 
@@ -186,6 +188,54 @@ const getActiveSessionUser = async (claims) => {
         employeeId: employee.employeeId,
         email: employee.email,
         role: employee.role,
+        mustChangePassword: !!employee.mustChangePassword,
+    };
+};
+
+/**
+ * Authenticated user changes their own password (required after temp/reset).
+ * Body: { currentPassword, newPassword }
+ */
+const changePassword = async (employeeId, currentPassword, newPassword, sessionId) => {
+    if (!currentPassword || !newPassword) {
+        throw Object.assign(new Error('Current password and new password are required'), { status: 400 });
+    }
+    if (typeof newPassword !== 'string' || newPassword.length < 8) {
+        throw Object.assign(new Error('New password must be at least 8 characters'), { status: 400 });
+    }
+    if (currentPassword === newPassword) {
+        throw Object.assign(new Error('New password must be different from the current password'), { status: 400 });
+    }
+
+    const employee = await Employee.scope('withPassword').findOne({ where: { employeeId } });
+    if (!employee || !employee.isActive) {
+        throw Object.assign(new Error('Employee not found'), { status: 404 });
+    }
+
+    const isValid = await comparePassword(currentPassword, employee.password);
+    if (!isValid) {
+        throw Object.assign(new Error('Current password is incorrect'), { status: 401 });
+    }
+
+    await employee.update({
+        password: await hashPassword(newPassword),
+        mustChangePassword: false,
+    });
+
+    await employee.reload();
+
+    const token = sessionId
+        ? await createAccessTokenFor(employee, sessionId)
+        : undefined;
+
+    return {
+        message: 'Password updated successfully.',
+        mustChangePassword: false,
+        employeeId: employee.employeeId,
+        firstName: employee.firstName,
+        lastName: employee.lastName,
+        role: employee.role,
+        ...(token ? { token } : {}),
     };
 };
 
@@ -194,5 +244,6 @@ module.exports = {
     refresh,
     logout,
     getActiveSessionUser,
+    changePassword,
     durationToMilliseconds,
 };

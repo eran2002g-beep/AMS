@@ -47,10 +47,12 @@ app.use(cors({
 app.use(requestLogger); //logs method, route, status code, response time
 
 // ----------------------- Routes -----------------------
-app.use('/auth',     authRoutes);      // POST /auth/login, POST /auth/logout
+app.use('/auth',     authRoutes);      // POST /auth/login, POST /auth/logout, GET /auth/me
 
-// Mount employee routes under /employee
+// Mount employee routes under /employee (canonical API path)
 app.use('/employee', employeeRoutes);
+// Plural alias — common mistake /employees should not hard-404
+app.use('/employees', employeeRoutes);
 
 // Mount roster routes under /roster
 app.use('/roster', rosterRoutes);
@@ -112,6 +114,10 @@ sequelize.authenticate()
     .then(() => sequelize.query(`
         ALTER TABLE employees
         ADD COLUMN IF NOT EXISTS roster BOOLEAN NOT NULL DEFAULT false;
+    `))
+    .then(() => sequelize.query(`
+        ALTER TABLE employees
+        ADD COLUMN IF NOT EXISTS "mustChangePassword" BOOLEAN NOT NULL DEFAULT false;
     `))
     .then(() => sequelize.query(`
         ALTER TABLE attendance
