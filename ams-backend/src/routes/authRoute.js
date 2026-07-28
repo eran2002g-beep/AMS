@@ -14,6 +14,8 @@ router.post('/login', authController.login);
 router.post('/refresh', authController.refresh);
 router.post('/logout', authController.logout);
 
+// GET /auth/profile - return current user's profile (requires valid access token)
+router.get('/profile', verifyToken, authController.profile);
 // GET /auth/me - return the logged-in employee's full profile
 // requires a valid Bearer access token
 router.get('/me', verifyToken, authController.getMe);

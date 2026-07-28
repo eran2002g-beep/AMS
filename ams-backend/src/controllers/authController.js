@@ -132,6 +132,18 @@ module.exports = {
     login,
     refresh,
     logout,
-    getMe,
-    changePassword,
+    profile,
+};
+
+// --- PROFILE CONTROLLER --------------------------------------
+// profile - returns the signed-in user's full employee record
+const profile = async (req, res) => {
+    try {
+        // req.user is set by verifyToken middleware and contains employeeId
+        const employee = await employeeService.getEmployeeById(req.user.employeeId);
+        return res.status(200).json({ success: true, data: employee });
+    } catch (err) {
+        const status = err.message && err.message.includes('not found') ? 404 : 500;
+        return res.status(status).json({ success: false, error: err.message });
+    }
 };
