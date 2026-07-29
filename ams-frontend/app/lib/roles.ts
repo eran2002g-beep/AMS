@@ -106,6 +106,13 @@ export function canAccessPath(
     return canViewAttendance(user.role);
   }
 
+  // Leave requests are self-service - every authenticated employee can submit
+  // and view their own leave requests. (Manager/admin-manager review views are
+  // a separate future story and will need their own path check when added.)
+  if (pathname === "/leave" || pathname.startsWith("/leave/")) {
+    return true;
+  }
+
   if (pathname === "/rosters" || pathname.startsWith("/rosters/")) {
     return canManageRoster(user.role);
   }
@@ -130,6 +137,7 @@ export function isKnownAppPath(pathname: string): boolean {
   if (pathname === "/admin" || pathname.startsWith("/admin/")) return true;
   if (pathname === "/employees" || pathname.startsWith("/employees/")) return true;
   if (pathname === "/attendance" || pathname.startsWith("/attendance/")) return true;
+  if (pathname === "/leave" || pathname.startsWith("/leave/")) return true;
   if (pathname === "/rosters" || pathname.startsWith("/rosters/")) return true;
   if (pathname.startsWith("/mock/punch")) return true;
   return false;
@@ -154,6 +162,11 @@ export function getNavItems(user?: Pick<AuthUser, "role" | "employeeId"> | null)
       label: "My Attendance",
       path: `/employees/attendance/${encodeURIComponent(user.employeeId)}`,
     });
+  }
+
+  // Every logged-in user can request leave and view their own requests.
+  if (user?.employeeId) {
+    items.push({ label: "Request Leave", path: "/leave" });
   }
 
   // Admins get a single entry point — tools appear after opening Admin Panel.
