@@ -29,10 +29,8 @@ const CAN_VIEW_ATTENDANCE  = [ROLES.ADMIN, ROLES.ADMIN_MANAGER];
 
 // Manager -> accept leave req and resolve unauthorized leave
 // Admin-Manager -> shares the same leave permissions as Manager
-// NOTE: no leave-request endpoints exist in the codebase yet (no model,
-// controller, or route). This group is defined now so that whoever builds
-// the leave-request subtask wires straight into this table instead of
-// inventing new role strings. Nothing currently imports this constant.
+// Used by leaveRequestRoute.js to gate the review/list endpoints. Submitting
+// a leave request itself is self-service and open to any authenticated role.
 const CAN_MANAGE_LEAVE     = [ROLES.MANAGER, ROLES.ADMIN_MANAGER];
 
 module.exports = {
