@@ -1031,3 +1031,92 @@ export const attendanceApi = {
     return body.data;
   },
 };
+
+// ------------------------------- Leave request types -------------------------------
+
+export type LeaveType = "annual" | "sick" | "casual" | "unpaid" | "other";
+export type LeaveStatus = "pending" | "approved" | "rejected" | "cancelled";
+
+export const LEAVE_TYPE_OPTIONS: Array<{ value: LeaveType; label: string }> = [
+  { value: "annual", label: "Annual" },
+  { value: "sick", label: "Sick" },
+  { value: "casual", label: "Casual" },
+  { value: "unpaid", label: "Unpaid" },
+  { value: "other", label: "Other" },
+];
+
+export type LeaveRequestRecord = {
+  id: number;
+  leaveRequestId: string;
+  employeeId: string;
+  leaveType: LeaveType;
+  startDate: string;
+  endDate: string;
+  totalDays: number;
+  reason: string;
+  status: LeaveStatus;
+  reviewedBy: string | null;
+  reviewComments: string | null;
+  reviewedAt: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type LeaveRequestSubmitPayload = {
+  leaveType: LeaveType;
+  startDate: string;
+  endDate: string;
+  reason: string;
+};
+
+export type LeaveRequestSubmitResponse = {
+  status: "success";
+  message: string;
+  data: LeaveRequestRecord;
+};
+
+export type LeaveRequestListFilters = {
+  status?: LeaveStatus;
+  page?: number;
+  limit?: number;
+};
+
+export type LeaveRequestListResponse = {
+  status: "success";
+  count: number;
+  meta: { total: number; page: number; limit: number };
+  data: LeaveRequestRecord[];
+};
+
+// ------------------------------- Leave request API -------------------------------
+
+export const leaveApi = {
+  // POST /leave/submit - submit a new leave request for the given employee
+  // (defaults to the signed-in user on the backend when employeeId is omitted).
+  async submit(payload: LeaveRequestSubmitPayload) {
+    const response = await api.post<LeaveRequestSubmitResponse>("/leave/submit", payload);
+    const body = response.data;
+    if (body.status !== "success") {
+      throw new Error("Failed to submit leave request");
+    }
+    return body.data;
+  },
+
+  // GET /leave/employee/:employeeId - an employee's own leave request history.
+  async getForEmployee(employeeId: string, filters: LeaveRequestListFilters = {}) {
+    const params: Record<string, string | number> = {};
+    if (filters.status) params.status = filters.status;
+    if (filters.page != null) params.page = filters.page;
+    if (filters.limit != null) params.limit = filters.limit;
+
+    const response = await api.get<LeaveRequestListResponse>(
+      `/leave/employee/${encodeURIComponent(employeeId)}`,
+      { params },
+    );
+    const body = response.data;
+    if (body.status !== "success") {
+      throw new Error("Failed to load leave requests");
+    }
+    return body;
+  },
+};
