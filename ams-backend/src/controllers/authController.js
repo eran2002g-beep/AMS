@@ -128,13 +128,6 @@ const changePassword = async (req, res) => {
     }
 };
 
-module.exports = {
-    login,
-    refresh,
-    logout,
-    profile,
-};
-
 // --- PROFILE CONTROLLER --------------------------------------
 // profile - returns the signed-in user's full employee record
 const profile = async (req, res) => {
@@ -146,4 +139,13 @@ const profile = async (req, res) => {
         const status = err.message && err.message.includes('not found') ? 404 : 500;
         return res.status(status).json({ success: false, error: err.message });
     }
+};
+
+module.exports = {
+    login,
+    refresh,
+    logout,
+    profile,
+    getMe,
+    changePassword,
 };

@@ -1,14 +1,18 @@
 // app/profile/page.tsx — "My Profile" page (view-only personal + account details)
 "use client";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
 import Avatar from "@mui/material/Avatar";
+import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
 import Alert from "@mui/material/Alert";
 import CircularProgress from "@mui/material/CircularProgress";
+import FingerprintIcon from "@mui/icons-material/Fingerprint";
 import { authApi, getErrorMessage, ROLE_LABELS, type Employee } from "@/lib/api";
+import { canEditAttendance } from "@/lib/roles";
 
 const ROLE_CHIP_SX: Record<string, { backgroundColor: string; color: string }> = {
   "super-admin": { backgroundColor: "#fce7f3", color: "#9d174d" },
@@ -68,6 +72,7 @@ function SectionCard({ title, children }: { title: string; children: ReactNode }
 }
 
 export default function ProfilePage() {
+  const router = useRouter();
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -109,6 +114,7 @@ export default function ProfilePage() {
   const roleLabel = ROLE_LABELS[employee.role] ?? employee.role;
   const fullName = `${employee.firstName} ${employee.lastName}`.trim();
   const hasReportingLine = !!employee.hodEmployee || !!employee.supervisorEmployee;
+  const showPunchCard = canEditAttendance(employee.role);
 
   return (
     <Box sx={{ maxWidth: 960, mx: "auto", display: "flex", flexDirection: "column", gap: 3 }}>
@@ -162,6 +168,27 @@ export default function ProfilePage() {
             />
           </Box>
         </Box>
+
+        {showPunchCard && (
+          <Button
+            variant="contained"
+            startIcon={<FingerprintIcon />}
+            onClick={() =>
+              router.push(
+                `/mock/punch/system?employeeId=${encodeURIComponent(employee.employeeId)}`,
+              )
+            }
+            aria-label="Record punch card"
+            sx={{
+              backgroundColor: "#2563eb",
+              whiteSpace: "nowrap",
+              alignSelf: { xs: "stretch", sm: "center" },
+              "&:hover": { backgroundColor: "#1d4ed8" },
+            }}
+          >
+            Punch Card
+          </Button>
+        )}
       </Paper>
 
       {/* Detail sections */}
