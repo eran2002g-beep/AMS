@@ -1,7 +1,7 @@
 # .env - stores secrets and config values, never commit this file to GitHub
 
 # Neon connection string - get this from: Neon Console -> Connect button
-DATABASE_URL=postgresql://neondb_owner:npg_ov8NjDh7usGe@ep-square-boat-ao8j82im-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+DATABASE_URL=URL
 
 # Port the Express server runs on - defaults to 5000 if not set.
 # On macOS, AirPlay Receiver may occupy port 5000 — use 5001 if the server cannot bind.

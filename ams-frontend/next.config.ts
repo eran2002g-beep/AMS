@@ -31,6 +31,13 @@ const nextConfig: NextConfig = {
         source: "/attendance/:path*",
         destination: `${backendUrl}/attendance/:path*`,
       },
+      {
+        // Covers /leave/submit, /leave/employee/:id, /leave/:leaveRequestId.
+        // Bare GET /leave is intentionally NOT rewritten - it stays the
+        // Next.js page route (app/leave/page.tsx), same as /attendance.
+        source: "/leave/:path*",
+        destination: `${backendUrl}/leave/:path*`,
+      },
     ];
   },
 };

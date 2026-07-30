@@ -18,6 +18,12 @@ const CAN_VIEW_EMPLOYEES: EmployeeRole[] = [
 ];
 const CAN_EDIT_ATTENDANCE: EmployeeRole[] = [ROLES.ADMIN, ROLES.ADMIN_MANAGER];
 const CAN_VIEW_ATTENDANCE: EmployeeRole[] = [ROLES.ADMIN, ROLES.ADMIN_MANAGER];
+/** Admin-tier roles that may open the Admin Panel hub. */
+const CAN_ACCESS_ADMIN_PANEL: EmployeeRole[] = [
+  ROLES.SUPER_ADMIN,
+  ROLES.ADMIN,
+  ROLES.ADMIN_MANAGER,
+];
 
 function hasRole(role: EmployeeRole | undefined, allowed: EmployeeRole[]) {
   return !!role && allowed.includes(role);
@@ -43,12 +49,13 @@ export function canViewAttendance(role?: EmployeeRole) {
   return hasRole(role, CAN_VIEW_ATTENDANCE);
 }
 
-/** Post-login / AuthGuard fallback destination for a role. */
-export function getHomePath(user: Pick<AuthUser, "role" | "employeeId">): string {
-  if (canViewEmployees(user.role)) return "/employees";
-  if (canViewAttendance(user.role)) return "/attendance";
-  if (canManageRoster(user.role)) return "/rosters";
-  return `/employees/attendance/${encodeURIComponent(user.employeeId)}`;
+export function canAccessAdminPanel(role?: EmployeeRole) {
+  return hasRole(role, CAN_ACCESS_ADMIN_PANEL);
+}
+
+/** Post-login / AuthGuard fallback — everyone lands on the shared dashboard. */
+export function getHomePath(_user: Pick<AuthUser, "role" | "employeeId">): string {
+  return "/dashboard";
 }
 
 /**
@@ -61,6 +68,22 @@ export function canAccessPath(
 ): boolean {
   if (pathname === "/login") return true;
   if (pathname === "/access-denied") return true;
+  if (pathname === "/change-password" || pathname.startsWith("/change-password?")) {
+    return true;
+  }
+
+  if (pathname === "/dashboard" || pathname.startsWith("/dashboard?")) {
+    return true;
+  }
+
+  // Own profile — any authenticated user.
+  if (pathname === "/profile" || pathname.startsWith("/profile?")) {
+    return true;
+  }
+
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+    return canAccessAdminPanel(user.role);
+  }
 
   if (pathname === "/employees" || pathname.startsWith("/employees?")) {
     return canViewEmployees(user.role);
@@ -83,6 +106,13 @@ export function canAccessPath(
     return canViewAttendance(user.role);
   }
 
+  // Leave requests are self-service - every authenticated employee can submit
+  // and view their own leave requests. (Manager/admin-manager review views are
+  // a separate future story and will need their own path check when added.)
+  if (pathname === "/leave" || pathname.startsWith("/leave/")) {
+    return true;
+  }
+
   if (pathname === "/rosters" || pathname.startsWith("/rosters/")) {
     return canManageRoster(user.role);
   }
@@ -91,16 +121,58 @@ export function canAccessPath(
     return canEditAttendance(user.role);
   }
 
-  // Unknown authenticated routes — allow and let the page/API decide.
-  return true;
+  // Unknown path — not a known app route (Next.js will render not-found).
+  return false;
+}
+
+/**
+ * True for real AMS pages (including those the user may not be allowed to open).
+ * Used so AuthGuard does not hijack missing URLs with a login/access dialog.
+ */
+export function isKnownAppPath(pathname: string): boolean {
+  if (pathname === "/login" || pathname === "/access-denied") return true;
+  if (pathname === "/change-password" || pathname.startsWith("/change-password/")) return true;
+  if (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) return true;
+  if (pathname === "/profile" || pathname.startsWith("/profile/")) return true;
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) return true;
+  if (pathname === "/employees" || pathname.startsWith("/employees/")) return true;
+  if (pathname === "/attendance" || pathname.startsWith("/attendance/")) return true;
+  if (pathname === "/leave" || pathname.startsWith("/leave/")) return true;
+  if (pathname === "/rosters" || pathname.startsWith("/rosters/")) return true;
+  if (pathname.startsWith("/mock/punch")) return true;
+  return false;
 }
 
 export type NavItem = { label: string; path: string };
 
-export function getNavItems(role?: EmployeeRole): NavItem[] {
-  const items: NavItem[] = [];
-  if (canViewEmployees(role)) items.push({ label: "Employees", path: "/employees" });
-  if (canViewAttendance(role)) items.push({ label: "Attendance", path: "/attendance" });
-  if (canManageRoster(role)) items.push({ label: "Rosters", path: "/rosters" });
+/**
+ * Main hamburger menu — shared employee items only.
+ * Admin tools (Employees / Attendance / Rosters) live inside the Admin Panel hub,
+ * not in this global menu.
+ */
+export function getNavItems(user?: Pick<AuthUser, "role" | "employeeId"> | null): NavItem[] {
+  const items: NavItem[] = [
+    { label: "Dashboard", path: "/dashboard" },
+    { label: "My Profile", path: "/profile" },
+  ];
+
+  // Every logged-in user can open their own attendance.
+  if (user?.employeeId) {
+    items.push({
+      label: "My Attendance",
+      path: `/employees/attendance/${encodeURIComponent(user.employeeId)}`,
+    });
+  }
+
+  // Every logged-in user can request leave and view their own requests.
+  if (user?.employeeId) {
+    items.push({ label: "Request Leave", path: "/leave" });
+  }
+
+  // Admins get a single entry point — tools appear after opening Admin Panel.
+  if (canAccessAdminPanel(user?.role)) {
+    items.push({ label: "Admin Panel", path: "/admin" });
+  }
+
   return items;
 }
