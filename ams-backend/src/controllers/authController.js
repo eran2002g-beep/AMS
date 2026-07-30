@@ -2,6 +2,7 @@
 // calls authService for business logic, never touches the database directly
 
 const authService = require('../services/authService');
+const employeeService = require('../services/employeeService');
 
 const REFRESH_COOKIE_NAME = process.env.REFRESH_COOKIE_NAME || 'ams_refresh';
 const refreshCookieOptions = {
@@ -83,8 +84,68 @@ const logout = async (req, res) => {
     }
 };
 
+// --- ME CONTROLLER --------------------------------------------
+// getMe - returns the full profile of the authenticated employee
+// requires a valid access token (verifyToken sets req.user)
+const getMe = async (req, res) => {
+    try {
+        const employee = await employeeService.getEmployeeById(req.user.employeeId);
+        return res.status(200).json({
+            success: true,
+            data: employee,
+        });
+    } catch (err) {
+        const statusCode = err.message.includes('not found') ? 404 : 500;
+        return res.status(statusCode).json({
+            success: false,
+            error: err.message,
+        });
+    }
+};
+
+// --- CHANGE PASSWORD ------------------------------------------
+// changePassword - authenticated user replaces a temporary / current password
+const changePassword = async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+        const result = await authService.changePassword(
+            req.user.employeeId,
+            currentPassword,
+            newPassword,
+            req.user.sid,
+        );
+
+        return res.status(200).json({
+            success: true,
+            ...result,
+        });
+    } catch (err) {
+        const status = err.status || err.statusCode || 500;
+        return res.status(status).json({
+            success: false,
+            message: err.message,
+        });
+    }
+};
+
+// --- PROFILE CONTROLLER --------------------------------------
+// profile - returns the signed-in user's full employee record
+const profile = async (req, res) => {
+    try {
+        // req.user is set by verifyToken middleware and contains employeeId
+        const employee = await employeeService.getEmployeeById(req.user.employeeId);
+        return res.status(200).json({ success: true, data: employee });
+    } catch (err) {
+        const status = err.message && err.message.includes('not found') ? 404 : 500;
+        return res.status(status).json({ success: false, error: err.message });
+    }
+};
+
 module.exports = {
     login,
     refresh,
     logout,
+    profile,
+    getMe,
+    changePassword,
 };

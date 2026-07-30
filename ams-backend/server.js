@@ -17,13 +17,14 @@ const Employee = require('./src/models/Employee');
 const Roster   = require('./src/models/Roster');
 const AttendanceLog = require('./src/models/AttendanceLog'); // Each punch card swipe from IoT or manual entry
 const Attendance = require('./src/models/Attendance');    // final calculated attendance record per employee per day
-const LeaveRequest = require('./src/models/LeaveRequest'); // unauthorised leave and leave request workflow
+const LeaveRequest = require('./src/models/LeaveRequest'); // employee-submitted leave requests awaiting review
 
 // ----------------------- Model Routes -----------------------
 const employeeRoutes = require('./src/routes/employeeRoute');
 const rosterRoutes = require('./src/routes/rosterRoute');
 const attendanceLogRoutes = require('./src/routes/attendanceLogRoute');
 const attendanceRoutes = require('./src/routes/attendanceRoute');
+const leaveRequestRoutes = require('./src/routes/leaveRequestRoute');
 const authRoutes     = require('./src/routes/authRoute');
 
 // ----------------------- Error Logging Middleware -----------------------
@@ -48,10 +49,12 @@ app.use(cors({
 app.use(requestLogger); //logs method, route, status code, response time
 
 // ----------------------- Routes -----------------------
-app.use('/auth',     authRoutes);      // POST /auth/login, POST /auth/logout
+app.use('/auth',     authRoutes);      // POST /auth/login, POST /auth/logout, GET /auth/me
 
-// Mount employee routes under /employee
+// Mount employee routes under /employee (canonical API path)
 app.use('/employee', employeeRoutes);
+// Plural alias — common mistake /employees should not hard-404
+app.use('/employees', employeeRoutes);
 
 // Mount roster routes under /roster
 app.use('/roster', rosterRoutes);
@@ -61,6 +64,9 @@ app.use('/attendance-log', attendanceLogRoutes);
 
 // Mount attendance routes under /attendance
 app.use('/attendance', attendanceRoutes);
+
+// Mount leave request routes under /leave
+app.use('/leave', leaveRequestRoutes);
 
 // ----------------------- Error Handlers -----------------------
 // Must be registered AFTER all routes so they only catch unmatched/errored requests
@@ -113,6 +119,10 @@ sequelize.authenticate()
     .then(() => sequelize.query(`
         ALTER TABLE employees
         ADD COLUMN IF NOT EXISTS roster BOOLEAN NOT NULL DEFAULT false;
+    `))
+    .then(() => sequelize.query(`
+        ALTER TABLE employees
+        ADD COLUMN IF NOT EXISTS "mustChangePassword" BOOLEAN NOT NULL DEFAULT false;
     `))
     .then(() => sequelize.query(`
         ALTER TABLE attendance

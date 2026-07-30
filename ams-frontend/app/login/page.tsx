@@ -53,6 +53,12 @@ export default function LoginPage() {
     try {
       const user = await login(email.trim(), password);
 
+      // Force password change before any other destination.
+      if (user.mustChangePassword) {
+        router.replace("/change-password");
+        return;
+      }
+
       // AC3: redirect by role. Honor a "next" target only if this role may open it.
       const next = searchParams.get("next");
       const destination =

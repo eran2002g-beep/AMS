@@ -18,10 +18,12 @@ import {
   TOKEN_STORAGE_KEY,
   USER_STORAGE_KEY,
   authApi,
+  type AccessDeniedReason,
   type AuthUser,
   type SessionResponse,
 } from "./api";
 import AccessDeniedDialog from "@/components/AccessDeniedDialog";
+import { getHomePath } from "@/lib/roles";
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -30,6 +32,8 @@ type AuthContextValue = {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<AuthUser>;
   logout: () => void;
+  /** Clear mustChangePassword after a successful password change. */
+  markPasswordChanged: (token?: string) => void;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -39,6 +43,7 @@ const userFromSession = (session: SessionResponse): AuthUser => ({
   firstName: session.firstName,
   lastName: session.lastName,
   role: session.role,
+  mustChangePassword: !!session.mustChangePassword,
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -46,6 +51,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [sessionExpiresAt, setSessionExpiresAt] = useState<number | null>(null);
   const [accessDeniedMessage, setAccessDeniedMessage] = useState<string | null>(null);
+  const [accessDeniedReason, setAccessDeniedReason] =
+    useState<AccessDeniedReason>("forbidden");
   const router = useRouter();
 
   // Validate the HttpOnly refresh cookie on startup instead of trusting stale
@@ -76,8 +83,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const handleAccessDenied = (event: Event) => {
-      const message = (event as CustomEvent<{ message?: string }>).detail?.message;
-      setAccessDeniedMessage(message ?? "Access denied. Please log in again.");
+      const detail = (event as CustomEvent<{ message?: string; reason?: AccessDeniedReason }>)
+        .detail;
+      setAccessDeniedReason(detail?.reason ?? "forbidden");
+      setAccessDeniedMessage(
+        detail?.message ?? "Access denied. You do not have permission to perform this action.",
+      );
     };
 
     window.addEventListener(AUTH_LOGOUT_EVENT, handleForcedLogout);
@@ -104,6 +115,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSessionExpiresAt(Date.parse(result.sessionExpiresAt));
 
     return nextUser;
+  }, []);
+
+  const markPasswordChanged = useCallback((token?: string) => {
+    if (token) {
+      localStorage.setItem(TOKEN_STORAGE_KEY, token);
+    }
+    setUser((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, mustChangePassword: false };
+      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
   }, []);
 
   // Revoke the server-side refresh session and always clear local state.
@@ -142,20 +165,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       login,
       logout,
+      markPasswordChanged,
     }),
-    [user, isLoading, login, logout],
+    [user, isLoading, login, logout, markPasswordChanged],
   );
 
   const handleAccessDeniedDialogClose = useCallback(() => {
-    logout();
-  }, [logout]);
+    setAccessDeniedMessage(null);
+    if (accessDeniedReason === "unauthenticated") {
+      logout();
+      return;
+    }
+    // Forbidden: stay signed in and return to a safe page.
+    const home = user ? getHomePath(user) : "/dashboard";
+    router.replace(home);
+  }, [accessDeniedReason, logout, router, user]);
 
   return (
     <AuthContext.Provider value={value}>
       {children}
       <AccessDeniedDialog
         open={!!accessDeniedMessage}
-        message={accessDeniedMessage ?? "Access denied. Please log in again."}
+        message={accessDeniedMessage ?? "Access denied."}
+        reason={accessDeniedReason}
         onClose={handleAccessDeniedDialogClose}
       />
     </AuthContext.Provider>

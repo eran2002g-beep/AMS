@@ -8,14 +8,24 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogContentText from "@mui/material/DialogContentText";
 import DialogTitle from "@mui/material/DialogTitle";
 import ReportProblemOutlinedIcon from "@mui/icons-material/ReportProblemOutlined";
+import type { AccessDeniedReason } from "@/lib/api";
 
 type Props = {
   open: boolean;
   message: string;
+  reason?: AccessDeniedReason;
   onClose: () => void;
 };
 
-export default function AccessDeniedDialog({ open, message, onClose }: Props) {
+export default function AccessDeniedDialog({
+  open,
+  message,
+  reason = "forbidden",
+  onClose,
+}: Props) {
+  const title = reason === "unauthenticated" ? "Session Expired" : "Access Denied";
+  const actionLabel = reason === "unauthenticated" ? "Sign In" : "Back to Dashboard";
+
   return (
     <Dialog
       open={open}
@@ -25,7 +35,7 @@ export default function AccessDeniedDialog({ open, message, onClose }: Props) {
     >
       <DialogTitle id="access-denied-dialog-title" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
         <ReportProblemOutlinedIcon color="error" />
-        Access Denied
+        {title}
       </DialogTitle>
       <DialogContent>
         <DialogContentText id="access-denied-dialog-description" sx={{ color: "#334155" }}>
@@ -34,7 +44,7 @@ export default function AccessDeniedDialog({ open, message, onClose }: Props) {
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
         <Button onClick={onClose} variant="contained" color="error">
-          OK
+          {actionLabel}
         </Button>
       </DialogActions>
     </Dialog>
