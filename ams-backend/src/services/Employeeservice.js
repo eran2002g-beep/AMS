@@ -578,4 +578,56 @@ module.exports = {
     getEmployeesByRole,
     validateRoleAssignment,
     getEmployeesByPermissionLevel,
+    resolveUnauthorisedAttendance,
+};
+
+// -----------------------------------------------------------------------
+// resolveUnauthorisedAttendance - Convert an 'unauthorised' attendance into an approved leave
+// reviewerEmployeeId: public-facing employeeId of the manager/admin performing the resolution
+// reviewNotes: optional notes about why the unauthorised was resolved to leave
+// -----------------------------------------------------------------------
+const resolveUnauthorisedAttendance = async (attendanceId, reviewerEmployeeId, reviewNotes = null) => {
+    if (!attendanceId) throw new Error('attendanceId is required');
+    if (!reviewerEmployeeId) throw new Error('reviewerEmployeeId is required');
+
+    // Lazy require to avoid circular deps in some import orders
+    const Attendance = require('../models/Attendance');
+    const LeaveRequest = require('../models/LeaveRequest');
+
+    // Fetch reviewer and validate permission
+    const reviewer = await Employee.findOne({ where: { employeeId: reviewerEmployeeId, isActive: true } });
+    if (!reviewer) throw new Error(`Active reviewer with ID ${reviewerEmployeeId} not found.`);
+
+    const reviewerPerms = getRolePermissions(reviewer.role);
+    if (!reviewerPerms.canManageLeave) {
+        throw new Error('Reviewer does not have permission to resolve unauthorised attendance.');
+    }
+
+    // Load attendance record
+    const attendance = await Attendance.findOne({ where: { attendanceId } });
+    if (!attendance) throw new Error(`Attendance record with ID ${attendanceId} not found.`);
+
+    if (attendance.status !== 'unauthorised') {
+        throw new Error('Only attendance records with status "unauthorised" can be resolved to leave.');
+    }
+
+    // Create an approved leave request linking this attendance record
+    const leave = await LeaveRequest.create({
+        employeeId: attendance.employeeId,
+        attendanceId: attendance.id,
+        date: attendance.date,
+        requestType: 'leave',
+        status: 'approved',
+        reason: reviewNotes || 'Resolved unauthorised attendance to approved leave',
+        reviewerId: reviewerEmployeeId,
+        reviewNotes: reviewNotes || null,
+        reviewedAt: new Date(),
+    });
+
+    // Update attendance to link leave and set status to 'leave'
+    attendance.leaveRequestId = leave.id;
+    attendance.status = 'leave';
+    await attendance.save();
+
+    return { attendance: await attendance.reload(), leave };
 };
