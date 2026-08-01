@@ -15,10 +15,13 @@ import {
   buildAttendanceUpdatePayload,
   getErrorMessage,
   getTodayDateString,
+  unauthorisedApi,
   type AttendanceRecord,
   type EmployeeAttendanceResponse,
+  type UnauthorisedRequestSubmitPayload,
 } from "@/lib/api";
 import AttendanceForm, { type AttendanceFormData } from "@/components/AttendanceForm";
+import UnauthorisedRequestForm from "@/components/UnauthorisedRequestForm";
 import { useAuth } from "@/lib/auth";
 import { canEditAttendance, canViewEmployees } from "@/lib/roles";
 
@@ -57,6 +60,10 @@ export default function EmployeeAttendancePage() {
   const [editingRecord, setEditingRecord] = useState<AttendanceRecord | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [deletingAttendanceId, setDeletingAttendanceId] = useState<string | null>(null);
+  const [resolveOpen, setResolveOpen] = useState(false);
+  const [resolvingRecord, setResolvingRecord] = useState<AttendanceRecord | null>(null);
+  const [resolveSubmitting, setResolveSubmitting] = useState(false);
+  const [pendingUnauthorisedAttendanceIds, setPendingUnauthorisedAttendanceIds] = useState<number[]>([]);
 
   useEffect(() => {
     if (sessionStorage.getItem("ams-from-employees") === "1") {
@@ -84,7 +91,25 @@ export default function EmployeeAttendancePage() {
     }
   }, [employeeId, appliedFilters, router]);
 
+  const loadPendingUnauthorised = useCallback(async () => {
+    if (!employeeId || !isOwnAttendance) {
+      setPendingUnauthorisedAttendanceIds([]);
+      return;
+    }
+    try {
+      const result = await unauthorisedApi.getForEmployee(employeeId, {
+        status: "pending",
+        limit: 100,
+      });
+      setPendingUnauthorisedAttendanceIds(result.data.map((r) => r.attendanceId));
+    } catch {
+      // Non-blocking — resolve button still works; backend rejects duplicates
+      setPendingUnauthorisedAttendanceIds([]);
+    }
+  }, [employeeId, isOwnAttendance]);
+
   useEffect(() => { loadAttendance(); }, [loadAttendance]);
+  useEffect(() => { loadPendingUnauthorised(); }, [loadPendingUnauthorised]);
 
   // ── Filter bar callbacks ────────────────────────────────────────────────────
 
@@ -157,6 +182,31 @@ export default function EmployeeAttendancePage() {
       setError(getErrorMessage(err));
     } finally {
       setDeletingAttendanceId(null);
+    }
+  };
+
+  const openResolveForm = (rec: AttendanceRecord) => {
+    setResolvingRecord(rec);
+    setResolveOpen(true);
+  };
+  const closeResolveForm = () => {
+    setResolveOpen(false);
+    setResolvingRecord(null);
+  };
+
+  const handleResolveUnauthorised = async (data: UnauthorisedRequestSubmitPayload) => {
+    setResolveSubmitting(true);
+    setError("");
+    setSuccess("");
+    try {
+      await unauthorisedApi.submit(data);
+      closeResolveForm();
+      setSuccess("Unauthorised leave request submitted for review.");
+      await Promise.all([loadAttendance(), loadPendingUnauthorised()]);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setResolveSubmitting(false);
     }
   };
 
@@ -266,6 +316,8 @@ export default function EmployeeAttendancePage() {
             records={records}
             onEdit={allowAdminEdit ? openEditForm : undefined}
             onDelete={allowAdminEdit ? handleDeleteAttendance : undefined}
+            onResolveUnauthorised={isOwnAttendance ? openResolveForm : undefined}
+            resolvingAttendanceIds={pendingUnauthorisedAttendanceIds}
             deletingAttendanceId={deletingAttendanceId}
           />
           {meta && (
@@ -295,6 +347,16 @@ export default function EmployeeAttendancePage() {
           submitting={submitting}
           defaultDate={getTodayDateString()}
           record={editingRecord}
+        />
+      )}
+
+      {isOwnAttendance && (
+        <UnauthorisedRequestForm
+          open={resolveOpen}
+          record={resolvingRecord}
+          onClose={closeResolveForm}
+          onSubmit={handleResolveUnauthorised}
+          submitting={resolveSubmitting}
         />
       )}
     </Box>

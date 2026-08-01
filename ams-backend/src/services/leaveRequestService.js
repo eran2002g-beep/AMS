@@ -3,12 +3,29 @@
 // Mirrors the shape of attendanceService.js so leave management stays consistent with
 // how the rest of the Employee Service domain (attendance, roster) is structured.
 
+const { Op } = require('sequelize');
 const Employee = require('../models/Employee');
 const LeaveRequest = require('../models/LeaveRequest');
 const {
     validateLeaveRequestPayload,
     validateNoOverlappingLeave,
 } = require('./leaveRequestValidation');
+
+// canAccept - true when the viewer is this leave's HOD or supervisor and status is still pending
+const withCanAccept = (leaveRequest, viewerId) => {
+    const data = typeof leaveRequest.toJSON === 'function'
+        ? leaveRequest.toJSON()
+        : { ...leaveRequest };
+
+    data.canAccept = data.status === 'pending'
+        && (data.hod === viewerId || data.supervisor === viewerId);
+
+    return data;
+};
+
+const isAssignedAdmin = (leaveRequest, viewerId) => (
+    leaveRequest.hod === viewerId || leaveRequest.supervisor === viewerId
+);
 
 // -----------------------------------------------------------------------
 // submitLeaveRequest - validates and creates a new leave request for an employee
@@ -36,6 +53,10 @@ const submitLeaveRequest = async (employeeId, data) => {
         totalDays: validated.totalDays,
         reason: validated.reason,
         status: 'pending',
+        // Snapshot HOD/supervisor at submit so the admin queue stays correct even if
+        // the employee's hierarchy changes later
+        hod: employee.hod ?? null,
+        supervisor: employee.supervisor ?? null,
     });
 
     return leaveRequest;
@@ -73,13 +94,23 @@ const getLeaveRequestsByEmployee = async (employeeId, opts = {}) => {
 };
 
 // -----------------------------------------------------------------------
-// getAllLeaveRequests - fetch leave requests across all employees (manager/admin view)
+// getAllLeaveRequests - leave requests assigned to the viewing manager/admin-manager
+// Only returns rows where the viewer is the leave's hod or supervisor.
 // Supports optional employeeId, status, and pagination filters.
 // -----------------------------------------------------------------------
-const getAllLeaveRequests = async (opts = {}) => {
+const getAllLeaveRequests = async (opts = {}, viewerId) => {
+    if (!viewerId) {
+        throw new Error('viewerId is required to list assigned leave requests.');
+    }
+
     const { employeeId, status, page = 1, limit = 50 } = opts;
 
-    const where = {};
+    const where = {
+        [Op.or]: [
+            { hod: viewerId },
+            { supervisor: viewerId },
+        ],
+    };
     if (employeeId) where.employeeId = employeeId;
     if (status) where.status = status;
 
@@ -95,22 +126,23 @@ const getAllLeaveRequests = async (opts = {}) => {
     });
 
     return {
-        records,
+        records: records.map((row) => withCanAccept(row, viewerId)),
         meta: { total, page: parsedPage, limit: parsedLimit },
     };
 };
 
 // -----------------------------------------------------------------------
 // getLeaveRequestById - fetch a single leave request by its public ID
+// Viewer must be the leave's assigned hod or supervisor.
 // -----------------------------------------------------------------------
-const getLeaveRequestById = async (leaveRequestId) => {
+const getLeaveRequestById = async (leaveRequestId, viewerId) => {
     const leaveRequest = await LeaveRequest.findOne({ where: { leaveRequestId } });
 
-    if (!leaveRequest) {
+    if (!leaveRequest || !isAssignedAdmin(leaveRequest, viewerId)) {
         throw new Error(`Leave request with ID ${leaveRequestId} not found.`);
     }
 
-    return leaveRequest;
+    return withCanAccept(leaveRequest, viewerId);
 };
 
 module.exports = {

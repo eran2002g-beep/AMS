@@ -874,6 +874,8 @@ export type AttendanceUpdatePayload = Partial<{
   clockOut: string | null;
   lateMinutes: number;
   lateCoverMinutes: number;
+  dayType: "full_day" | "short_leave" | "half_day" | null;
+  isManual: boolean;
   notes: string | null;
 }>;
 
@@ -895,7 +897,10 @@ export function buildAttendanceUpdatePayload(
     status: AttendanceRecord["status"];
     clockIn: string;
     clockOut: string;
+    lateMinutes: string;
     lateCoverMinutes: string;
+    dayType: "" | "full_day" | "short_leave" | "half_day";
+    isManual: boolean;
     notes: string;
   },
 ): AttendanceUpdatePayload {
@@ -913,9 +918,24 @@ export function buildAttendanceUpdatePayload(
     changes.clockOut = form.clockOut || null;
   }
 
-  const lateMinutes = form.lateCoverMinutes ? Number(form.lateCoverMinutes) : 0;
-  if (lateMinutes !== original.lateCoverMinutes) {
-    changes.lateCoverMinutes = lateMinutes;
+  const arrivalLate = form.lateMinutes ? Number(form.lateMinutes) : 0;
+  if (arrivalLate !== (original.lateMinutes ?? 0)) {
+    changes.lateMinutes = arrivalLate;
+  }
+
+  const coverOwed = form.lateCoverMinutes ? Number(form.lateCoverMinutes) : 0;
+  if (coverOwed !== original.lateCoverMinutes) {
+    changes.lateCoverMinutes = coverOwed;
+  }
+
+  const nextDayType = form.dayType || null;
+  const origDayType = original.dayType ?? null;
+  if (nextDayType !== origDayType) {
+    changes.dayType = nextDayType;
+  }
+
+  if (form.isManual !== !!original.isManual) {
+    changes.isManual = form.isManual;
   }
 
   const notes = form.notes.trim();
@@ -1116,6 +1136,89 @@ export const leaveApi = {
     const body = response.data;
     if (body.status !== "success") {
       throw new Error("Failed to load leave requests");
+    }
+    return body;
+  },
+};
+
+// ------------------------------- Unauthorised request API -------------------------------
+
+export type UnauthorisedRequestStatus = "pending" | "approved" | "rejected" | "cancelled";
+
+export type UnauthorisedRequestRecord = {
+  id: number;
+  unauthorisedRequestId: string;
+  employeeId: string;
+  attendanceId: number;
+  happenDate: string;
+  clockIn: string | null;
+  clockOut: string | null;
+  reason: string;
+  description: string;
+  status: UnauthorisedRequestStatus;
+  reviewedBy: string | null;
+  reviewComments: string | null;
+  reviewedAt: string | null;
+  hod: number | null;
+  supervisor: number | null;
+  canAccept?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type UnauthorisedRequestSubmitPayload = {
+  attendanceId: string;
+  reason: string;
+  description: string;
+  happenDate?: string;
+  clockIn?: string;
+  clockOut?: string;
+  employeeId?: string;
+};
+
+export type UnauthorisedRequestSubmitResponse = {
+  status: "success";
+  message: string;
+  data: UnauthorisedRequestRecord;
+};
+
+export type UnauthorisedRequestListResponse = {
+  status: "success";
+  count: number;
+  meta: { total: number; page: number; limit: number };
+  data: UnauthorisedRequestRecord[];
+};
+
+export const unauthorisedApi = {
+  // POST /unauthorised/submit — resolve an unauthorised attendance day
+  async submit(payload: UnauthorisedRequestSubmitPayload) {
+    const response = await api.post<UnauthorisedRequestSubmitResponse>(
+      "/unauthorised/submit",
+      payload,
+    );
+    const body = response.data;
+    if (body.status !== "success") {
+      throw new Error("Failed to submit unauthorised request");
+    }
+    return body.data;
+  },
+
+  async getForEmployee(
+    employeeId: string,
+    filters: { status?: UnauthorisedRequestStatus; page?: number; limit?: number } = {},
+  ) {
+    const params: Record<string, string | number> = {};
+    if (filters.status) params.status = filters.status;
+    if (filters.page != null) params.page = filters.page;
+    if (filters.limit != null) params.limit = filters.limit;
+
+    const response = await api.get<UnauthorisedRequestListResponse>(
+      `/unauthorised/employee/${encodeURIComponent(employeeId)}`,
+      { params },
+    );
+    const body = response.data;
+    if (body.status !== "success") {
+      throw new Error("Failed to load unauthorised requests");
     }
     return body;
   },

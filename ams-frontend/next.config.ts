@@ -38,6 +38,11 @@ const nextConfig: NextConfig = {
         source: "/leave/:path*",
         destination: `${backendUrl}/leave/:path*`,
       },
+      {
+        // Covers /unauthorised/submit, /unauthorised/employee/:id, /unauthorised/:id.
+        source: "/unauthorised/:path*",
+        destination: `${backendUrl}/unauthorised/:path*`,
+      },
     ];
   },
 };

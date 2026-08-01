@@ -19,6 +19,7 @@ const Roster   = require('./src/models/Roster');
 const AttendanceLog = require('./src/models/AttendanceLog'); // Each punch card swipe from IoT or manual entry
 const Attendance = require('./src/models/Attendance');    // final calculated attendance record per employee per day
 const LeaveRequest = require('./src/models/LeaveRequest'); // employee-submitted leave requests awaiting review
+const UnauthorisedRequest = require('./src/models/UnauthorisedRequest'); // requests linked to unauthorised attendance
 
 // ----------------------- Model Routes -----------------------
 const employeeRoutes = require('./src/routes/employeeRoute');
@@ -26,6 +27,7 @@ const rosterRoutes = require('./src/routes/rosterRoute');
 const attendanceLogRoutes = require('./src/routes/attendanceLogRoute');
 const attendanceRoutes = require('./src/routes/attendanceRoute');
 const leaveRequestRoutes = require('./src/routes/leaveRequestRoute');
+const unauthorisedRequestRoutes = require('./src/routes/unauthorisedRequestRoute');
 const authRoutes     = require('./src/routes/authRoute');
 
 // ----------------------- Error Logging Middleware -----------------------
@@ -68,6 +70,9 @@ app.use('/attendance', attendanceRoutes);
 
 // Mount leave request routes under /leave
 app.use('/leave', leaveRequestRoutes);
+
+// Mount unauthorised attendance request routes under /unauthorised
+app.use('/unauthorised', unauthorisedRequestRoutes);
 
 // ----------------------- Error Handlers -----------------------
 // Must be registered AFTER all routes so they only catch unmatched/errored requests

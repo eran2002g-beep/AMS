@@ -40,10 +40,11 @@ const getEmployeeLeaveRequests = async (req, res) => {
     }
 };
 
-// GET /leave - all leave requests, for managers/admin-managers reviewing requests
+// GET /leave - leave requests assigned to the signed-in manager/admin-manager
+// (viewer is the leave's hod or supervisor); each row includes canAccept
 const getAllLeaveRequests = async (req, res) => {
     try {
-        const result = await leaveRequestService.getAllLeaveRequests(req.query);
+        const result = await leaveRequestService.getAllLeaveRequests(req.query, req.user.id);
 
         return res.status(200).json({
             status: 'success',
@@ -57,9 +58,13 @@ const getAllLeaveRequests = async (req, res) => {
 };
 
 // GET /leave/:leaveRequestId - a single leave request by its public ID
+// Only if the signed-in user is assigned as hod or supervisor on that request
 const getLeaveRequestById = async (req, res) => {
     try {
-        const leaveRequest = await leaveRequestService.getLeaveRequestById(req.params.leaveRequestId);
+        const leaveRequest = await leaveRequestService.getLeaveRequestById(
+            req.params.leaveRequestId,
+            req.user.id,
+        );
 
         return res.status(200).json({
             status: 'success',

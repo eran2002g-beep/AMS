@@ -558,29 +558,6 @@ const getEmployeesByPermissionLevel = async (permissionKey) => {
     });
 };
 
-// Export all service functions - add new ones here as we build more features
-module.exports = {
-    createEmployee,
-    getAllEmployees,
-    getEmployeeById,
-    getAdministrativeEmployees,
-    getManagers,
-    searchEmployees,
-    validateReportingRelationships,
-    updateEmployee,
-    updateEmployeeHierarchy,
-    getDirectReports,
-    deleteEmployeeById,
-    getEmployeeAttendance,
-    calculateAttendanceMetrics,
-    validateUserCanManageEmployees,
-    getRolePermissions,
-    getEmployeesByRole,
-    validateRoleAssignment,
-    getEmployeesByPermissionLevel,
-    resolveUnauthorisedAttendance,
-};
-
 // -----------------------------------------------------------------------
 // resolveUnauthorisedAttendance - Convert an 'unauthorised' attendance into an approved leave
 // reviewerEmployeeId: public-facing employeeId of the manager/admin performing the resolution
@@ -611,17 +588,20 @@ const resolveUnauthorisedAttendance = async (attendanceId, reviewerEmployeeId, r
         throw new Error('Only attendance records with status "unauthorised" can be resolved to leave.');
     }
 
-    // Create an approved leave request linking this attendance record
+    // Create an approved leave request covering this attendance day
     const leave = await LeaveRequest.create({
         employeeId: attendance.employeeId,
-        attendanceId: attendance.id,
-        date: attendance.date,
-        requestType: 'leave',
-        status: 'approved',
+        leaveType: 'other',
+        startDate: attendance.date,
+        endDate: attendance.date,
+        totalDays: 1,
         reason: reviewNotes || 'Resolved unauthorised attendance to approved leave',
-        reviewerId: reviewerEmployeeId,
-        reviewNotes: reviewNotes || null,
+        status: 'approved',
+        reviewedBy: reviewerEmployeeId,
+        reviewComments: reviewNotes || null,
         reviewedAt: new Date(),
+        hod: reviewer.hod ?? null,
+        supervisor: reviewer.supervisor ?? null,
     });
 
     // Update attendance to link leave and set status to 'leave'
@@ -630,4 +610,27 @@ const resolveUnauthorisedAttendance = async (attendanceId, reviewerEmployeeId, r
     await attendance.save();
 
     return { attendance: await attendance.reload(), leave };
+};
+
+// Export all service functions - add new ones here as we build more features
+module.exports = {
+    createEmployee,
+    getAllEmployees,
+    getEmployeeById,
+    getAdministrativeEmployees,
+    getManagers,
+    searchEmployees,
+    validateReportingRelationships,
+    updateEmployee,
+    updateEmployeeHierarchy,
+    getDirectReports,
+    deleteEmployeeById,
+    getEmployeeAttendance,
+    calculateAttendanceMetrics,
+    validateUserCanManageEmployees,
+    getRolePermissions,
+    getEmployeesByRole,
+    validateRoleAssignment,
+    getEmployeesByPermissionLevel,
+    resolveUnauthorisedAttendance,
 };
