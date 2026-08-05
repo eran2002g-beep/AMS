@@ -397,6 +397,92 @@ const calculateAttendanceMetrics = async (employeeId, startDate, endDate, shiftS
 };
 
 // -----------------------------------------------------------------------
+// getEmployeeLeaveHistory - fetch leave requests tied to an employee (NEW)
+// Supports filtering by status (pending/approved/rejected), leaveType,
+// a specific year, or an explicit startDate/endDate range.
+// -----------------------------------------------------------------------
+const getEmployeeLeaveHistory = async (employeeId, filters = {}) => {
+    if (!employeeId) {
+        throw new Error('Employee ID is required to retrieve leave history.');
+    }
+
+    // Lazy require to avoid circular deps in some import orders
+    const LeaveRequest = require('../models/LeaveRequest');
+
+    const employee = await Employee.findOne({ where: { employeeId, isActive: true } });
+    if (!employee) {
+        throw new Error(`Active employee with ID ${employeeId} not found.`);
+    }
+
+    const where = { employeeId };
+
+    if (filters.status) where.status = filters.status;
+    if (filters.leaveType) where.leaveType = filters.leaveType;
+
+    if (filters.startDate && filters.endDate) {
+        where.startDate = { [Op.between]: [filters.startDate, filters.endDate] };
+    } else if (filters.year) {
+        const year = Number(filters.year);
+        where.startDate = { [Op.between]: [`${year}-01-01`, `${year}-12-31`] };
+    }
+
+    return LeaveRequest.findAll({
+        where,
+        order: [['startDate', 'DESC']],
+    });
+};
+
+// -----------------------------------------------------------------------
+// getUnauthorisedLeaveRecords - fetch attendance records with status
+// 'unauthorised' (NEW). Pass an employeeId to scope to one employee, or
+// omit it to pull the org-wide list (intended for manager/admin review),
+// in which case each record is annotated with basic employee info.
+// -----------------------------------------------------------------------
+const getUnauthorisedLeaveRecords = async (employeeId = null, filters = {}) => {
+    const where = { status: 'unauthorised' };
+
+    if (employeeId) {
+        const employee = await Employee.findOne({ where: { employeeId, isActive: true } });
+        if (!employee) {
+            throw new Error(`Active employee with ID ${employeeId} not found.`);
+        }
+        where.employeeId = employeeId;
+    }
+
+    if (filters.month) where.month = Number(filters.month);
+    if (filters.year) where.year = Number(filters.year);
+
+    if (filters.startDate && filters.endDate) {
+        where.date = { [Op.between]: [filters.startDate, filters.endDate] };
+    }
+
+    const records = await Attendance.findAll({
+        where,
+        order: [['date', 'DESC']],
+    });
+
+    if (employeeId) {
+        return records;
+    }
+
+    // Org-wide view: attach lightweight employee info to each record
+    const employeeIds = [...new Set(records.map((r) => r.employeeId))];
+    if (employeeIds.length === 0) return [];
+
+    const employees = await Employee.findAll({
+        where: { employeeId: { [Op.in]: employeeIds } },
+        attributes: ['id', 'employeeId', 'firstName', 'lastName', 'department', 'role'],
+        raw: true,
+    });
+    const employeeMap = new Map(employees.map((e) => [e.employeeId, e]));
+
+    return records.map((record) => ({
+        ...record.toJSON(),
+        employee: employeeMap.get(record.employeeId) || null,
+    }));
+};
+
+// -----------------------------------------------------------------------
 // ROLE MANAGEMENT - Methods to manage roles and permissions
 // -----------------------------------------------------------------------
 
@@ -627,6 +713,8 @@ module.exports = {
     deleteEmployeeById,
     getEmployeeAttendance,
     calculateAttendanceMetrics,
+    getEmployeeLeaveHistory,
+    getUnauthorisedLeaveRecords,
     validateUserCanManageEmployees,
     getRolePermissions,
     getEmployeesByRole,
