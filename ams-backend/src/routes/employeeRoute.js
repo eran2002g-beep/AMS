@@ -3,11 +3,13 @@ const express = require('express');
 const router = express.Router();
 
 const employeeService = require('../services/employeeService');
-const { verifyToken, authorize } = require('../middleware/authMiddleware');
+const employeeController = require('../controllers/employeeController');
+const { verifyToken, authorize, authorizeOwnOrRoles } = require('../middleware/authMiddleware');
 const {
     CAN_MANAGE_EMPLOYEES,
     CAN_VIEW_EMPLOYEES,
     CAN_VIEW_ATTENDANCE,
+    CAN_MANAGE_LEAVE,
 } = require("../../config/roles");
 
 // -----------------------------------------------------------------------
@@ -62,6 +64,23 @@ router.get('/managers', verifyToken, authorize(...CAN_MANAGE_EMPLOYEES), async (
         });
     }
 });
+
+// -----------------------------------------------------------------------
+// GET /employee/me/leave-requests - retrieve the signed-in employee's leave history
+// Self-service endpoint for employees to track request status.
+// -----------------------------------------------------------------------
+router.get('/me/leave-requests', verifyToken, employeeController.getMyLeaveHistory);
+
+// -----------------------------------------------------------------------
+// GET /employee/:employeeId/leave-requests - retrieve leave history for one employee
+// Own record: any authenticated employee. Others: manager/admin-manager.
+// -----------------------------------------------------------------------
+router.get(
+    '/:employeeId/leave-requests',
+    verifyToken,
+    authorizeOwnOrRoles(...CAN_MANAGE_LEAVE),
+    employeeController.getEmployeeLeaveHistory,
+);
 
 // -----------------------------------------------------------------------
 // PUT /employee/:employeeId/hierarchy - Update Role and Reporting Structure
