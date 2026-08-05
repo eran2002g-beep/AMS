@@ -20,6 +20,10 @@ router.get(
     unauthorisedRequestController.getEmployeeUnauthorisedRequests,
 );
 
+// GET /unauthorised/me - unauthorised requests for the signed-in employee
+// (must be before /:unauthorisedRequestId)
+router.get('/me', verifyToken, unauthorisedRequestController.getMyUnauthorisedRequests);
+
 // GET /unauthorised/:unauthorisedRequestId - single request for assigned admins
 router.get(
     '/:unauthorisedRequestId',

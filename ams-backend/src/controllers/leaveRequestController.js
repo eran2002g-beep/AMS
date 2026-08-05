@@ -40,6 +40,26 @@ const getEmployeeLeaveRequests = async (req, res) => {
     }
 };
 
+// GET /leave/me - leave request history for the signed-in employee
+const getMyLeaveRequests = async (req, res) => {
+    try {
+        const result = await leaveRequestService.getLeaveRequestsByEmployee(
+            req.user.employeeId,
+            req.query,
+        );
+
+        return res.status(200).json({
+            status: 'success',
+            count: result.records.length,
+            meta: result.meta,
+            data: result.records,
+        });
+    } catch (err) {
+        const statusCode = err.message.includes('not found') ? 404 : 400;
+        return res.status(statusCode).json({ status: 'error', error: err.message });
+    }
+};
+
 // GET /leave - leave requests assigned to the signed-in manager/admin-manager
 // (viewer is the leave's hod or supervisor); each row includes canAccept
 const getAllLeaveRequests = async (req, res) => {
@@ -79,6 +99,7 @@ const getLeaveRequestById = async (req, res) => {
 module.exports = {
     submitLeaveRequest,
     getEmployeeLeaveRequests,
+    getMyLeaveRequests,
     getAllLeaveRequests,
     getLeaveRequestById,
 };

@@ -23,6 +23,9 @@ router.get('/', verifyToken, authorize(...CAN_MANAGE_LEAVE), leaveRequestControl
 // -----------------------------------------------------------------------
 router.get('/employee/:employeeId', verifyToken, authorizeOwnOrRoles(...CAN_MANAGE_LEAVE), leaveRequestController.getEmployeeLeaveRequests);
 
+// GET /leave/me - leave requests for the signed-in employee (must be before /:leaveRequestId)
+router.get('/me', verifyToken, leaveRequestController.getMyLeaveRequests);
+
 // GET /leave/:leaveRequestId - Retrieve a single leave request by its public ID
 // MANAGE LEAVE -> manager, admin-manager
 router.get('/:leaveRequestId', verifyToken, authorize(...CAN_MANAGE_LEAVE), leaveRequestController.getLeaveRequestById);

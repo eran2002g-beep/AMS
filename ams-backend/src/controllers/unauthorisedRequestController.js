@@ -45,6 +45,25 @@ const getEmployeeUnauthorisedRequests = async (req, res) => {
     }
 };
 
+// GET /unauthorised/me - unauthorised request history for the signed-in employee
+const getMyUnauthorisedRequests = async (req, res) => {
+    try {
+        const result = await unauthorisedRequestService.getUnauthorisedRequestsByEmployee(
+            req.user.employeeId,
+            req.query,
+        );
+
+        return res.status(200).json({
+            status: 'success',
+            count: result.records.length,
+            meta: result.meta,
+            data: result.records,
+        });
+    } catch (err) {
+        return res.status(statusFromError(err)).json({ status: 'error', error: err.message });
+    }
+};
+
 // GET /unauthorised
 const getAllUnauthorisedRequests = async (req, res) => {
     try {
@@ -84,6 +103,7 @@ const getUnauthorisedRequestById = async (req, res) => {
 module.exports = {
     submitUnauthorisedRequest,
     getEmployeeUnauthorisedRequests,
+    getMyUnauthorisedRequests,
     getAllUnauthorisedRequests,
     getUnauthorisedRequestById,
 };
