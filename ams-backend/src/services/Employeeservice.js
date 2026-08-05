@@ -397,6 +397,43 @@ const calculateAttendanceMetrics = async (employeeId, startDate, endDate, shiftS
 };
 
 // -----------------------------------------------------------------------
+// getUnauthorisedLeaveRecords - Admin view for unapproved/absent leaves (NEW)
+// -----------------------------------------------------------------------
+const getUnauthorisedLeaveRecords = async (filters = {}) => {
+    const { startDate, endDate, department, employeeId } = filters;
+
+    // Filter status for absent, unauthorised, or unexcused leave records
+    const where = {
+        [Op.or]: [
+            { status: 'ABSENT' },
+            { status: 'UNAUTHORISED' },
+            { status: 'UNEXCUSED' }
+        ]
+    };
+
+    if (employeeId) where.employeeId = employeeId;
+
+    if (startDate && endDate) {
+        where.date = {
+            [Op.between]: [startDate, endDate]
+        };
+    }
+
+    const employeeWhere = { isActive: true };
+    if (department) employeeWhere.department = department;
+
+    return Attendance.findAll({
+        where,
+        include: [{
+            model: Employee,
+            where: employeeWhere,
+            attributes: ['id', 'employeeId', 'firstName', 'lastName', 'department', 'role']
+        }],
+        order: [['date', 'DESC']]
+    });
+};
+
+// -----------------------------------------------------------------------
 // ROLE MANAGEMENT - Methods to manage roles and permissions
 // -----------------------------------------------------------------------
 
@@ -501,7 +538,6 @@ const getEmployeesByRole = async (role) => {
  * @returns {boolean} - True if assignment is allowed
  */
 const validateRoleAssignment = (requesterRole, targetRole) => {
-    // Validate inputs
     if (!requesterRole || !targetRole) {
         throw new Error('Both requesterRole and targetRole are required.');
     }
@@ -512,7 +548,6 @@ const validateRoleAssignment = (requesterRole, targetRole) => {
         throw error;
     }
 
-    // Only super-admin can assign roles
     if (requesterRole !== ROLES.SUPER_ADMIN) {
         throw new Error(`Only ${ROLES.SUPER_ADMIN} can assign roles. User role "${requesterRole}" is not authorized.`);
     }
@@ -535,7 +570,6 @@ const getEmployeesByPermissionLevel = async (permissionKey) => {
         throw new Error(`Invalid permission key: ${permissionKey}. Allowed: ${allowedPermissions.join(', ')}`);
     }
 
-    // Get roles that have this permission
     const rolesWithPermission = Object.entries(ROLES).reduce((acc, [key, role]) => {
         const permissions = getRolePermissions(role);
         if (permissions[permissionKey] === true) {
@@ -558,7 +592,7 @@ const getEmployeesByPermissionLevel = async (permissionKey) => {
     });
 };
 
-// Export all service functions - add new ones here as we build more features
+// Export all service functions
 module.exports = {
     createEmployee,
     getAllEmployees,
@@ -573,6 +607,7 @@ module.exports = {
     deleteEmployeeById,
     getEmployeeAttendance,
     calculateAttendanceMetrics,
+    getUnauthorisedLeaveRecords, 
     validateUserCanManageEmployees,
     getRolePermissions,
     getEmployeesByRole,
