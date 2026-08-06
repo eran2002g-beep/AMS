@@ -133,6 +133,40 @@ const validateLateCoverMinutes = (value) => {
 };
 
 // ---------------------------------------------------------------------------
+// validateLateMinutes - arrival lateness vs scheduled start (non-negative int)
+// ---------------------------------------------------------------------------
+const validateLateMinutes = (value) => {
+    if (value === undefined || value === null || value === '') return;
+
+    const parsed = Number(value);
+
+    if (!Number.isInteger(parsed) || parsed < 0) {
+        throw new Error('lateMinutes must be a non-negative integer.');
+    }
+
+    if (parsed > MAX_LATE_COVER_MINUTES) {
+        throw new Error(
+            `lateMinutes (${parsed}) exceeds the maximum allowed value of ${MAX_LATE_COVER_MINUTES} minutes (one full day).`,
+        );
+    }
+};
+
+const VALID_DAY_TYPES = ['full_day', 'short_leave', 'half_day'];
+
+// ---------------------------------------------------------------------------
+// validateDayType - null clears classification; otherwise must be a known ENUM
+// ---------------------------------------------------------------------------
+const validateDayType = (value) => {
+    if (value === undefined || value === null || value === '') return null;
+
+    const dayType = String(value).trim();
+    if (!VALID_DAY_TYPES.includes(dayType)) {
+        throw new Error(`dayType must be one of: ${VALID_DAY_TYPES.join(', ')}.`);
+    }
+    return dayType;
+};
+
+// ---------------------------------------------------------------------------
 // validateShiftTimes
 // Checks that both scheduledStart and scheduledEnd are valid time strings
 // when provided, and that scheduledStart is before scheduledEnd.
@@ -165,5 +199,8 @@ module.exports = {
     validateNoDuplicateAttendance,
     validateRosterEmployeeMatch,
     validateLateCoverMinutes,
+    validateLateMinutes,
+    validateDayType,
+    VALID_DAY_TYPES,
     validateShiftTimes,
 };

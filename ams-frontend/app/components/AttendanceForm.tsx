@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import {
   Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Button, Box, CircularProgress, MenuItem,
+  FormControlLabel, Switch,
 } from "@mui/material";
 import type { AttendanceRecord, Employee } from "@/lib/api";
 import TimePickerField from "@/components/TimePickerField";
@@ -13,7 +14,10 @@ export type AttendanceFormData = {
   status: AttendanceRecord["status"];
   clockIn: string;
   clockOut: string;
+  lateMinutes: string;
   lateCoverMinutes: string;
+  dayType: "" | "full_day" | "short_leave" | "half_day";
+  isManual: boolean;
   notes: string;
 };
 
@@ -25,6 +29,13 @@ const STATUS_OPTIONS: Array<{ value: AttendanceRecord["status"]; label: string }
   { value: "holiday", label: "Holiday" },
 ];
 
+const DAY_TYPE_OPTIONS: Array<{ value: AttendanceFormData["dayType"]; label: string }> = [
+  { value: "", label: "None" },
+  { value: "full_day", label: "Full day" },
+  { value: "short_leave", label: "Short leave" },
+  { value: "half_day", label: "Half day" },
+];
+
 function emptyForm(defaultDate: string): AttendanceFormData {
   return {
     employeeId: "",
@@ -32,7 +43,10 @@ function emptyForm(defaultDate: string): AttendanceFormData {
     status: "present",
     clockIn: "",
     clockOut: "",
+    lateMinutes: "",
     lateCoverMinutes: "",
+    dayType: "",
+    isManual: true,
     notes: "",
   };
 }
@@ -44,7 +58,10 @@ function recordToForm(record: AttendanceRecord): AttendanceFormData {
     status: record.status,
     clockIn: record.clockIn ? record.clockIn.slice(0, 5) : "",
     clockOut: record.clockOut ? record.clockOut.slice(0, 5) : "",
+    lateMinutes: record.lateMinutes > 0 ? String(record.lateMinutes) : "",
     lateCoverMinutes: record.lateCoverMinutes > 0 ? String(record.lateCoverMinutes) : "",
+    dayType: record.dayType ?? "",
+    isManual: !!record.isManual,
     notes: record.notes ?? "",
   };
 }
@@ -98,6 +115,9 @@ export default function AttendanceForm({
     if (!form.date) newErrors.date = "Date is required";
     if (!form.status) newErrors.status = "Status is required";
 
+    if (form.lateMinutes && !/^\d+$/.test(form.lateMinutes)) {
+      newErrors.lateMinutes = "Must be a whole number";
+    }
     if (form.lateCoverMinutes && !/^\d+$/.test(form.lateCoverMinutes)) {
       newErrors.lateCoverMinutes = "Must be a whole number";
     }
@@ -193,6 +213,17 @@ export default function AttendanceForm({
             />
           </Box>
           <TextField
+            name="lateMinutes"
+            label="Late (minutes)"
+            type="number"
+            value={form.lateMinutes}
+            onChange={handleChange}
+            error={!!errors.lateMinutes}
+            helperText={errors.lateMinutes || "Minutes late vs scheduled start"}
+            slotProps={{ htmlInput: { min: 0 } }}
+            fullWidth
+          />
+          <TextField
             name="lateCoverMinutes"
             label="Cover owed (minutes)"
             type="number"
@@ -203,6 +234,33 @@ export default function AttendanceForm({
             slotProps={{ htmlInput: { min: 0 } }}
             fullWidth
           />
+          <TextField
+            name="dayType"
+            label="Day type"
+            select
+            value={form.dayType}
+            onChange={handleChange}
+            helperText="Worked-hours classification for the day"
+            fullWidth
+          >
+            {DAY_TYPE_OPTIONS.map((opt) => (
+              <MenuItem key={opt.value || "none"} value={opt.value}>
+                {opt.label}
+              </MenuItem>
+            ))}
+          </TextField>
+          {isEdit && (
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={form.isManual}
+                  onChange={(e) => setForm({ ...form, isManual: e.target.checked })}
+                  color="success"
+                />
+              }
+              label="Manual record"
+            />
+          )}
           <TextField
             name="notes"
             label="Notes"

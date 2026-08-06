@@ -94,6 +94,32 @@ const LeaveRequest = sequelize.define('LeaveRequest', {
         allowNull: true,
     },
 
+    // hod - internal employee PK of the HOD assigned at submit time (snapshot from Employee.hod)
+    // used so the admin leave queue can find requests assigned to this manager
+    hod: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+            model: 'employees',
+            key: 'id',
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL',
+    },
+
+    // supervisor - internal employee PK of the supervisor assigned at submit time
+    // (snapshot from Employee.supervisor) — same queue filtering purpose as hod
+    supervisor: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+            model: 'employees',
+            key: 'id',
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL',
+    },
+
 }, {
     tableName: 'leave_requests',
     timestamps: true, // createdAt = submission time, updatedAt = last status change

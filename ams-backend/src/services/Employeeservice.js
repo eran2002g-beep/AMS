@@ -431,6 +431,89 @@ const getUnauthorisedLeaveRecords = async (filters = {}) => {
         }],
         order: [['date', 'DESC']]
     });
+// getEmployeeLeaveHistory - fetch leave requests tied to an employee (NEW)
+// Supports filtering by status (pending/approved/rejected), leaveType,
+// a specific year, or an explicit startDate/endDate range.
+// -----------------------------------------------------------------------
+const getEmployeeLeaveHistory = async (employeeId, filters = {}) => {
+    if (!employeeId) {
+        throw new Error('Employee ID is required to retrieve leave history.');
+    }
+
+    // Lazy require to avoid circular deps in some import orders
+    const LeaveRequest = require('../models/LeaveRequest');
+
+    const employee = await Employee.findOne({ where: { employeeId, isActive: true } });
+    if (!employee) {
+        throw new Error(`Active employee with ID ${employeeId} not found.`);
+    }
+
+    const where = { employeeId };
+
+    if (filters.status) where.status = filters.status;
+    if (filters.leaveType) where.leaveType = filters.leaveType;
+
+    if (filters.startDate && filters.endDate) {
+        where.startDate = { [Op.between]: [filters.startDate, filters.endDate] };
+    } else if (filters.year) {
+        const year = Number(filters.year);
+        where.startDate = { [Op.between]: [`${year}-01-01`, `${year}-12-31`] };
+    }
+
+    return LeaveRequest.findAll({
+        where,
+        order: [['startDate', 'DESC']],
+    });
+};
+
+// -----------------------------------------------------------------------
+// getUnauthorisedLeaveRecords - fetch attendance records with status
+// 'unauthorised' (NEW). Pass an employeeId to scope to one employee, or
+// omit it to pull the org-wide list (intended for manager/admin review),
+// in which case each record is annotated with basic employee info.
+// -----------------------------------------------------------------------
+const getUnauthorisedLeaveRecords = async (employeeId = null, filters = {}) => {
+    const where = { status: 'unauthorised' };
+
+    if (employeeId) {
+        const employee = await Employee.findOne({ where: { employeeId, isActive: true } });
+        if (!employee) {
+            throw new Error(`Active employee with ID ${employeeId} not found.`);
+        }
+        where.employeeId = employeeId;
+    }
+
+    if (filters.month) where.month = Number(filters.month);
+    if (filters.year) where.year = Number(filters.year);
+
+    if (filters.startDate && filters.endDate) {
+        where.date = { [Op.between]: [filters.startDate, filters.endDate] };
+    }
+
+    const records = await Attendance.findAll({
+        where,
+        order: [['date', 'DESC']],
+    });
+
+    if (employeeId) {
+        return records;
+    }
+
+    // Org-wide view: attach lightweight employee info to each record
+    const employeeIds = [...new Set(records.map((r) => r.employeeId))];
+    if (employeeIds.length === 0) return [];
+
+    const employees = await Employee.findAll({
+        where: { employeeId: { [Op.in]: employeeIds } },
+        attributes: ['id', 'employeeId', 'firstName', 'lastName', 'department', 'role'],
+        raw: true,
+    });
+    const employeeMap = new Map(employees.map((e) => [e.employeeId, e]));
+
+    return records.map((record) => ({
+        ...record.toJSON(),
+        employee: employeeMap.get(record.employeeId) || null,
+    }));
 };
 
 // -----------------------------------------------------------------------
@@ -593,6 +676,61 @@ const getEmployeesByPermissionLevel = async (permissionKey) => {
 };
 
 // Export all service functions
+// -----------------------------------------------------------------------
+// resolveUnauthorisedAttendance - Convert an 'unauthorised' attendance into an approved leave
+// reviewerEmployeeId: public-facing employeeId of the manager/admin performing the resolution
+// reviewNotes: optional notes about why the unauthorised was resolved to leave
+// -----------------------------------------------------------------------
+const resolveUnauthorisedAttendance = async (attendanceId, reviewerEmployeeId, reviewNotes = null) => {
+    if (!attendanceId) throw new Error('attendanceId is required');
+    if (!reviewerEmployeeId) throw new Error('reviewerEmployeeId is required');
+
+    // Lazy require to avoid circular deps in some import orders
+    const Attendance = require('../models/Attendance');
+    const LeaveRequest = require('../models/LeaveRequest');
+
+    // Fetch reviewer and validate permission
+    const reviewer = await Employee.findOne({ where: { employeeId: reviewerEmployeeId, isActive: true } });
+    if (!reviewer) throw new Error(`Active reviewer with ID ${reviewerEmployeeId} not found.`);
+
+    const reviewerPerms = getRolePermissions(reviewer.role);
+    if (!reviewerPerms.canManageLeave) {
+        throw new Error('Reviewer does not have permission to resolve unauthorised attendance.');
+    }
+
+    // Load attendance record
+    const attendance = await Attendance.findOne({ where: { attendanceId } });
+    if (!attendance) throw new Error(`Attendance record with ID ${attendanceId} not found.`);
+
+    if (attendance.status !== 'unauthorised') {
+        throw new Error('Only attendance records with status "unauthorised" can be resolved to leave.');
+    }
+
+    // Create an approved leave request covering this attendance day
+    const leave = await LeaveRequest.create({
+        employeeId: attendance.employeeId,
+        leaveType: 'other',
+        startDate: attendance.date,
+        endDate: attendance.date,
+        totalDays: 1,
+        reason: reviewNotes || 'Resolved unauthorised attendance to approved leave',
+        status: 'approved',
+        reviewedBy: reviewerEmployeeId,
+        reviewComments: reviewNotes || null,
+        reviewedAt: new Date(),
+        hod: reviewer.hod ?? null,
+        supervisor: reviewer.supervisor ?? null,
+    });
+
+    // Update attendance to link leave and set status to 'leave'
+    attendance.leaveRequestId = leave.id;
+    attendance.status = 'leave';
+    await attendance.save();
+
+    return { attendance: await attendance.reload(), leave };
+};
+
+// Export all service functions - add new ones here as we build more features
 module.exports = {
     createEmployee,
     getAllEmployees,
@@ -608,9 +746,12 @@ module.exports = {
     getEmployeeAttendance,
     calculateAttendanceMetrics,
     getUnauthorisedLeaveRecords, 
+    getEmployeeLeaveHistory,
+    getUnauthorisedLeaveRecords,
     validateUserCanManageEmployees,
     getRolePermissions,
     getEmployeesByRole,
     validateRoleAssignment,
     getEmployeesByPermissionLevel,
+    resolveUnauthorisedAttendance,
 };

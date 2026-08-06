@@ -1,13 +1,14 @@
 // server.js - entry point, connects to the database then starts the Express server
 
+// Must run before any process.env usage / DB import - loads values from .env
+require('dotenv').config();
+
 // Express handles incoming HTTP requests and routes them to the right controller
 const express = require('express');
 const cors = require('cors'); // FIX: import CORS middleware
 
 // Import the shared DB connection
 const sequelize = require('./config/db');
-// Must run before any process.env usage - loads values from .env
-require('dotenv').config();
 
 // ----------------------- Model Imports -----------------------
 // Import all models here so sequelize.sync() creates their tables
@@ -18,6 +19,7 @@ const Roster   = require('./src/models/Roster');
 const AttendanceLog = require('./src/models/AttendanceLog'); // Each punch card swipe from IoT or manual entry
 const Attendance = require('./src/models/Attendance');    // final calculated attendance record per employee per day
 const LeaveRequest = require('./src/models/LeaveRequest'); // employee-submitted leave requests awaiting review
+const UnauthorisedRequest = require('./src/models/UnauthorisedRequest'); // requests linked to unauthorised attendance
 
 // ----------------------- Model Routes -----------------------
 const employeeRoutes = require('./src/routes/employeeRoute');
@@ -25,6 +27,7 @@ const rosterRoutes = require('./src/routes/rosterRoute');
 const attendanceLogRoutes = require('./src/routes/attendanceLogRoute');
 const attendanceRoutes = require('./src/routes/attendanceRoute');
 const leaveRequestRoutes = require('./src/routes/leaveRequestRoute');
+const unauthorisedRequestRoutes = require('./src/routes/unauthorisedRequestRoute');
 const authRoutes     = require('./src/routes/authRoute');
 
 // ----------------------- Error Logging Middleware -----------------------
@@ -68,6 +71,9 @@ app.use('/attendance', attendanceRoutes);
 // Mount leave request routes under /leave
 app.use('/leave', leaveRequestRoutes);
 
+// Mount unauthorised attendance request routes under /unauthorised
+app.use('/unauthorised', unauthorisedRequestRoutes);
+
 // ----------------------- Error Handlers -----------------------
 // Must be registered AFTER all routes so they only catch unmatched/errored requests
 app.use(notFoundLogger);  // 404 - route not found
@@ -79,41 +85,54 @@ const PORT = process.env.PORT || 5000;
 // Step 1 - test the database connection
 sequelize.authenticate()
 
-    // Step 2 - add password column and backfill before sync enforces NOT NULL
-    .then(() => {
+    // Step 2 - create tables on a fresh DB, or migrate password on an existing one
+    // Password must be backfilled before sync enforces NOT NULL on existing rows.
+    .then(async () => {
         console.log('');
         console.log('-------------------------------------------------------');
         console.log('Neon database connected successfully.');
-        return sequelize.query(`
+
+        const tables = await sequelize.getQueryInterface().showAllTables();
+        const tableNames = tables.map((t) => (
+            typeof t === 'string' ? t : (t.tableName || t.name || '')
+        ).toLowerCase());
+        const hasEmployees = tableNames.includes('employees');
+
+        if (!hasEmployees) {
+            // Fresh database — create all tables from models first
+            await sequelize.sync({ alter: true });
+            return;
+        }
+
+        await sequelize.query(`
             ALTER TABLE employees
             ADD COLUMN IF NOT EXISTS password VARCHAR(255);
         `);
-    })
-    .then(async () => {
+
         const [results] = await sequelize.query(`
             SELECT COUNT(*)::int AS count
             FROM employees
             WHERE password IS NULL OR password = '';
         `);
         const missingCount = results[0]?.count ?? 0;
-        if (missingCount === 0) return;
+        if (missingCount > 0) {
+            const bcrypt = require('bcrypt');
+            const placeholderHash = await bcrypt.hash('ChangeMe123!', 10);
+            await sequelize.query(
+                `UPDATE employees SET password = :hash WHERE password IS NULL OR password = '';`,
+                { replacements: { hash: placeholderHash } },
+            );
+            console.log(`Backfilled password for ${missingCount} employee(s) with temporary default.`);
+        }
 
-        const bcrypt = require('bcrypt');
-        const placeholderHash = await bcrypt.hash('ChangeMe123!', 10);
-        await sequelize.query(
-            `UPDATE employees SET password = :hash WHERE password IS NULL OR password = '';`,
-            { replacements: { hash: placeholderHash } },
-        );
-        console.log(`Backfilled password for ${missingCount} employee(s) with temporary default.`);
+        await sequelize.query(`
+            ALTER TABLE employees
+            ALTER COLUMN password SET NOT NULL;
+        `);
+
+        // alter: true updates existing tables safely without deleting data
+        await sequelize.sync({ alter: true });
     })
-    .then(() => sequelize.query(`
-        ALTER TABLE employees
-        ALTER COLUMN password SET NOT NULL;
-    `))
-
-    // Step 3 - create or update tables to match model definitions
-    // alter: true updates existing tables safely without deleting data
-    .then(() => sequelize.sync({ alter: true }))
 
     // Step 4 - apply known schema patches (sync alter alone is unreliable on PostgreSQL)
     .then(() => sequelize.query(`

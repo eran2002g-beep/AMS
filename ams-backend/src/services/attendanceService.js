@@ -24,6 +24,8 @@ const {
     validateDateNotInFuture,
     validateNoDuplicateAttendance,
     validateLateCoverMinutes,
+    validateLateMinutes,
+    validateDayType,
     validateShiftTimes,
 } = require('./attendanceValidation');
 
@@ -666,7 +668,8 @@ const normalizeAttendanceUpdatePayload = (data = {}) => {
     }
 
     const allowedFields = [
-        'employeeId', 'date', 'clockIn', 'clockOut', 'status', 'lateCoverMinutes',
+        'employeeId', 'date', 'clockIn', 'clockOut', 'status',
+        'lateMinutes', 'lateCoverMinutes', 'dayType',
         'notes', 'scheduledStart', 'scheduledEnd', 'rosterId', 'attendanceLogId',
         'leaveRequestId', 'isManual', 'month', 'year',
     ];
@@ -724,6 +727,17 @@ const normalizeAttendanceUpdatePayload = (data = {}) => {
         if (key === 'lateCoverMinutes') {
             validateLateCoverMinutes(value);
             update.lateCoverMinutes = Number(value);
+            continue;
+        }
+
+        if (key === 'lateMinutes') {
+            validateLateMinutes(value);
+            update.lateMinutes = Number(value);
+            continue;
+        }
+
+        if (key === 'dayType') {
+            update.dayType = validateDayType(value);
             continue;
         }
 
