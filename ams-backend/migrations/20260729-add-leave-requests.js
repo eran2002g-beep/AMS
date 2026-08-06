@@ -1,13 +1,37 @@
+// Legacy migration: original leave_requests shape (attendanceId/date/requestType).
+// Current LeaveRequest schema is created/evolved via sequelize.sync + later migrations.
+// If the table already exists, skip so migrate can proceed on existing databases.
+
 const up = async (sequelize) => {
+    const [existing] = await sequelize.query(`
+        SELECT 1 AS present
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name = 'leave_requests'
+        LIMIT 1;
+    `);
+
+    if (existing.length > 0) {
+        return;
+    }
+
     await sequelize.transaction(async (transaction) => {
         await sequelize.query(`
-            CREATE TYPE IF NOT EXISTS "enum_leave_requests_requestType"
-                AS ENUM ('unauthorised', 'leave');
+            DO $$ BEGIN
+                CREATE TYPE "enum_leave_requests_requestType"
+                    AS ENUM ('unauthorised', 'leave');
+            EXCEPTION
+                WHEN duplicate_object THEN NULL;
+            END $$;
         `, { transaction });
 
         await sequelize.query(`
-            CREATE TYPE IF NOT EXISTS "enum_leave_requests_status"
-                AS ENUM ('pending', 'approved', 'rejected');
+            DO $$ BEGIN
+                CREATE TYPE "enum_leave_requests_status"
+                    AS ENUM ('pending', 'approved', 'rejected');
+            EXCEPTION
+                WHEN duplicate_object THEN NULL;
+            END $$;
         `, { transaction });
 
         await sequelize.query(`

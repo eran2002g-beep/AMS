@@ -3,11 +3,13 @@ const express = require('express');
 const router = express.Router();
 
 const employeeService = require('../services/employeeService');
-const { verifyToken, authorize } = require('../middleware/authMiddleware');
+const employeeController = require('../controllers/employeeController');
+const { verifyToken, authorize, authorizeOwnOrRoles } = require('../middleware/authMiddleware');
 const {
     CAN_MANAGE_EMPLOYEES,
     CAN_VIEW_EMPLOYEES,
     CAN_VIEW_ATTENDANCE,
+    CAN_MANAGE_LEAVE,
 } = require("../../config/roles");
 
 // -----------------------------------------------------------------------
@@ -18,7 +20,13 @@ router.get('/', verifyToken, authorize(...CAN_VIEW_EMPLOYEES), async (req, res) 
     try {
         const { q, department, role, page, limit } = req.query;
 
-        const result = await employeeService.searchEmployees({ q, department, role, page, limit });
+        const result = await employeeService.searchEmployees({
+            q,
+            department,
+            role,
+            page,
+            limit
+        });
 
         return res.status(200).json({
             success: true,
@@ -27,9 +35,9 @@ router.get('/', verifyToken, authorize(...CAN_VIEW_EMPLOYEES), async (req, res) 
             data: result.employees
         });
     } catch (err) {
-        return res.status(500).json({ 
-            success: false, 
-            error: err.message 
+        return res.status(500).json({
+            success: false,
+            error: err.message
         });
     }
 });
@@ -43,6 +51,7 @@ router.get('/', verifyToken, authorize(...CAN_VIEW_EMPLOYEES), async (req, res) 
 router.get('/managers', verifyToken, authorize(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
     try {
         const managers = await employeeService.getManagers();
+
         return res.status(200).json({
             success: true,
             count: managers.length,
@@ -88,6 +97,25 @@ router.get('/unauthorised-leaves', verifyToken, authorize(...CAN_VIEW_ATTENDANCE
 // -----------------------------------------------------------------------
 // PUT /employee/:employeeId/hierarchy - Update Role and Reporting Structure
 // EMPLOYEE CRUD -> admin/super_admin only (via CAN_MANAGE_EMPLOYEES permissions)
+// GET /employee/me/leave-requests - retrieve the signed-in employee's leave history
+// Self-service endpoint for employees to track request status.
+// -----------------------------------------------------------------------
+router.get('/me/leave-requests', verifyToken, employeeController.getMyLeaveHistory);
+
+// -----------------------------------------------------------------------
+// GET /employee/:employeeId/leave-requests - retrieve leave history for one employee
+// Own record: any authenticated employee. Others: manager/admin-manager.
+// -----------------------------------------------------------------------
+router.get(
+    '/:employeeId/leave-requests',
+    verifyToken,
+    authorizeOwnOrRoles(...CAN_MANAGE_LEAVE),
+    employeeController.getEmployeeLeaveHistory,
+);
+
+// -----------------------------------------------------------------------
+// PUT /employee/:employeeId/hierarchy - Update Role and Reporting Structure
+// EMPLOYEE CRUD -> admin/super_admin only
 // -----------------------------------------------------------------------
 router.put('/:employeeId/hierarchy', verifyToken, authorize(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
     try {
@@ -95,15 +123,21 @@ router.put('/:employeeId/hierarchy', verifyToken, authorize(...CAN_MANAGE_EMPLOY
         // hierarchyData payload: { role, hod, supervisor }
         const updatedEmployee = await employeeService.updateEmployeeHierarchy(employeeId, req.body);
         
+
+        const updatedEmployee = await employeeService.updateEmployeeHierarchy(
+            employeeId,
+            req.body
+        );
+
         return res.status(200).json({
             success: true,
             message: 'Employee role management and hierarchy lines updated successfully.',
             data: updatedEmployee
         });
     } catch (err) {
-        return res.status(400).json({ 
-            success: false, 
-            error: err.message 
+        return res.status(400).json({
+            success: false,
+            error: err.message
         });
     }
 });
@@ -111,21 +145,23 @@ router.put('/:employeeId/hierarchy', verifyToken, authorize(...CAN_MANAGE_EMPLOY
 // -----------------------------------------------------------------------
 // GET /employee/:managerId/subordinates - Get all direct reports for a manager
 // EMPLOYEE HIERARCHY READ -> restricted to super-admin and management roles
+// GET /employee/:managerId/subordinates - Get all direct reports
 // -----------------------------------------------------------------------
 router.get('/:managerId/subordinates', verifyToken, authorize(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
     try {
         const { managerId } = req.params;
+
         const subordinates = await employeeService.getDirectReports(managerId);
-        
+
         return res.status(200).json({
             success: true,
             count: subordinates.length,
             data: subordinates
         });
     } catch (err) {
-        return res.status(404).json({ 
-            success: false, 
-            error: err.message 
+        return res.status(404).json({
+            success: false,
+            error: err.message
         });
     }
 });
@@ -133,50 +169,60 @@ router.get('/:managerId/subordinates', verifyToken, authorize(...CAN_MANAGE_EMPL
 // -----------------------------------------------------------------------
 // GET /employee/:employeeId - Retrieve one active employee by ID
 // EMPLOYEE READ -> super-admin, admin, and admin-manager
+// GET /employee/:employeeId - Retrieve one employee
 // -----------------------------------------------------------------------
 router.get('/:employeeId', verifyToken, authorize(...CAN_VIEW_EMPLOYEES), async (req, res) => {
     try {
         const employee = await employeeService.getEmployeeById(req.params.employeeId);
-        return res.status(200).json({ success: true, data: employee });
+
+        return res.status(200).json({
+            success: true,
+            data: employee
+        });
     } catch (err) {
-        return res.status(404).json({ success: false, error: err.message });
+        return res.status(404).json({
+            success: false,
+            error: err.message
+        });
     }
 });
 
 // -----------------------------------------------------------------------
-// POST /employee/create - Create a new employee record
-// EMPLOYEE CRUD -> super_admin only (via CAN_MANAGE_EMPLOYEES permissions)
+// POST /employee/create
 // -----------------------------------------------------------------------
 router.post('/create', verifyToken, authorize(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
     try {
         const employee = await employeeService.createEmployee(req.body);
+
         return res.status(201).json(employee);
     } catch (err) {
-        return res.status(400).json({ error: err.message });
+        return res.status(400).json({
+            error: err.message
+        });
     }
 });
 
 // -----------------------------------------------------------------------
 // DELETE /employee/:employeeId - Soft delete an employee record
 // EMPLOYEE CRUD -> super_admin only (via CAN_MANAGE_EMPLOYEES permissions)
+// DELETE /employee/:employeeId
 // -----------------------------------------------------------------------
 router.delete('/:employeeId', verifyToken, authorize(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
     try {
-        // Extract employeeId from URL parameters
-        const { employeeId } = req.params; 
-        
+        const { employeeId } = req.params;
+
         await employeeService.deleteEmployeeById(employeeId);
-        
+
         return res.status(200).json({
             success: true,
             message: `Employee ${employeeId} has been successfully deleted.`
         });
     } catch (err) {
-        // Return 404 if employee was not found, otherwise default to 500 server error
         const statusCode = err.message.includes('not found') ? 404 : 500;
-        return res.status(statusCode).json({ 
-            success: false, 
-            error: err.message 
+
+        return res.status(statusCode).json({
+            success: false,
+            error: err.message
         });
     }
 });
@@ -184,20 +230,26 @@ router.delete('/:employeeId', verifyToken, authorize(...CAN_MANAGE_EMPLOYEES), a
 // -----------------------------------------------------------------------
 // PATCH /employee/:employeeId - Update an existing employee record
 // EMPLOYEE CRUD -> super_admin only (via CAN_MANAGE_EMPLOYEES permissions)
+// PATCH /employee/:employeeId
 // -----------------------------------------------------------------------
 router.patch('/:employeeId', verifyToken, authorize(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
     try {
         const { employeeId } = req.params;
-        const updatedEmployee = await employeeService.updateEmployee(employeeId, req.body);
+
+        const updatedEmployee = await employeeService.updateEmployee(
+            employeeId,
+            req.body
+        );
+
         return res.status(200).json({
             success: true,
             message: 'Employee updated successfully',
             data: updatedEmployee
         });
     } catch (err) {
-        return res.status(400).json({ 
-            success: false, 
-            error: err.message 
+        return res.status(400).json({
+            success: false,
+            error: err.message
         });
     }
 });
@@ -205,13 +257,13 @@ router.patch('/:employeeId', verifyToken, authorize(...CAN_MANAGE_EMPLOYEES), as
 // -----------------------------------------------------------------------
 // GET /employee/:employeeId/attendance-summary - Get calculated metrics
 // ATTENDANCE READ -> follows the view attendance permission (admin, admin_manager)
+// GET /employee/:employeeId/attendance-summary
 // -----------------------------------------------------------------------
 router.get('/:employeeId/attendance-summary', verifyToken, authorize(...CAN_VIEW_ATTENDANCE), async (req, res) => {
     try {
         const { employeeId } = req.params;
         const { startDate, endDate, shiftStartTime } = req.query;
 
-        // Ensure date range params are supplied
         if (!startDate || !endDate) {
             return res.status(400).json({
                 success: false,
@@ -219,22 +271,25 @@ router.get('/:employeeId/attendance-summary', verifyToken, authorize(...CAN_VIEW
             });
         }
 
-        // Run core mathematical metrics calculation from service layer
         const metrics = await employeeService.calculateAttendanceMetrics(
-            employeeId, 
-            startDate, 
-            endDate, 
+            employeeId,
+            startDate,
+            endDate,
             shiftStartTime || "09:00"
         );
 
         return res.status(200).json({
             success: true,
             employeeId,
-            period: { startDate, endDate },
+            period: {
+                startDate,
+                endDate
+            },
             data: metrics
         });
     } catch (err) {
         const statusCode = err.message.includes('not found') ? 404 : 500;
+
         return res.status(statusCode).json({
             success: false,
             error: err.message

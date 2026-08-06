@@ -8,6 +8,7 @@ import {
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
+import GavelIcon from "@mui/icons-material/Gavel";
 import type { AttendanceRecord, Employee } from "@/lib/api";
 import {
   formatLateMinutes,
@@ -23,6 +24,9 @@ type Props = {
   records: AttendanceRecord[];
   onEdit?: (record: AttendanceRecord) => void;
   onDelete?: (record: AttendanceRecord) => Promise<void>;
+  onResolveUnauthorised?: (record: AttendanceRecord) => void;
+  /** Internal attendance PKs that already have a pending/approved unauthorised request */
+  resolvingAttendanceIds?: number[];
   deletingAttendanceId?: string | null;
   employeeMap?: Record<string, Employee>;
 };
@@ -59,10 +63,19 @@ function coverCellSx(minutes: number) {
     : { color: "inherit" };
 }
 
-export default function AttendanceTable({ records, onEdit, onDelete, deletingAttendanceId, employeeMap }: Props) {
+export default function AttendanceTable({
+  records,
+  onEdit,
+  onDelete,
+  onResolveUnauthorised,
+  resolvingAttendanceIds = [],
+  deletingAttendanceId,
+  employeeMap,
+}: Props) {
   const [confirmTarget, setConfirmTarget] = useState<AttendanceRecord | null>(null);
-  const showActions = !!onEdit || !!onDelete;
+  const showActions = !!onEdit || !!onDelete || !!onResolveUnauthorised;
   const columnCount = COLUMNS.length + (showActions ? 1 : 0) + (employeeMap ? 1 : 0);
+  const pendingResolveSet = new Set(resolvingAttendanceIds);
 
   const handleConfirmDelete = async () => {
     if (!confirmTarget || !onDelete) return;
@@ -211,6 +224,38 @@ export default function AttendanceTable({ records, onEdit, onDelete, deletingAtt
                   <TableCell>{display(record.notes)}</TableCell>
                   {showActions && (
                     <TableCell>
+                      {onResolveUnauthorised && record.status === "unauthorised" && (
+                        <Tooltip
+                          title={
+                            pendingResolveSet.has(record.id)
+                              ? "Unauthorised request already submitted"
+                              : "Resolve Unauthorised Leave"
+                          }
+                        >
+                          <span>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<GavelIcon fontSize="small" />}
+                              onClick={() => onResolveUnauthorised(record)}
+                              disabled={pendingResolveSet.has(record.id)}
+                              aria-label={`Resolve unauthorised leave for ${formatDate(record.date)}`}
+                              sx={{
+                                mr: 0.5,
+                                textTransform: "none",
+                                borderColor: "#ea580c",
+                                color: "#c2410c",
+                                "&:hover": {
+                                  borderColor: "#c2410c",
+                                  backgroundColor: "#fff7ed",
+                                },
+                              }}
+                            >
+                              Resolve
+                            </Button>
+                          </span>
+                        </Tooltip>
+                      )}
                       {onEdit && (
                         <Tooltip title="Edit attendance">
                           <IconButton
