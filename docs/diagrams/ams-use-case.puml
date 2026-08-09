@@ -1,0 +1,154 @@
+@startuml AMS_Use_Case_Diagram
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 13
+skinparam actorStyle awesome
+skinparam packageStyle rectangle
+skinparam usecase {
+  BackgroundColor #F7F9FC
+  BorderColor #334155
+  FontColor #0F172A
+}
+skinparam actor {
+  BorderColor #0F172A
+  FontColor #0F172A
+}
+skinparam package {
+  BackgroundColor #FFFFFF
+  BorderColor #94A3B8
+  FontColor #334155
+}
+skinparam note {
+  BackgroundColor #FFFBEB
+  BorderColor #D97706
+}
+skinparam arrowColor #475569
+
+left to right direction
+title AMS — Attendance Management System\nUse Case Diagram
+
+actor "Employee" as Emp
+actor "Manager" as Mgr
+actor "Admin" as Adm
+actor "Admin-Manager" as AdmMgr
+actor "Super-Admin" as SAdm
+actor "IoT Punch Device\n(Mock / Manual)" as IoT
+
+rectangle "AMS System" {
+
+  package "Authentication" {
+    usecase "Login" as UC_Login
+    usecase "Refresh Session" as UC_Refresh
+    usecase "Logout" as UC_Logout
+    usecase "View Own Profile" as UC_Profile
+    usecase "Change Password" as UC_ChgPwd
+  }
+
+  package "Self-Service Attendance" {
+    usecase "View Own Attendance" as UC_OwnAtt
+    usecase "Submit Leave Request" as UC_SubmitLeave
+    usecase "View Own Leave Requests" as UC_OwnLeave
+    usecase "Submit Unauthorised\nAttendance Request" as UC_SubmitUnauth
+    usecase "View Own Unauthorised\nRequests" as UC_OwnUnauth
+  }
+
+  package "Leave & Exception Review" {
+    usecase "Review Leave Request Queue" as UC_ReviewLeave
+    usecase "Review Unauthorised\nRequest Queue" as UC_ReviewUnauth
+    usecase "Approve / Reject Leave\n(planned)" as UC_ApproveLeave
+    usecase "Resolve Unauthorised\nAttendance (planned)" as UC_ResolveUnauth
+  }
+
+  package "Attendance Operations" {
+    usecase "View All Attendance" as UC_ViewAtt
+    usecase "Manually Add / Edit\nAttendance Record" as UC_EditAtt
+    usecase "Delete Attendance Record" as UC_DelAtt
+    usecase "Process Normal Attendance" as UC_ProcNormal
+    usecase "Process Roster Attendance" as UC_ProcRoster
+  }
+
+  package "Employee & Roster Admin" {
+    usecase "Create / Update Employee" as UC_EmpCRUD
+    usecase "Soft-Delete Employee" as UC_EmpDel
+    usecase "Reset Employee Password" as UC_ResetPwd
+    usecase "Manage HOD / Supervisor\nHierarchy" as UC_Hierarchy
+    usecase "Upload Roster\n(CSV / XLSX)" as UC_UploadRoster
+    usecase "View / Delete Roster" as UC_ManageRoster
+  }
+
+  package "Punch Ingestion" {
+    usecase "Record Punch Log\n(In / Out)" as UC_Punch
+  }
+}
+
+' ---- Inheritance (role specialization) ----
+Mgr -up-|> Emp
+Adm -up-|> Emp
+AdmMgr -up-|> Emp
+SAdm -up-|> Emp
+AdmMgr -up-|> Mgr
+AdmMgr -up-|> Adm
+
+' ---- Employee (base) ----
+Emp --> UC_Login
+Emp --> UC_Refresh
+Emp --> UC_Logout
+Emp --> UC_Profile
+Emp --> UC_ChgPwd
+Emp --> UC_OwnAtt
+Emp --> UC_SubmitLeave
+Emp --> UC_OwnLeave
+Emp --> UC_SubmitUnauth
+Emp --> UC_OwnUnauth
+
+' ---- Manager ----
+Mgr --> UC_ReviewLeave
+Mgr --> UC_ReviewUnauth
+Mgr --> UC_ApproveLeave
+Mgr --> UC_ResolveUnauth
+
+' ---- Admin ----
+Adm --> UC_ViewAtt
+Adm --> UC_EditAtt
+Adm --> UC_DelAtt
+Adm --> UC_ProcNormal
+Adm --> UC_ProcRoster
+
+' ---- Super-Admin ----
+SAdm --> UC_EmpCRUD
+SAdm --> UC_EmpDel
+SAdm --> UC_ResetPwd
+SAdm --> UC_Hierarchy
+SAdm --> UC_UploadRoster
+SAdm --> UC_ManageRoster
+
+' ---- IoT ----
+IoT --> UC_Punch
+
+' ---- Includes / Extends ----
+UC_ProcNormal ..> UC_Punch : <<include>>
+UC_ProcRoster ..> UC_Punch : <<include>>
+UC_ProcRoster ..> UC_UploadRoster : <<include>>
+UC_SubmitUnauth ..> UC_OwnAtt : <<include>>
+UC_ChgPwd ..> UC_Login : <<extend>>\nmustChangePassword
+UC_ApproveLeave ..> UC_ReviewLeave : <<extend>>
+UC_ResolveUnauth ..> UC_ReviewUnauth : <<extend>>
+
+note right of UC_ApproveLeave
+  Statuses modeled in DB;
+  approve/reject API not wired yet
+end note
+
+note right of UC_ResolveUnauth
+  Service exists;
+  HTTP route not exposed yet
+end note
+
+note bottom of UC_Punch
+  Currently via mock punch UI
+  or POST /attendance-log/create
+end note
+
+@enduml

@@ -1,0 +1,272 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1180" viewBox="0 0 1600 1180">
+  <defs>
+    <style>
+      .title { font: 700 28px Helvetica, Arial, sans-serif; fill: #0f172a; }
+      .subtitle { font: 400 14px Helvetica, Arial, sans-serif; fill: #64748b; }
+      .actor-label { font: 600 13px Helvetica, Arial, sans-serif; fill: #0f172a; text-anchor: middle; }
+      .uc-label { font: 500 12px Helvetica, Arial, sans-serif; fill: #0f172a; text-anchor: middle; }
+      .pkg-title { font: 700 13px Helvetica, Arial, sans-serif; fill: #334155; }
+      .sys-title { font: 700 16px Helvetica, Arial, sans-serif; fill: #1e293b; }
+      .note { font: 400 11px Helvetica, Arial, sans-serif; fill: #92400e; }
+      .legend { font: 400 11px Helvetica, Arial, sans-serif; fill: #475569; }
+      .assoc { stroke: #334155; stroke-width: 1.4; fill: none; }
+      .include { stroke: #64748b; stroke-width: 1.2; stroke-dasharray: 5 3; fill: none; }
+      .gen { stroke: #0f172a; stroke-width: 1.4; fill: none; }
+    </style>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#334155"/>
+    </marker>
+    <marker id="hollow" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto">
+      <path d="M0,0 L11,5 L0,10 Z" fill="#ffffff" stroke="#0f172a" stroke-width="1.2"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="1180" fill="#ffffff"/>
+
+  <text x="800" y="42" text-anchor="middle" class="title">AMS  - Attendance Management System</text>
+  <text x="800" y="68" text-anchor="middle" class="subtitle">Use Case Diagram</text>
+
+  <!-- System boundary -->
+  <rect x="220" y="90" width="1160" height="980" rx="6" fill="#f8fafc" stroke="#64748b" stroke-width="2"/>
+  <text x="240" y="118" class="sys-title">AMS System</text>
+
+  <!-- Actors LEFT -->
+  <g id="employee">
+    <circle cx="90" cy="430" r="16" fill="none" stroke="#0f172a" stroke-width="2"/>
+    <line x1="90" y1="446" x2="90" y2="490" stroke="#0f172a" stroke-width="2"/>
+    <line x1="60" y1="462" x2="120" y2="462" stroke="#0f172a" stroke-width="2"/>
+    <line x1="90" y1="490" x2="68" y2="525" stroke="#0f172a" stroke-width="2"/>
+    <line x1="90" y1="490" x2="112" y2="525" stroke="#0f172a" stroke-width="2"/>
+    <text x="90" y="550" class="actor-label">Employee</text>
+  </g>
+
+  <g id="manager">
+    <circle cx="90" cy="220" r="16" fill="none" stroke="#0f172a" stroke-width="2"/>
+    <line x1="90" y1="236" x2="90" y2="280" stroke="#0f172a" stroke-width="2"/>
+    <line x1="60" y1="252" x2="120" y2="252" stroke="#0f172a" stroke-width="2"/>
+    <line x1="90" y1="280" x2="68" y2="315" stroke="#0f172a" stroke-width="2"/>
+    <line x1="90" y1="280" x2="112" y2="315" stroke="#0f172a" stroke-width="2"/>
+    <text x="90" y="340" class="actor-label">Manager</text>
+  </g>
+
+  <g id="iot">
+    <circle cx="90" cy="820" r="16" fill="none" stroke="#0f172a" stroke-width="2"/>
+    <line x1="90" y1="836" x2="90" y2="880" stroke="#0f172a" stroke-width="2"/>
+    <line x1="60" y1="852" x2="120" y2="852" stroke="#0f172a" stroke-width="2"/>
+    <line x1="90" y1="880" x2="68" y2="915" stroke="#0f172a" stroke-width="2"/>
+    <line x1="90" y1="880" x2="112" y2="915" stroke="#0f172a" stroke-width="2"/>
+    <text x="90" y="940" class="actor-label">IoT Punch Device</text>
+    <text x="90" y="956" class="actor-label">(Mock / Manual)</text>
+  </g>
+
+  <!-- Actors RIGHT -->
+  <g id="admin">
+    <circle cx="1510" cy="280" r="16" fill="none" stroke="#0f172a" stroke-width="2"/>
+    <line x1="1510" y1="296" x2="1510" y2="340" stroke="#0f172a" stroke-width="2"/>
+    <line x1="1480" y1="312" x2="1540" y2="312" stroke="#0f172a" stroke-width="2"/>
+    <line x1="1510" y1="340" x2="1488" y2="375" stroke="#0f172a" stroke-width="2"/>
+    <line x1="1510" y1="340" x2="1532" y2="375" stroke="#0f172a" stroke-width="2"/>
+    <text x="1510" y="400" class="actor-label">Admin</text>
+  </g>
+
+  <g id="admin-manager">
+    <circle cx="1510" cy="500" r="16" fill="none" stroke="#0f172a" stroke-width="2"/>
+    <line x1="1510" y1="516" x2="1510" y2="560" stroke="#0f172a" stroke-width="2"/>
+    <line x1="1480" y1="532" x2="1540" y2="532" stroke="#0f172a" stroke-width="2"/>
+    <line x1="1510" y1="560" x2="1488" y2="595" stroke="#0f172a" stroke-width="2"/>
+    <line x1="1510" y1="560" x2="1532" y2="595" stroke="#0f172a" stroke-width="2"/>
+    <text x="1510" y="620" class="actor-label">Admin-Manager</text>
+  </g>
+
+  <g id="super-admin">
+    <circle cx="1510" cy="760" r="16" fill="none" stroke="#0f172a" stroke-width="2"/>
+    <line x1="1510" y1="776" x2="1510" y2="820" stroke="#0f172a" stroke-width="2"/>
+    <line x1="1480" y1="792" x2="1540" y2="792" stroke="#0f172a" stroke-width="2"/>
+    <line x1="1510" y1="820" x2="1488" y2="855" stroke="#0f172a" stroke-width="2"/>
+    <line x1="1510" y1="820" x2="1532" y2="855" stroke="#0f172a" stroke-width="2"/>
+    <text x="1510" y="880" class="actor-label">Super-Admin</text>
+  </g>
+
+  <!-- Package: Authentication -->
+  <rect x="260" y="140" width="520" height="200" rx="4" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="276" y="162" class="pkg-title">Authentication</text>
+
+  <ellipse cx="360" cy="210" rx="78" ry="28" fill="#eef2ff" stroke="#334155" stroke-width="1.5"/>
+  <text x="360" y="214" class="uc-label">Login</text>
+
+  <ellipse cx="520" cy="210" rx="88" ry="28" fill="#eef2ff" stroke="#334155" stroke-width="1.5"/>
+  <text x="520" y="214" class="uc-label">Refresh Session</text>
+
+  <ellipse cx="680" cy="210" rx="70" ry="28" fill="#eef2ff" stroke="#334155" stroke-width="1.5"/>
+  <text x="680" y="214" class="uc-label">Logout</text>
+
+  <ellipse cx="400" cy="290" rx="95" ry="28" fill="#eef2ff" stroke="#334155" stroke-width="1.5"/>
+  <text x="400" y="294" class="uc-label">View Own Profile</text>
+
+  <ellipse cx="620" cy="290" rx="100" ry="28" fill="#eef2ff" stroke="#334155" stroke-width="1.5"/>
+  <text x="620" y="294" class="uc-label">Change Password</text>
+
+  <!-- Package: Self-Service -->
+  <rect x="260" y="360" width="520" height="280" rx="4" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="276" y="382" class="pkg-title">Self-Service Attendance &amp; Requests</text>
+
+  <ellipse cx="390" cy="430" rx="105" ry="28" fill="#ecfdf5" stroke="#334155" stroke-width="1.5"/>
+  <text x="390" y="434" class="uc-label">View Own Attendance</text>
+
+  <ellipse cx="620" cy="430" rx="105" ry="28" fill="#ecfdf5" stroke="#334155" stroke-width="1.5"/>
+  <text x="620" y="434" class="uc-label">Submit Leave Request</text>
+
+  <ellipse cx="390" cy="510" rx="110" ry="28" fill="#ecfdf5" stroke="#334155" stroke-width="1.5"/>
+  <text x="390" y="514" class="uc-label">View Own Leave Requests</text>
+
+  <ellipse cx="620" cy="510" rx="118" ry="32" fill="#ecfdf5" stroke="#334155" stroke-width="1.5"/>
+  <text x="620" y="506" class="uc-label">Submit Unauthorised</text>
+  <text x="620" y="522" class="uc-label">Attendance Request</text>
+
+  <ellipse cx="505" cy="595" rx="120" ry="28" fill="#ecfdf5" stroke="#334155" stroke-width="1.5"/>
+  <text x="505" y="599" class="uc-label">View Own Unauthorised Requests</text>
+
+  <!-- Package: Leave Review -->
+  <rect x="260" y="660" width="520" height="200" rx="4" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="276" y="682" class="pkg-title">Leave &amp; Exception Review</text>
+
+  <ellipse cx="390" cy="740" rx="110" ry="32" fill="#fff7ed" stroke="#334155" stroke-width="1.5"/>
+  <text x="390" y="736" class="uc-label">Review Leave</text>
+  <text x="390" y="752" class="uc-label">Request Queue</text>
+
+  <ellipse cx="620" cy="740" rx="110" ry="32" fill="#fff7ed" stroke="#334155" stroke-width="1.5"/>
+  <text x="620" y="736" class="uc-label">Review Unauthorised</text>
+  <text x="620" y="752" class="uc-label">Request Queue</text>
+
+  <ellipse cx="390" cy="820" rx="110" ry="28" fill="#fef3c7" stroke="#b45309" stroke-width="1.5" stroke-dasharray="4 2"/>
+  <text x="390" y="824" class="uc-label">Approve / Reject Leave *</text>
+
+  <ellipse cx="620" cy="820" rx="118" ry="28" fill="#fef3c7" stroke="#b45309" stroke-width="1.5" stroke-dasharray="4 2"/>
+  <text x="620" y="824" class="uc-label">Resolve Unauthorised *</text>
+
+  <!-- Package: Attendance Ops -->
+  <rect x="820" y="140" width="520" height="280" rx="4" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="836" y="162" class="pkg-title">Attendance Operations</text>
+
+  <ellipse cx="950" cy="220" rx="100" ry="28" fill="#eff6ff" stroke="#334155" stroke-width="1.5"/>
+  <text x="950" y="224" class="uc-label">View All Attendance</text>
+
+  <ellipse cx="1170" cy="220" rx="110" ry="32" fill="#eff6ff" stroke="#334155" stroke-width="1.5"/>
+  <text x="1170" y="216" class="uc-label">Add / Edit Attendance</text>
+  <text x="1170" y="232" class="uc-label">Record</text>
+
+  <ellipse cx="950" cy="300" rx="110" ry="28" fill="#eff6ff" stroke="#334155" stroke-width="1.5"/>
+  <text x="950" y="304" class="uc-label">Delete Attendance</text>
+
+  <ellipse cx="1170" cy="300" rx="115" ry="32" fill="#eff6ff" stroke="#334155" stroke-width="1.5"/>
+  <text x="1170" y="296" class="uc-label">Process Normal</text>
+  <text x="1170" y="312" class="uc-label">Attendance</text>
+
+  <ellipse cx="1060" cy="380" rx="115" ry="28" fill="#eff6ff" stroke="#334155" stroke-width="1.5"/>
+  <text x="1060" y="384" class="uc-label">Process Roster Attendance</text>
+
+  <!-- Package: Employee & Roster -->
+  <rect x="820" y="440" width="520" height="280" rx="4" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="836" y="462" class="pkg-title">Employee &amp; Roster Administration</text>
+
+  <ellipse cx="950" cy="520" rx="110" ry="28" fill="#fdf2f8" stroke="#334155" stroke-width="1.5"/>
+  <text x="950" y="524" class="uc-label">Create / Update Employee</text>
+
+  <ellipse cx="1170" cy="520" rx="100" ry="28" fill="#fdf2f8" stroke="#334155" stroke-width="1.5"/>
+  <text x="1170" y="524" class="uc-label">Soft-Delete Employee</text>
+
+  <ellipse cx="950" cy="590" rx="110" ry="28" fill="#fdf2f8" stroke="#334155" stroke-width="1.5"/>
+  <text x="950" y="594" class="uc-label">Reset Employee Password</text>
+
+  <ellipse cx="1170" cy="590" rx="110" ry="32" fill="#fdf2f8" stroke="#334155" stroke-width="1.5"/>
+  <text x="1170" y="586" class="uc-label">Manage HOD /</text>
+  <text x="1170" y="602" class="uc-label">Supervisor Hierarchy</text>
+
+  <ellipse cx="950" cy="670" rx="105" ry="28" fill="#fdf2f8" stroke="#334155" stroke-width="1.5"/>
+  <text x="950" y="674" class="uc-label">Upload Roster File</text>
+
+  <ellipse cx="1170" cy="670" rx="100" ry="28" fill="#fdf2f8" stroke="#334155" stroke-width="1.5"/>
+  <text x="1170" y="674" class="uc-label">View / Delete Roster</text>
+
+  <!-- Package: Punch -->
+  <rect x="820" y="740" width="520" height="120" rx="4" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="836" y="762" class="pkg-title">Punch Ingestion</text>
+
+  <ellipse cx="1060" cy="820" rx="120" ry="32" fill="#f1f5f9" stroke="#334155" stroke-width="1.5"/>
+  <text x="1060" y="816" class="uc-label">Record Punch Log</text>
+  <text x="1060" y="832" class="uc-label">(In / Out)</text>
+
+  <!-- Associations: Employee -->
+  <line x1="120" y1="430" x2="282" y2="210" class="assoc"/>
+  <line x1="120" y1="430" x2="282" y2="290" class="assoc"/>
+  <line x1="120" y1="430" x2="285" y2="430" class="assoc"/>
+  <line x1="120" y1="430" x2="285" y2="510" class="assoc"/>
+  <line x1="120" y1="445" x2="385" y2="595" class="assoc"/>
+  <line x1="120" y1="420" x2="515" y2="430" class="assoc"/>
+  <line x1="120" y1="420" x2="502" y2="510" class="assoc"/>
+  <line x1="120" y1="415" x2="440" y2="210" class="assoc"/>
+  <line x1="120" y1="415" x2="610" y2="210" class="assoc"/>
+  <line x1="120" y1="415" x2="520" y2="290" class="assoc"/>
+
+  <!-- Manager associations -->
+  <line x1="120" y1="250" x2="280" y2="740" class="assoc"/>
+  <line x1="120" y1="260" x2="510" y2="740" class="assoc"/>
+  <line x1="120" y1="270" x2="280" y2="820" class="assoc"/>
+  <line x1="120" y1="280" x2="502" y2="820" class="assoc"/>
+
+  <!-- IoT -->
+  <line x1="120" y1="850" x2="940" y2="820" class="assoc"/>
+
+  <!-- Admin -->
+  <line x1="1490" y1="300" x2="1050" y2="220" class="assoc"/>
+  <line x1="1490" y1="310" x2="1280" y2="220" class="assoc"/>
+  <line x1="1490" y1="320" x2="1060" y2="300" class="assoc"/>
+  <line x1="1490" y1="330" x2="1285" y2="300" class="assoc"/>
+  <line x1="1490" y1="340" x2="1175" y2="380" class="assoc"/>
+
+  <!-- Admin-Manager: inherits both manager + admin capabilities visually via lines to both packages -->
+  <line x1="1490" y1="500" x2="1280" y2="220" class="assoc"/>
+  <line x1="1490" y1="510" x2="1175" y2="380" class="assoc"/>
+  <line x1="1490" y1="520" x2="730" y2="740" class="assoc"/>
+  <line x1="1490" y1="530" x2="738" y2="820" class="assoc"/>
+
+  <!-- Super-Admin -->
+  <line x1="1490" y1="760" x2="1060" y2="520" class="assoc"/>
+  <line x1="1490" y1="770" x2="1270" y2="520" class="assoc"/>
+  <line x1="1490" y1="780" x2="1060" y2="590" class="assoc"/>
+  <line x1="1490" y1="790" x2="1280" y2="590" class="assoc"/>
+  <line x1="1490" y1="800" x2="1055" y2="670" class="assoc"/>
+  <line x1="1490" y1="810" x2="1270" y2="670" class="assoc"/>
+
+  <!-- Include relationships -->
+  <path d="M1170,332 C1170,500 1100,700 1060,788" class="include" marker-end="url(#arrow)"/>
+  <text x="1185" y="560" class="legend">&lt;&lt;include&gt;&gt;</text>
+
+  <path d="M1060,408 C1000,500 980,620 950,642" class="include" marker-end="url(#arrow)"/>
+  <text x="980" y="530" class="legend">&lt;&lt;include&gt;&gt;</text>
+
+  <path d="M620,542 C620,560 520,560 505,567" class="include" marker-end="url(#arrow)"/>
+  <text x="540" y="555" class="legend">&lt;&lt;include&gt;&gt;</text>
+
+  <!-- Generalization notes -->
+  <text x="800" y="900" text-anchor="middle" class="subtitle">Role specialization: Manager, Admin, Admin-Manager, and Super-Admin inherit Employee self-service use cases.</text>
+  <text x="800" y="920" text-anchor="middle" class="subtitle">Admin-Manager = Admin attendance permissions + Manager leave/unauthorised review.</text>
+
+  <!-- Legend -->
+  <rect x="260" y="890" width="520" height="150" rx="4" fill="#fffbeb" stroke="#d97706" stroke-width="1.2"/>
+  <text x="276" y="914" class="pkg-title">Legend / Notes</text>
+  <text x="276" y="940" class="note">* Dashed orange use cases are planned (statuses modeled; APIs not wired yet).</text>
+  <text x="276" y="962" class="note">Solid lines = association (actor participates in use case).</text>
+  <text x="276" y="984" class="note">Dashed gray arrows = &lt;&lt;include&gt;&gt; (processing depends on punches / roster).</text>
+  <text x="276" y="1006" class="note">Change Password extends Login when mustChangePassword = true.</text>
+  <text x="276" y="1028" class="note">Source: AMS RBAC (roles.js) + domain services (attendance, leave, roster).</text>
+
+  <rect x="820" y="890" width="520" height="150" rx="4" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2"/>
+  <text x="836" y="914" class="pkg-title">Primary Actors Summary</text>
+  <text x="836" y="942" class="legend">Employee - login, profile, own attendance, submit leave/unauthorised</text>
+  <text x="836" y="964" class="legend">Manager - review leave and unauthorised queues for assigned staff</text>
+  <text x="836" y="986" class="legend">Admin - view/edit attendance; run normal and roster processing</text>
+  <text x="836" y="1008" class="legend">Super-Admin - employee CRUD, hierarchy, roster upload/manage</text>
+  <text x="836" y="1030" class="legend">IoT Device - ingest punch logs (currently mock / manual API)</text>
+</svg>
