@@ -397,40 +397,6 @@ const calculateAttendanceMetrics = async (employeeId, startDate, endDate, shiftS
 };
 
 // -----------------------------------------------------------------------
-// getUnauthorisedLeaveRecords - Admin view for unapproved/absent leaves (NEW)
-// -----------------------------------------------------------------------
-const getUnauthorisedLeaveRecords = async (filters = {}) => {
-    const { startDate, endDate, department, employeeId } = filters;
-
-    // Filter status for absent, unauthorised, or unexcused leave records
-    const where = {
-        [Op.or]: [
-            { status: 'ABSENT' },
-            { status: 'UNAUTHORISED' },
-            { status: 'UNEXCUSED' }
-        ]
-    };
-
-    if (employeeId) where.employeeId = employeeId;
-
-    if (startDate && endDate) {
-        where.date = {
-            [Op.between]: [startDate, endDate]
-        };
-    }
-
-    const employeeWhere = { isActive: true };
-    if (department) employeeWhere.department = department;
-
-    return Attendance.findAll({
-        where,
-        include: [{
-            model: Employee,
-            where: employeeWhere,
-            attributes: ['id', 'employeeId', 'firstName', 'lastName', 'department', 'role']
-        }],
-        order: [['date', 'DESC']]
-    });
 // getEmployeeLeaveHistory - fetch leave requests tied to an employee (NEW)
 // Supports filtering by status (pending/approved/rejected), leaveType,
 // a specific year, or an explicit startDate/endDate range.
@@ -745,9 +711,8 @@ module.exports = {
     deleteEmployeeById,
     getEmployeeAttendance,
     calculateAttendanceMetrics,
-    getUnauthorisedLeaveRecords, 
-    getEmployeeLeaveHistory,
     getUnauthorisedLeaveRecords,
+    getEmployeeLeaveHistory,
     validateUserCanManageEmployees,
     getRolePermissions,
     getEmployeesByRole,

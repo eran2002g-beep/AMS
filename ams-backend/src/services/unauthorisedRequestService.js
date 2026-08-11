@@ -11,6 +11,7 @@ const {
 } = require('./unauthorisedRequestValidation');
 
 const notFoundError = (message) => Object.assign(new Error(message), { status: 404 });
+const forbiddenError = (message) => Object.assign(new Error(message), { status: 403 });
 
 const withCanAccept = (request, viewerId) => {
     const data = typeof request.toJSON === 'function'
@@ -26,6 +27,65 @@ const withCanAccept = (request, viewerId) => {
 const isAssignedAdmin = (request, viewerId) => (
     request.hod === viewerId || request.supervisor === viewerId
 );
+
+// Attach reviewer display name + assigned HOD/supervisor names for hierarchy UI.
+const attachReviewerNames = async (records) => {
+    const list = records.map((row) => (
+        typeof row.toJSON === 'function' ? row.toJSON() : { ...row }
+    ));
+
+    const reviewerPublicIds = [...new Set(list.map((r) => r.reviewedBy).filter(Boolean))];
+    const hierarchyInternalIds = [
+        ...new Set(list.flatMap((r) => [r.hod, r.supervisor].filter(Boolean))),
+    ];
+
+    const [reviewers, hierarchyEmployees] = await Promise.all([
+        reviewerPublicIds.length
+            ? Employee.findAll({
+                where: { employeeId: { [Op.in]: reviewerPublicIds } },
+                attributes: ['id', 'employeeId', 'firstName', 'lastName'],
+            })
+            : Promise.resolve([]),
+        hierarchyInternalIds.length
+            ? Employee.findAll({
+                where: { id: { [Op.in]: hierarchyInternalIds } },
+                attributes: ['id', 'employeeId', 'firstName', 'lastName'],
+            })
+            : Promise.resolve([]),
+    ]);
+
+    const reviewerNameByPublicId = Object.fromEntries(
+        reviewers.map((e) => [e.employeeId, `${e.firstName} ${e.lastName}`]),
+    );
+    const hierarchyByInternalId = Object.fromEntries(
+        hierarchyEmployees.map((e) => [e.id, e]),
+    );
+
+    return list.map((r) => {
+        const hod = r.hod != null ? hierarchyByInternalId[r.hod] : null;
+        const supervisor = r.supervisor != null ? hierarchyByInternalId[r.supervisor] : null;
+
+        let reviewedByRole = null;
+        if (r.reviewedBy && hod && r.reviewedBy === hod.employeeId) reviewedByRole = 'hod';
+        else if (r.reviewedBy && supervisor && r.reviewedBy === supervisor.employeeId) {
+            reviewedByRole = 'supervisor';
+        }
+
+        return {
+            ...r,
+            reviewedByName: r.reviewedBy
+                ? (reviewerNameByPublicId[r.reviewedBy] ?? r.reviewedBy)
+                : null,
+            reviewedByRole,
+            hodEmployeeId: hod?.employeeId ?? null,
+            hodName: hod ? `${hod.firstName} ${hod.lastName}` : null,
+            supervisorEmployeeId: supervisor?.employeeId ?? null,
+            supervisorName: supervisor
+                ? `${supervisor.firstName} ${supervisor.lastName}`
+                : null,
+        };
+    });
+};
 
 // -----------------------------------------------------------------------
 // submitUnauthorisedRequest - validates payload, ensures attendance exists,
@@ -114,7 +174,7 @@ const getUnauthorisedRequestsByEmployee = async (employeeId, opts = {}) => {
     });
 
     return {
-        records,
+        records: await attachReviewerNames(records),
         meta: { total, page: parsedPage, limit: parsedLimit },
     };
 };
@@ -146,8 +206,9 @@ const getAllUnauthorisedRequests = async (opts = {}, viewerId) => {
         order: [['createdAt', 'DESC']],
     });
 
+    const withNames = await attachReviewerNames(records);
     return {
-        records: records.map((row) => withCanAccept(row, viewerId)),
+        records: withNames.map((row) => withCanAccept(row, viewerId)),
         meta: { total, page: parsedPage, limit: parsedLimit },
     };
 };
@@ -163,7 +224,61 @@ const getUnauthorisedRequestById = async (unauthorisedRequestId, viewerId) => {
         );
     }
 
-    return withCanAccept(request, viewerId);
+    const [enriched] = await attachReviewerNames([request]);
+    return withCanAccept(enriched, viewerId);
+};
+
+// -----------------------------------------------------------------------
+// reviewUnauthorisedRequest - approve or reject a pending request.
+// On approve: apply claimed clock times and clear unauthorised attendance status.
+// -----------------------------------------------------------------------
+const reviewUnauthorisedRequest = async (
+    unauthorisedRequestId,
+    viewer,
+    { decision, reviewComments } = {},
+) => {
+    if (!viewer?.id || !viewer?.employeeId) {
+        throw new Error('viewer is required to review an unauthorised request.');
+    }
+    if (!['approved', 'rejected'].includes(decision)) {
+        throw new Error('decision must be "approved" or "rejected".');
+    }
+
+    const request = await UnauthorisedRequest.findOne({
+        where: { unauthorisedRequestId },
+    });
+    if (!request) {
+        throw notFoundError(
+            `Unauthorised request with ID ${unauthorisedRequestId} not found.`,
+        );
+    }
+    if (!isAssignedAdmin(request, viewer.id)) {
+        throw forbiddenError('You are not assigned to review this unauthorised request.');
+    }
+    if (request.status !== 'pending') {
+        throw new Error(
+            `Only pending unauthorised requests can be reviewed (current: ${request.status}).`,
+        );
+    }
+
+    request.status = decision;
+    request.reviewedBy = viewer.employeeId;
+    request.reviewComments = reviewComments?.trim() || null;
+    request.reviewedAt = new Date();
+    await request.save();
+
+    if (decision === 'approved') {
+        const attendance = await Attendance.findByPk(request.attendanceId);
+        if (attendance && attendance.status === 'unauthorised') {
+            if (request.clockIn) attendance.clockIn = request.clockIn;
+            if (request.clockOut) attendance.clockOut = request.clockOut;
+            attendance.status = 'present';
+            await attendance.save();
+        }
+    }
+
+    const [enriched] = await attachReviewerNames([request]);
+    return withCanAccept(enriched, viewer.id);
 };
 
 module.exports = {
@@ -171,4 +286,5 @@ module.exports = {
     getUnauthorisedRequestsByEmployee,
     getAllUnauthorisedRequests,
     getUnauthorisedRequestById,
+    reviewUnauthorisedRequest,
 };

@@ -32,14 +32,16 @@ const nextConfig: NextConfig = {
         destination: `${backendUrl}/attendance/:path*`,
       },
       {
-        // Covers /leave/submit, /leave/employee/:id, /leave/:leaveRequestId.
-        // Bare GET /leave is intentionally NOT rewritten - it stays the
-        // Next.js page route (app/leave/page.tsx), same as /attendance.
+        // Covers /leave/submit, /leave/me, /leave/queue, /leave/employee/:id,
+        // /leave/:id/approve|reject. Bare GET /leave and /leave/review stay as
+        // Next.js pages (filesystem takes precedence over rewrites).
         source: "/leave/:path*",
         destination: `${backendUrl}/leave/:path*`,
       },
       {
-        // Covers /unauthorised/submit, /unauthorised/employee/:id, /unauthorised/:id.
+        // Covers /unauthorised/submit, /unauthorised/me, /unauthorised/queue,
+        // /unauthorised/employee/:id, /unauthorised/:id/approve|reject.
+        // /unauthorised/review is a Next.js page (filesystem wins).
         source: "/unauthorised/:path*",
         destination: `${backendUrl}/unauthorised/:path*`,
       },
