@@ -5,11 +5,15 @@
 
 const { Op } = require('sequelize');
 const Employee = require('../models/Employee');
+const Attendance = require('../models/Attendance');
 const LeaveRequest = require('../models/LeaveRequest');
 const {
     validateLeaveRequestPayload,
     validateNoOverlappingLeave,
 } = require('./leaveRequestValidation');
+
+const notFoundError = (message) => Object.assign(new Error(message), { status: 404 });
+const forbiddenError = (message) => Object.assign(new Error(message), { status: 403 });
 
 // canAccept - true when the viewer is this leave's HOD or supervisor and status is still pending
 const withCanAccept = (leaveRequest, viewerId) => {
@@ -26,6 +30,65 @@ const withCanAccept = (leaveRequest, viewerId) => {
 const isAssignedAdmin = (leaveRequest, viewerId) => (
     leaveRequest.hod === viewerId || leaveRequest.supervisor === viewerId
 );
+
+// Attach reviewer display name + assigned HOD/supervisor names for hierarchy UI.
+const enrichRequestRecords = async (records) => {
+    const list = records.map((row) => (
+        typeof row.toJSON === 'function' ? row.toJSON() : { ...row }
+    ));
+
+    const reviewerPublicIds = [...new Set(list.map((r) => r.reviewedBy).filter(Boolean))];
+    const hierarchyInternalIds = [
+        ...new Set(list.flatMap((r) => [r.hod, r.supervisor].filter(Boolean))),
+    ];
+
+    const [reviewers, hierarchyEmployees] = await Promise.all([
+        reviewerPublicIds.length
+            ? Employee.findAll({
+                where: { employeeId: { [Op.in]: reviewerPublicIds } },
+                attributes: ['id', 'employeeId', 'firstName', 'lastName'],
+            })
+            : Promise.resolve([]),
+        hierarchyInternalIds.length
+            ? Employee.findAll({
+                where: { id: { [Op.in]: hierarchyInternalIds } },
+                attributes: ['id', 'employeeId', 'firstName', 'lastName'],
+            })
+            : Promise.resolve([]),
+    ]);
+
+    const reviewerNameByPublicId = Object.fromEntries(
+        reviewers.map((e) => [e.employeeId, `${e.firstName} ${e.lastName}`]),
+    );
+    const hierarchyByInternalId = Object.fromEntries(
+        hierarchyEmployees.map((e) => [e.id, e]),
+    );
+
+    return list.map((r) => {
+        const hod = r.hod != null ? hierarchyByInternalId[r.hod] : null;
+        const supervisor = r.supervisor != null ? hierarchyByInternalId[r.supervisor] : null;
+
+        let reviewedByRole = null;
+        if (r.reviewedBy && hod && r.reviewedBy === hod.employeeId) reviewedByRole = 'hod';
+        else if (r.reviewedBy && supervisor && r.reviewedBy === supervisor.employeeId) {
+            reviewedByRole = 'supervisor';
+        }
+
+        return {
+            ...r,
+            reviewedByName: r.reviewedBy
+                ? (reviewerNameByPublicId[r.reviewedBy] ?? r.reviewedBy)
+                : null,
+            reviewedByRole,
+            hodEmployeeId: hod?.employeeId ?? null,
+            hodName: hod ? `${hod.firstName} ${hod.lastName}` : null,
+            supervisorEmployeeId: supervisor?.employeeId ?? null,
+            supervisorName: supervisor
+                ? `${supervisor.firstName} ${supervisor.lastName}`
+                : null,
+        };
+    });
+};
 
 // -----------------------------------------------------------------------
 // submitLeaveRequest - validates and creates a new leave request for an employee
@@ -88,7 +151,7 @@ const getLeaveRequestsByEmployee = async (employeeId, opts = {}) => {
     });
 
     return {
-        records,
+        records: await enrichRequestRecords(records),
         meta: { total, page: parsedPage, limit: parsedLimit },
     };
 };
@@ -125,8 +188,9 @@ const getAllLeaveRequests = async (opts = {}, viewerId) => {
         order: [['createdAt', 'DESC']],
     });
 
+    const withNames = await enrichRequestRecords(records);
     return {
-        records: records.map((row) => withCanAccept(row, viewerId)),
+        records: withNames.map((row) => withCanAccept(row, viewerId)),
         meta: { total, page: parsedPage, limit: parsedLimit },
     };
 };
@@ -139,10 +203,65 @@ const getLeaveRequestById = async (leaveRequestId, viewerId) => {
     const leaveRequest = await LeaveRequest.findOne({ where: { leaveRequestId } });
 
     if (!leaveRequest || !isAssignedAdmin(leaveRequest, viewerId)) {
-        throw new Error(`Leave request with ID ${leaveRequestId} not found.`);
+        throw notFoundError(`Leave request with ID ${leaveRequestId} not found.`);
     }
 
-    return withCanAccept(leaveRequest, viewerId);
+    const [enriched] = await enrichRequestRecords([leaveRequest]);
+    return withCanAccept(enriched, viewerId);
+};
+
+// -----------------------------------------------------------------------
+// reviewLeaveRequest - approve or reject a pending leave request.
+// Only the assigned HOD/supervisor may review. On approve, marks overlapping
+// attendance days as leave and links them to this request.
+// -----------------------------------------------------------------------
+const reviewLeaveRequest = async (leaveRequestId, viewer, { decision, reviewComments } = {}) => {
+    if (!viewer?.id || !viewer?.employeeId) {
+        throw new Error('viewer is required to review a leave request.');
+    }
+    if (!['approved', 'rejected'].includes(decision)) {
+        throw new Error('decision must be "approved" or "rejected".');
+    }
+
+    const leaveRequest = await LeaveRequest.findOne({ where: { leaveRequestId } });
+    if (!leaveRequest) {
+        throw notFoundError(`Leave request with ID ${leaveRequestId} not found.`);
+    }
+    if (!isAssignedAdmin(leaveRequest, viewer.id)) {
+        throw forbiddenError('You are not assigned to review this leave request.');
+    }
+    if (leaveRequest.status !== 'pending') {
+        throw new Error(
+            `Only pending leave requests can be reviewed (current: ${leaveRequest.status}).`,
+        );
+    }
+
+    leaveRequest.status = decision;
+    leaveRequest.reviewedBy = viewer.employeeId;
+    leaveRequest.reviewComments = reviewComments?.trim() || null;
+    leaveRequest.reviewedAt = new Date();
+    await leaveRequest.save();
+
+    if (decision === 'approved') {
+        await Attendance.update(
+            {
+                status: 'leave',
+                leaveRequestId: leaveRequest.id,
+            },
+            {
+                where: {
+                    employeeId: leaveRequest.employeeId,
+                    date: {
+                        [Op.between]: [leaveRequest.startDate, leaveRequest.endDate],
+                    },
+                    status: { [Op.ne]: 'holiday' },
+                },
+            },
+        );
+    }
+
+    const [enriched] = await enrichRequestRecords([leaveRequest]);
+    return withCanAccept(enriched, viewer.id);
 };
 
 module.exports = {
@@ -150,4 +269,5 @@ module.exports = {
     getLeaveRequestsByEmployee,
     getAllLeaveRequests,
     getLeaveRequestById,
+    reviewLeaveRequest,
 };

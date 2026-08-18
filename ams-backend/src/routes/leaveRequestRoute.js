@@ -11,20 +11,41 @@ const { CAN_MANAGE_LEAVE } = require('../../config/roles');
 router.post('/submit', verifyToken, leaveRequestController.submitLeaveRequest);
 
 // -----------------------------------------------------------------------
-// GET /leave - Retrieve all leave requests across employees
-// Supports optional employeeId, status, page, and limit filters
+// GET /leave/queue - assigned HOD/supervisor queue (preferred for Next.js proxy;
+// bare GET /leave collides with the frontend page route)
 // MANAGE LEAVE -> manager, admin-manager
 // -----------------------------------------------------------------------
+router.get('/queue', verifyToken, authorize(...CAN_MANAGE_LEAVE), leaveRequestController.getAllLeaveRequests);
+
+// GET /leave - same as /queue (direct backend / non-proxied clients)
 router.get('/', verifyToken, authorize(...CAN_MANAGE_LEAVE), leaveRequestController.getAllLeaveRequests);
 
 // GET /leave/employee/:employeeId - Retrieve leave requests for one employee
-// Supports optional status, page, and limit filters
 // Own records: any authenticated user. Others: MANAGE LEAVE -> manager, admin-manager
-// -----------------------------------------------------------------------
 router.get('/employee/:employeeId', verifyToken, authorizeOwnOrRoles(...CAN_MANAGE_LEAVE), leaveRequestController.getEmployeeLeaveRequests);
 
 // GET /leave/me - leave requests for the signed-in employee (must be before /:leaveRequestId)
 router.get('/me', verifyToken, leaveRequestController.getMyLeaveRequests);
+
+// POST /leave/:leaveRequestId/approve|reject - assigned HOD/supervisor decision
+router.post(
+    '/:leaveRequestId/approve',
+    verifyToken,
+    authorize(...CAN_MANAGE_LEAVE),
+    (req, res) => {
+        req.params.decision = 'approve';
+        return leaveRequestController.reviewLeaveRequest(req, res);
+    },
+);
+router.post(
+    '/:leaveRequestId/reject',
+    verifyToken,
+    authorize(...CAN_MANAGE_LEAVE),
+    (req, res) => {
+        req.params.decision = 'reject';
+        return leaveRequestController.reviewLeaveRequest(req, res);
+    },
+);
 
 // GET /leave/:leaveRequestId - Retrieve a single leave request by its public ID
 // MANAGE LEAVE -> manager, admin-manager

@@ -1076,8 +1076,19 @@ export type LeaveRequestRecord = {
   reason: string;
   status: LeaveStatus;
   reviewedBy: string | null;
+  /** Display name resolved from reviewedBy (null while pending). */
+  reviewedByName?: string | null;
+  /** Whether the reviewer was the assigned HOD or supervisor. */
+  reviewedByRole?: "hod" | "supervisor" | null;
   reviewComments: string | null;
   reviewedAt: string | null;
+  hod?: number | null;
+  supervisor?: number | null;
+  hodEmployeeId?: string | null;
+  hodName?: string | null;
+  supervisorEmployeeId?: string | null;
+  supervisorName?: string | null;
+  canAccept?: boolean;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -1097,6 +1108,7 @@ export type LeaveRequestSubmitResponse = {
 
 export type LeaveRequestListFilters = {
   status?: LeaveStatus;
+  employeeId?: string;
   page?: number;
   limit?: number;
 };
@@ -1106,6 +1118,10 @@ export type LeaveRequestListResponse = {
   count: number;
   meta: { total: number; page: number; limit: number };
   data: LeaveRequestRecord[];
+};
+
+export type LeaveReviewPayload = {
+  reviewComments?: string;
 };
 
 // ------------------------------- Leave request API -------------------------------
@@ -1139,6 +1155,61 @@ export const leaveApi = {
     }
     return body;
   },
+
+  // GET /leave/me - signed-in employee's leave history.
+  async getMine(filters: LeaveRequestListFilters = {}) {
+    const params: Record<string, string | number> = {};
+    if (filters.status) params.status = filters.status;
+    if (filters.page != null) params.page = filters.page;
+    if (filters.limit != null) params.limit = filters.limit;
+
+    const response = await api.get<LeaveRequestListResponse>("/leave/me", { params });
+    const body = response.data;
+    if (body.status !== "success") {
+      throw new Error("Failed to load leave requests");
+    }
+    return body;
+  },
+
+  // GET /leave/queue - assigned HOD/supervisor review queue.
+  async getQueue(filters: LeaveRequestListFilters = {}) {
+    const params: Record<string, string | number> = {};
+    if (filters.status) params.status = filters.status;
+    if (filters.employeeId) params.employeeId = filters.employeeId;
+    if (filters.page != null) params.page = filters.page;
+    if (filters.limit != null) params.limit = filters.limit;
+
+    const response = await api.get<LeaveRequestListResponse>("/leave/queue", { params });
+    const body = response.data;
+    if (body.status !== "success") {
+      throw new Error("Failed to load leave request queue");
+    }
+    return body;
+  },
+
+  async approve(leaveRequestId: string, payload: LeaveReviewPayload = {}) {
+    const response = await api.post<LeaveRequestSubmitResponse>(
+      `/leave/${encodeURIComponent(leaveRequestId)}/approve`,
+      payload,
+    );
+    const body = response.data;
+    if (body.status !== "success") {
+      throw new Error("Failed to approve leave request");
+    }
+    return body.data;
+  },
+
+  async reject(leaveRequestId: string, payload: LeaveReviewPayload = {}) {
+    const response = await api.post<LeaveRequestSubmitResponse>(
+      `/leave/${encodeURIComponent(leaveRequestId)}/reject`,
+      payload,
+    );
+    const body = response.data;
+    if (body.status !== "success") {
+      throw new Error("Failed to reject leave request");
+    }
+    return body.data;
+  },
 };
 
 // ------------------------------- Unauthorised request API -------------------------------
@@ -1157,10 +1228,18 @@ export type UnauthorisedRequestRecord = {
   description: string;
   status: UnauthorisedRequestStatus;
   reviewedBy: string | null;
+  /** Display name resolved from reviewedBy (null while pending). */
+  reviewedByName?: string | null;
+  /** Whether the reviewer was the assigned HOD or supervisor. */
+  reviewedByRole?: "hod" | "supervisor" | null;
   reviewComments: string | null;
   reviewedAt: string | null;
   hod: number | null;
   supervisor: number | null;
+  hodEmployeeId?: string | null;
+  hodName?: string | null;
+  supervisorEmployeeId?: string | null;
+  supervisorName?: string | null;
   canAccept?: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -1189,6 +1268,17 @@ export type UnauthorisedRequestListResponse = {
   data: UnauthorisedRequestRecord[];
 };
 
+export type UnauthorisedRequestListFilters = {
+  status?: UnauthorisedRequestStatus;
+  employeeId?: string;
+  page?: number;
+  limit?: number;
+};
+
+export type UnauthorisedReviewPayload = {
+  reviewComments?: string;
+};
+
 export const unauthorisedApi = {
   // POST /unauthorised/submit — resolve an unauthorised attendance day
   async submit(payload: UnauthorisedRequestSubmitPayload) {
@@ -1205,7 +1295,7 @@ export const unauthorisedApi = {
 
   async getForEmployee(
     employeeId: string,
-    filters: { status?: UnauthorisedRequestStatus; page?: number; limit?: number } = {},
+    filters: UnauthorisedRequestListFilters = {},
   ) {
     const params: Record<string, string | number> = {};
     if (filters.status) params.status = filters.status;
@@ -1221,5 +1311,63 @@ export const unauthorisedApi = {
       throw new Error("Failed to load unauthorised requests");
     }
     return body;
+  },
+
+  async getMine(filters: UnauthorisedRequestListFilters = {}) {
+    const params: Record<string, string | number> = {};
+    if (filters.status) params.status = filters.status;
+    if (filters.page != null) params.page = filters.page;
+    if (filters.limit != null) params.limit = filters.limit;
+
+    const response = await api.get<UnauthorisedRequestListResponse>("/unauthorised/me", {
+      params,
+    });
+    const body = response.data;
+    if (body.status !== "success") {
+      throw new Error("Failed to load unauthorised requests");
+    }
+    return body;
+  },
+
+  // GET /unauthorised/queue - assigned HOD/supervisor review queue.
+  async getQueue(filters: UnauthorisedRequestListFilters = {}) {
+    const params: Record<string, string | number> = {};
+    if (filters.status) params.status = filters.status;
+    if (filters.employeeId) params.employeeId = filters.employeeId;
+    if (filters.page != null) params.page = filters.page;
+    if (filters.limit != null) params.limit = filters.limit;
+
+    const response = await api.get<UnauthorisedRequestListResponse>("/unauthorised/queue", {
+      params,
+    });
+    const body = response.data;
+    if (body.status !== "success") {
+      throw new Error("Failed to load unauthorised request queue");
+    }
+    return body;
+  },
+
+  async approve(unauthorisedRequestId: string, payload: UnauthorisedReviewPayload = {}) {
+    const response = await api.post<UnauthorisedRequestSubmitResponse>(
+      `/unauthorised/${encodeURIComponent(unauthorisedRequestId)}/approve`,
+      payload,
+    );
+    const body = response.data;
+    if (body.status !== "success") {
+      throw new Error("Failed to approve unauthorised request");
+    }
+    return body.data;
+  },
+
+  async reject(unauthorisedRequestId: string, payload: UnauthorisedReviewPayload = {}) {
+    const response = await api.post<UnauthorisedRequestSubmitResponse>(
+      `/unauthorised/${encodeURIComponent(unauthorisedRequestId)}/reject`,
+      payload,
+    );
+    const body = response.data;
+    if (body.status !== "success") {
+      throw new Error("Failed to reject unauthorised request");
+    }
+    return body.data;
   },
 };

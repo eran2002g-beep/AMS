@@ -119,6 +119,7 @@ router.put('/:employeeId/hierarchy', verifyToken, authorize(...CAN_MANAGE_EMPLOY
     try {
         const { employeeId } = req.params;
 
+        // hierarchyData payload: { role, hod, supervisor }
         const updatedEmployee = await employeeService.updateEmployeeHierarchy(
             employeeId,
             req.body
