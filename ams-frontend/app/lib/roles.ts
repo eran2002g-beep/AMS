@@ -18,6 +18,7 @@ const CAN_VIEW_EMPLOYEES: EmployeeRole[] = [
 ];
 const CAN_EDIT_ATTENDANCE: EmployeeRole[] = [ROLES.ADMIN, ROLES.ADMIN_MANAGER];
 const CAN_VIEW_ATTENDANCE: EmployeeRole[] = [ROLES.ADMIN, ROLES.ADMIN_MANAGER];
+const CAN_MANAGE_LEAVE: EmployeeRole[] = [ROLES.MANAGER, ROLES.ADMIN_MANAGER];
 /** Admin-tier roles that may open the Admin Panel hub. */
 const CAN_ACCESS_ADMIN_PANEL: EmployeeRole[] = [
   ROLES.SUPER_ADMIN,
@@ -47,6 +48,10 @@ export function canEditAttendance(role?: EmployeeRole) {
 
 export function canViewAttendance(role?: EmployeeRole) {
   return hasRole(role, CAN_VIEW_ATTENDANCE);
+}
+
+export function canManageLeave(role?: EmployeeRole) {
+  return hasRole(role, CAN_MANAGE_LEAVE);
 }
 
 export function canAccessAdminPanel(role?: EmployeeRole) {
@@ -106,9 +111,18 @@ export function canAccessPath(
     return canViewAttendance(user.role);
   }
 
-  // Leave requests are self-service - every authenticated employee can submit
-  // and view their own leave requests. (Manager/admin-manager review views are
-  // a separate future story and will need their own path check when added.)
+  // Manager/admin-manager leave & unauthorised review queues.
+  if (
+    pathname === "/leave/review" ||
+    pathname.startsWith("/leave/review?") ||
+    pathname === "/unauthorised/review" ||
+    pathname.startsWith("/unauthorised/review?")
+  ) {
+    return canManageLeave(user.role);
+  }
+
+  // Leave requests are self-service — every authenticated employee can submit
+  // and view their own leave / unauthorised requests.
   if (pathname === "/leave" || pathname.startsWith("/leave/")) {
     return true;
   }
@@ -138,6 +152,7 @@ export function isKnownAppPath(pathname: string): boolean {
   if (pathname === "/employees" || pathname.startsWith("/employees/")) return true;
   if (pathname === "/attendance" || pathname.startsWith("/attendance/")) return true;
   if (pathname === "/leave" || pathname.startsWith("/leave/")) return true;
+  if (pathname === "/unauthorised" || pathname.startsWith("/unauthorised/")) return true;
   if (pathname === "/rosters" || pathname.startsWith("/rosters/")) return true;
   if (pathname.startsWith("/mock/punch")) return true;
   return false;
@@ -148,7 +163,7 @@ export type NavItem = { label: string; path: string };
 /**
  * Main hamburger menu — shared employee items only.
  * Admin tools (Employees / Attendance / Rosters) live inside the Admin Panel hub,
- * not in this global menu.
+ * not in this global menu. Managers also get review queue entries here.
  */
 export function getNavItems(user?: Pick<AuthUser, "role" | "employeeId"> | null): NavItem[] {
   const items: NavItem[] = [
@@ -166,7 +181,12 @@ export function getNavItems(user?: Pick<AuthUser, "role" | "employeeId"> | null)
 
   // Every logged-in user can request leave and view their own requests.
   if (user?.employeeId) {
-    items.push({ label: "Request Leave", path: "/leave" });
+    items.push({ label: "My Requests", path: "/leave" });
+  }
+
+  if (canManageLeave(user?.role)) {
+    items.push({ label: "Review Leave", path: "/leave/review" });
+    items.push({ label: "Review Unauthorised", path: "/unauthorised/review" });
   }
 
   // Admins get a single entry point — tools appear after opening Admin Panel.

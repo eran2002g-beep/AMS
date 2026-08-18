@@ -1,5 +1,11 @@
 const leaveRequestService = require('../services/leaveRequestService');
 
+const statusFromError = (err) => {
+    if (err.status) return err.status;
+    if (err.message && err.message.includes('not found')) return 404;
+    return 400;
+};
+
 // POST /leave/submit - employee submits a new leave request for themselves
 // Defaults to the signed-in user's employeeId; a manager/admin-manager may
 // submit on behalf of someone else by passing employeeId in the body.
@@ -15,8 +21,7 @@ const submitLeaveRequest = async (req, res) => {
             data: leaveRequest,
         });
     } catch (err) {
-        const statusCode = err.message.includes('not found') ? 404 : 400;
-        return res.status(statusCode).json({ status: 'error', error: err.message });
+        return res.status(statusFromError(err)).json({ status: 'error', error: err.message });
     }
 };
 
@@ -35,8 +40,7 @@ const getEmployeeLeaveRequests = async (req, res) => {
             data: result.records,
         });
     } catch (err) {
-        const statusCode = err.message.includes('not found') ? 404 : 400;
-        return res.status(statusCode).json({ status: 'error', error: err.message });
+        return res.status(statusFromError(err)).json({ status: 'error', error: err.message });
     }
 };
 
@@ -55,13 +59,12 @@ const getMyLeaveRequests = async (req, res) => {
             data: result.records,
         });
     } catch (err) {
-        const statusCode = err.message.includes('not found') ? 404 : 400;
-        return res.status(statusCode).json({ status: 'error', error: err.message });
+        return res.status(statusFromError(err)).json({ status: 'error', error: err.message });
     }
 };
 
-// GET /leave - leave requests assigned to the signed-in manager/admin-manager
-// (viewer is the leave's hod or supervisor); each row includes canAccept
+// GET /leave/queue (and GET /leave) - leave requests assigned to the signed-in
+// manager/admin-manager; each row includes canAccept and reviewedByName
 const getAllLeaveRequests = async (req, res) => {
     try {
         const result = await leaveRequestService.getAllLeaveRequests(req.query, req.user.id);
@@ -73,7 +76,7 @@ const getAllLeaveRequests = async (req, res) => {
             data: result.records,
         });
     } catch (err) {
-        return res.status(400).json({ status: 'error', error: err.message });
+        return res.status(statusFromError(err)).json({ status: 'error', error: err.message });
     }
 };
 
@@ -91,8 +94,27 @@ const getLeaveRequestById = async (req, res) => {
             data: leaveRequest,
         });
     } catch (err) {
-        const statusCode = err.message.includes('not found') ? 404 : 400;
-        return res.status(statusCode).json({ status: 'error', error: err.message });
+        return res.status(statusFromError(err)).json({ status: 'error', error: err.message });
+    }
+};
+
+// POST /leave/:leaveRequestId/approve|reject
+const reviewLeaveRequest = async (req, res) => {
+    try {
+        const decision = req.params.decision === 'approve' ? 'approved' : 'rejected';
+        const leaveRequest = await leaveRequestService.reviewLeaveRequest(
+            req.params.leaveRequestId,
+            { id: req.user.id, employeeId: req.user.employeeId },
+            { decision, reviewComments: req.body?.reviewComments },
+        );
+
+        return res.status(200).json({
+            status: 'success',
+            message: `Leave request ${decision} successfully.`,
+            data: leaveRequest,
+        });
+    } catch (err) {
+        return res.status(statusFromError(err)).json({ status: 'error', error: err.message });
     }
 };
 
@@ -102,4 +124,5 @@ module.exports = {
     getMyLeaveRequests,
     getAllLeaveRequests,
     getLeaveRequestById,
+    reviewLeaveRequest,
 };

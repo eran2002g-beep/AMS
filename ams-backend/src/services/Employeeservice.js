@@ -418,6 +418,10 @@ const getUnauthorisedLeaveDetails = async (filters = {}) => {
 };
 
 // getEmployeeLeaveHistory - fetch leave requests tied to an employee
+// getEmployeeLeaveHistory - fetch leave requests tied to an employee (NEW)
+// Supports filtering by status (pending/approved/rejected), leaveType,
+// a specific year, or an explicit startDate/endDate range.
+// -----------------------------------------------------------------------
 const getEmployeeLeaveHistory = async (employeeId, filters = {}) => {
     if (!employeeId) {
         throw new Error('Employee ID is required to retrieve leave history.');
@@ -640,6 +644,7 @@ module.exports = {
     getEmployeeAttendance,
     calculateAttendanceMetrics,
     getUnauthorisedLeaveDetails,
+    getUnauthorisedLeaveRecords,
     getEmployeeLeaveHistory,
     validateUserCanManageEmployees,
     getRolePermissions,

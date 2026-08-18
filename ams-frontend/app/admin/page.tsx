@@ -9,6 +9,7 @@ import Stack from "@mui/material/Stack";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import {
+  canManageLeave,
   canManageRoster,
   canViewAttendance,
   canViewEmployees,
@@ -38,6 +39,18 @@ export default function AdminPanelPage() {
       label: "Attendance",
       description: "Review and edit attendance records",
       path: "/attendance",
+    });
+  }
+  if (canManageLeave(role)) {
+    links.push({
+      label: "Leave Requests",
+      description: "Approve or reject leave assigned to you",
+      path: "/leave/review",
+    });
+    links.push({
+      label: "Unauthorised Requests",
+      description: "Approve or reject unauthorised attendance explanations",
+      path: "/unauthorised/review",
     });
   }
   if (canManageRoster(role)) {

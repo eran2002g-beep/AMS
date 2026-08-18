@@ -64,7 +64,7 @@ const getMyUnauthorisedRequests = async (req, res) => {
     }
 };
 
-// GET /unauthorised
+// GET /unauthorised/queue (and GET /unauthorised)
 const getAllUnauthorisedRequests = async (req, res) => {
     try {
         const result = await unauthorisedRequestService.getAllUnauthorisedRequests(
@@ -100,10 +100,31 @@ const getUnauthorisedRequestById = async (req, res) => {
     }
 };
 
+// POST /unauthorised/:unauthorisedRequestId/approve|reject
+const reviewUnauthorisedRequest = async (req, res) => {
+    try {
+        const decision = req.params.decision === 'approve' ? 'approved' : 'rejected';
+        const request = await unauthorisedRequestService.reviewUnauthorisedRequest(
+            req.params.unauthorisedRequestId,
+            { id: req.user.id, employeeId: req.user.employeeId },
+            { decision, reviewComments: req.body?.reviewComments },
+        );
+
+        return res.status(200).json({
+            status: 'success',
+            message: `Unauthorised request ${decision} successfully.`,
+            data: request,
+        });
+    } catch (err) {
+        return res.status(statusFromError(err)).json({ status: 'error', error: err.message });
+    }
+};
+
 module.exports = {
     submitUnauthorisedRequest,
     getEmployeeUnauthorisedRequests,
     getMyUnauthorisedRequests,
     getAllUnauthorisedRequests,
     getUnauthorisedRequestById,
+    reviewUnauthorisedRequest,
 };
