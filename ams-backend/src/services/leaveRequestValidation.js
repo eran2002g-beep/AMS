@@ -6,6 +6,8 @@ const { Op } = require('sequelize');
 const LeaveRequest = require('../models/LeaveRequest');
 
 const VALID_LEAVE_TYPES = ['annual', 'sick', 'casual', 'unpaid', 'other'];
+const VALID_DURATIONS = ['full_day', 'half_day'];
+const VALID_HALF_DAY_PERIODS = ['morning', 'afternoon'];
 const MAX_REASON_LENGTH = 1000;
 const MAX_LEAVE_SPAN_DAYS = 90; // guards against accidental multi-year ranges
 
@@ -69,6 +71,38 @@ const validateDateRange = (startDate, endDate) => {
 };
 
 // ---------------------------------------------------------------------------
+// validateDuration
+// full_day (default) or half_day. Half-day leave must be a single calendar day
+// and must include morning|afternoon period.
+// ---------------------------------------------------------------------------
+const validateDuration = (data = {}, startDate, endDate) => {
+    const raw = data.duration == null || data.duration === ''
+        ? 'full_day'
+        : data.duration;
+
+    if (typeof raw !== 'string' || !VALID_DURATIONS.includes(raw)) {
+        throw new Error(`duration must be one of: ${VALID_DURATIONS.join(', ')}.`);
+    }
+
+    if (raw === 'full_day') {
+        return { duration: 'full_day', halfDayPeriod: null };
+    }
+
+    if (startDate !== endDate) {
+        throw new Error('Half-day leave must use the same startDate and endDate.');
+    }
+
+    const period = data.halfDayPeriod;
+    if (typeof period !== 'string' || !VALID_HALF_DAY_PERIODS.includes(period)) {
+        throw new Error(
+            `halfDayPeriod must be one of: ${VALID_HALF_DAY_PERIODS.join(', ')} when duration is half_day.`,
+        );
+    }
+
+    return { duration: 'half_day', halfDayPeriod: period };
+};
+
+// ---------------------------------------------------------------------------
 // validateReason
 // Reason is required so managers have context to approve/reject against.
 // ---------------------------------------------------------------------------
@@ -122,6 +156,11 @@ const validateLeaveRequestPayload = (data = {}) => {
     const leaveType = validateLeaveType(data.leaveType);
     const totalDays = validateDateRange(data.startDate, data.endDate);
     const reason = validateReason(data.reason);
+    const { duration, halfDayPeriod } = validateDuration(
+        data,
+        data.startDate,
+        data.endDate,
+    );
 
     return {
         leaveType,
@@ -129,14 +168,19 @@ const validateLeaveRequestPayload = (data = {}) => {
         endDate: data.endDate,
         totalDays,
         reason,
+        duration,
+        halfDayPeriod,
     };
 };
 
 module.exports = {
     VALID_LEAVE_TYPES,
+    VALID_DURATIONS,
+    VALID_HALF_DAY_PERIODS,
     MAX_LEAVE_SPAN_DAYS,
     validateLeaveType,
     validateDateRange,
+    validateDuration,
     validateReason,
     validateNoOverlappingLeave,
     validateLeaveRequestPayload,

@@ -53,9 +53,24 @@ const LeaveRequest = sequelize.define('LeaveRequest', {
 
     // totalDays - inclusive calendar day count between startDate and endDate
     // calculated by the service layer at submission time, stored for fast display/reporting
+    // Half-day leave still spans one calendar day (totalDays = 1); see duration/halfDayPeriod.
     totalDays: {
         type: DataTypes.INTEGER,
         allowNull: false,
+    },
+
+    // duration - full_day = entire shift off; half_day = morning or afternoon only
+    duration: {
+        type: DataTypes.ENUM('full_day', 'half_day'),
+        allowNull: false,
+        defaultValue: 'full_day',
+    },
+
+    // halfDayPeriod - which half the employee is taking off (required when duration=half_day)
+    // Attendance processing checks the opposite (working) half for In/Out punches.
+    halfDayPeriod: {
+        type: DataTypes.ENUM('morning', 'afternoon'),
+        allowNull: true,
     },
 
     // reason - employee-supplied explanation for the leave request

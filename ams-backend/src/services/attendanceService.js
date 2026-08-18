@@ -28,6 +28,7 @@ const {
     validateDayType,
     validateShiftTimes,
 } = require('./attendanceValidation');
+const { resolveLeaveForAttendance } = require('./leaveAttendanceHelper');
 
 const pad = (n) => String(n).padStart(2, '0');
 
@@ -247,19 +248,59 @@ const processNormalAttendance = async (period = {}) => {
                 logs, NORMAL_SHIFT_START, NORMAL_SHIFT_END
             );
 
-            let status           = calculateStatus(clockIn, clockOut);
-            let lateCoverMinutes = 0;
-            let dayType          = null;
+            const leaveOutcome = await resolveLeaveForAttendance({
+                employeeId: employee.employeeId,
+                date,
+                shiftStart: NORMAL_SHIFT_START,
+                shiftEnd: NORMAL_SHIFT_END,
+                logs,
+                clockIn,
+                clockOut,
+                logId,
+            });
 
-            if (clockIn && clockOut) {
-                const workedMinutes = calculateWorkedMinutes(clockIn, clockOut);
-                const classified    = classifyWorkDay(workedMinutes);
-                status              = classified.status;
-                lateCoverMinutes    = classified.lateCoverMinutes;
-                dayType             = classified.dayType;
+            let status;
+            let lateCoverMinutes;
+            let dayType;
+            let lateMinutes;
+            let finalClockIn;
+            let finalClockOut;
+            let finalLogId;
+            let scheduledStart = NORMAL_SHIFT_START;
+            let scheduledEnd = NORMAL_SHIFT_END;
+            let reqLeave = false;
+            let leaveRequestId = null;
+
+            if (leaveOutcome) {
+                status = leaveOutcome.status;
+                lateCoverMinutes = leaveOutcome.lateCoverMinutes;
+                dayType = leaveOutcome.dayType;
+                lateMinutes = leaveOutcome.lateMinutes;
+                finalClockIn = leaveOutcome.clockIn;
+                finalClockOut = leaveOutcome.clockOut;
+                finalLogId = leaveOutcome.logId;
+                scheduledStart = leaveOutcome.scheduledStart || NORMAL_SHIFT_START;
+                scheduledEnd = leaveOutcome.scheduledEnd || NORMAL_SHIFT_END;
+                reqLeave = leaveOutcome.reqLeave;
+                leaveRequestId = leaveOutcome.leaveRequestId;
+            } else {
+                finalClockIn = clockIn;
+                finalClockOut = clockOut;
+                finalLogId = logId;
+                status = calculateStatus(clockIn, clockOut);
+                lateCoverMinutes = 0;
+                dayType = null;
+
+                if (clockIn && clockOut) {
+                    const workedMinutes = calculateWorkedMinutes(clockIn, clockOut);
+                    const classified = classifyWorkDay(workedMinutes);
+                    status = classified.status;
+                    lateCoverMinutes = classified.lateCoverMinutes;
+                    dayType = classified.dayType;
+                }
+
+                lateMinutes = calculateArrivalLateMinutes(NORMAL_SHIFT_START, clockIn);
             }
-
-            const lateMinutes = calculateArrivalLateMinutes(NORMAL_SHIFT_START, clockIn);
 
             if (isDiscrepancy(status, lateMinutes, lateCoverMinutes)) {
                 discrepancies.push(buildDiscrepancy(
@@ -270,16 +311,18 @@ const processNormalAttendance = async (period = {}) => {
             const attendanceRecord = await upsertAttendanceRecord({
                 employeeId:      employee.employeeId,
                 date,
-                clockIn,
-                clockOut,
-                scheduledStart:  NORMAL_SHIFT_START,
-                scheduledEnd:    NORMAL_SHIFT_END,
+                clockIn:         finalClockIn,
+                clockOut:        finalClockOut,
+                scheduledStart,
+                scheduledEnd,
                 status,
                 lateMinutes,
                 lateCoverMinutes,
                 dayType,
                 rosterId:        null,
-                logId,
+                logId:           finalLogId,
+                reqLeave,
+                leaveRequestId,
             });
 
             results.push(attendanceRecord);
@@ -315,30 +358,73 @@ const processRosterEntries = async (entries) => {
             logs, entry.shiftStart, entry.shiftEnd
         );
 
-        const status           = calculateStatus(clockIn, clockOut);
-        const lateMinutes      = calculateArrivalLateMinutes(entry.shiftStart, clockIn);
-        const lateCoverMinutes = calculateLateCover(
-            entry.shiftStart, entry.shiftEnd, clockIn, clockOut
-        );
+        const leaveOutcome = await resolveLeaveForAttendance({
+            employeeId: entry.employeeId,
+            date: entry.date,
+            shiftStart: entry.shiftStart,
+            shiftEnd: entry.shiftEnd,
+            logs,
+            clockIn,
+            clockOut,
+            logId,
+        });
+
+        let status;
+        let lateMinutes;
+        let lateCoverMinutes;
+        let dayType = null;
+        let finalClockIn;
+        let finalClockOut;
+        let finalLogId;
+        let scheduledStart = entry.shiftStart;
+        let scheduledEnd = entry.shiftEnd;
+        let reqLeave = false;
+        let leaveRequestId = null;
+
+        if (leaveOutcome) {
+            status = leaveOutcome.status;
+            lateMinutes = leaveOutcome.lateMinutes;
+            lateCoverMinutes = leaveOutcome.lateCoverMinutes;
+            dayType = leaveOutcome.dayType;
+            finalClockIn = leaveOutcome.clockIn;
+            finalClockOut = leaveOutcome.clockOut;
+            finalLogId = leaveOutcome.logId;
+            scheduledStart = leaveOutcome.scheduledStart || entry.shiftStart;
+            scheduledEnd = leaveOutcome.scheduledEnd || entry.shiftEnd;
+            reqLeave = leaveOutcome.reqLeave;
+            leaveRequestId = leaveOutcome.leaveRequestId;
+        } else {
+            finalClockIn = clockIn;
+            finalClockOut = clockOut;
+            finalLogId = logId;
+            status = calculateStatus(clockIn, clockOut);
+            lateMinutes = calculateArrivalLateMinutes(entry.shiftStart, clockIn);
+            lateCoverMinutes = calculateLateCover(
+                entry.shiftStart, entry.shiftEnd, clockIn, clockOut
+            );
+        }
 
         if (isDiscrepancy(status, lateMinutes, lateCoverMinutes)) {
             discrepancies.push(buildDiscrepancy(
-                entry.employeeId, entry.date, status, lateMinutes, lateCoverMinutes
+                entry.employeeId, entry.date, status, lateMinutes, lateCoverMinutes, dayType
             ));
         }
 
         const attendanceRecord = await upsertAttendanceRecord({
             employeeId:      entry.employeeId,
             date:            entry.date,
-            clockIn,
-            clockOut,
-            scheduledStart:  entry.shiftStart,
-            scheduledEnd:    entry.shiftEnd,
+            clockIn:         finalClockIn,
+            clockOut:        finalClockOut,
+            scheduledStart,
+            scheduledEnd,
             status,
             lateMinutes,
             lateCoverMinutes,
+            dayType,
             rosterId:        entry.rosterId,
-            logId,
+            logId:           finalLogId,
+            reqLeave,
+            leaveRequestId,
         });
 
         results.push(attendanceRecord);
@@ -671,7 +757,7 @@ const normalizeAttendanceUpdatePayload = (data = {}) => {
         'employeeId', 'date', 'clockIn', 'clockOut', 'status',
         'lateMinutes', 'lateCoverMinutes', 'dayType',
         'notes', 'scheduledStart', 'scheduledEnd', 'rosterId', 'attendanceLogId',
-        'leaveRequestId', 'isManual', 'month', 'year',
+        'leaveRequestId', 'reqLeave', 'isManual', 'month', 'year',
     ];
 
     const update = {};
@@ -748,6 +834,11 @@ const normalizeAttendanceUpdatePayload = (data = {}) => {
 
         if (key === 'isManual') {
             update.isManual = Boolean(value);
+            continue;
+        }
+
+        if (key === 'reqLeave') {
+            update.reqLeave = Boolean(value);
             continue;
         }
 

@@ -128,6 +128,7 @@ type Props = LeaveProps | UnauthProps;
 
 function reviewerDisplay(record: LeaveRequestRecord | UnauthorisedRequestRecord) {
   if (record.status === "pending") return "Awaiting HOD or supervisor";
+  if (record.reviewedBy === "SYSTEM") return "System (auto-accept)";
   const role =
     record.reviewedByRole === "hod"
       ? "HOD"
@@ -193,7 +194,11 @@ export default function RequestDetailDialog(props: Props) {
                 ? formatDate((record as LeaveRequestRecord).startDate)
                 : `${formatDate((record as LeaveRequestRecord).startDate)} – ${formatDate((record as LeaveRequestRecord).endDate)}`}
             </DetailRow>
-            <DetailRow label="Days">{(record as LeaveRequestRecord).totalDays}</DetailRow>
+            <DetailRow label="Duration">
+              {(record as LeaveRequestRecord).duration === "half_day"
+                ? `Half day (${(record as LeaveRequestRecord).halfDayPeriod ?? "morning"})`
+                : `Full day · ${(record as LeaveRequestRecord).totalDays} day(s)`}
+            </DetailRow>
             <DetailRow label="Reason">{(record as LeaveRequestRecord).reason}</DetailRow>
           </>
         ) : (

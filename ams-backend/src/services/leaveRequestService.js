@@ -5,12 +5,15 @@
 
 const { Op } = require('sequelize');
 const Employee = require('../models/Employee');
-const Attendance = require('../models/Attendance');
 const LeaveRequest = require('../models/LeaveRequest');
 const {
     validateLeaveRequestPayload,
     validateNoOverlappingLeave,
 } = require('./leaveRequestValidation');
+const {
+    applyApprovedLeaveToAttendance,
+    applyRejectedLeaveToAttendance,
+} = require('./leaveAttendanceHelper');
 
 const notFoundError = (message) => Object.assign(new Error(message), { status: 404 });
 const forbiddenError = (message) => Object.assign(new Error(message), { status: 403 });
@@ -74,11 +77,15 @@ const enrichRequestRecords = async (records) => {
             reviewedByRole = 'supervisor';
         }
 
+        const reviewedByName = r.reviewedBy === 'SYSTEM'
+            ? 'System (auto-accept)'
+            : (r.reviewedBy
+                ? (reviewerNameByPublicId[r.reviewedBy] ?? r.reviewedBy)
+                : null);
+
         return {
             ...r,
-            reviewedByName: r.reviewedBy
-                ? (reviewerNameByPublicId[r.reviewedBy] ?? r.reviewedBy)
-                : null,
+            reviewedByName,
             reviewedByRole,
             hodEmployeeId: hod?.employeeId ?? null,
             hodName: hod ? `${hod.firstName} ${hod.lastName}` : null,
@@ -115,6 +122,8 @@ const submitLeaveRequest = async (employeeId, data) => {
         endDate: validated.endDate,
         totalDays: validated.totalDays,
         reason: validated.reason,
+        duration: validated.duration,
+        halfDayPeriod: validated.halfDayPeriod,
         status: 'pending',
         // Snapshot HOD/supervisor at submit so the admin queue stays correct even if
         // the employee's hierarchy changes later
@@ -212,8 +221,9 @@ const getLeaveRequestById = async (leaveRequestId, viewerId) => {
 
 // -----------------------------------------------------------------------
 // reviewLeaveRequest - approve or reject a pending leave request.
-// Only the assigned HOD/supervisor may review. On approve, marks overlapping
-// attendance days as leave and links them to this request.
+// Only the assigned HOD/supervisor may review. On approve, sets reqLeave=true
+// on overlapping attendance (full-day → status leave). On reject, clears
+// reqLeave so absence can reflect.
 // -----------------------------------------------------------------------
 const reviewLeaveRequest = async (leaveRequestId, viewer, { decision, reviewComments } = {}) => {
     if (!viewer?.id || !viewer?.employeeId) {
@@ -243,21 +253,9 @@ const reviewLeaveRequest = async (leaveRequestId, viewer, { decision, reviewComm
     await leaveRequest.save();
 
     if (decision === 'approved') {
-        await Attendance.update(
-            {
-                status: 'leave',
-                leaveRequestId: leaveRequest.id,
-            },
-            {
-                where: {
-                    employeeId: leaveRequest.employeeId,
-                    date: {
-                        [Op.between]: [leaveRequest.startDate, leaveRequest.endDate],
-                    },
-                    status: { [Op.ne]: 'holiday' },
-                },
-            },
-        );
+        await applyApprovedLeaveToAttendance(leaveRequest);
+    } else {
+        await applyRejectedLeaveToAttendance(leaveRequest);
     }
 
     const [enriched] = await enrichRequestRecords([leaveRequest]);

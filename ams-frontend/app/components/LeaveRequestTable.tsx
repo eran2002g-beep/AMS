@@ -31,6 +31,14 @@ function leaveTypeLabel(value: LeaveRequestRecord["leaveType"]) {
   return LEAVE_TYPE_OPTIONS.find((opt) => opt.value === value)?.label ?? value;
 }
 
+function durationLabel(record: LeaveRequestRecord) {
+  if (record.duration === "half_day") {
+    const period = record.halfDayPeriod === "afternoon" ? "afternoon" : "morning";
+    return `Half (${period})`;
+  }
+  return String(record.totalDays);
+}
+
 function statusChipSx(status: LeaveStatus) {
   switch (status) {
     case "approved":
@@ -51,6 +59,7 @@ function statusLabel(status: LeaveStatus) {
 
 function reviewerLabel(record: LeaveRequestRecord) {
   if (record.status === "pending") return "—";
+  if (record.reviewedBy === "SYSTEM") return "System (auto-accept)";
   if (record.reviewedByName) return record.reviewedByName;
   if (record.reviewedBy) return record.reviewedBy;
   return "—";
@@ -125,7 +134,7 @@ export default function LeaveRequestTable({
                       ? formatDate(record.startDate)
                       : `${formatDate(record.startDate)} – ${formatDate(record.endDate)}`}
                   </TableCell>
-                  <TableCell>{record.totalDays}</TableCell>
+                  <TableCell>{durationLabel(record)}</TableCell>
                   <TableCell sx={{ maxWidth: 220 }}>
                     <Tooltip title={record.reason}>
                       <span

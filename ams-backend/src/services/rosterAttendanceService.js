@@ -11,6 +11,7 @@ const {
     buildDiscrepancy,
     isDiscrepancy,
 } = require('../utils/attendanceUtils');
+const { resolveLeaveForAttendance } = require('./leaveAttendanceHelper');
 
 const matchEntryToLogs = async (entry) => {
     const logs = await AttendanceLog.findAll({
@@ -21,7 +22,7 @@ const matchEntryToLogs = async (entry) => {
         order: [['punchTime', 'ASC']],
     });
 
-    return matchLogsToShift(logs, entry.shiftStart, entry.shiftEnd);
+    return { logs, matched: matchLogsToShift(logs, entry.shiftStart, entry.shiftEnd) };
 };
 
 const processRosterAttendance = async (rosterId) => {
@@ -35,32 +36,76 @@ const processRosterAttendance = async (rosterId) => {
     const discrepancies = [];
 
     for (const entry of entries) {
-        const { clockIn, clockOut, logId } = await matchEntryToLogs(entry);
+        const { logs, matched } = await matchEntryToLogs(entry);
+        const { clockIn, clockOut, logId } = matched;
 
-        const status           = calculateStatus(clockIn, clockOut);
-        const lateMinutes      = calculateArrivalLateMinutes(entry.shiftStart, clockIn);
-        const lateCoverMinutes = calculateLateCover(
-            entry.shiftStart, entry.shiftEnd, clockIn, clockOut
-        );
+        const leaveOutcome = await resolveLeaveForAttendance({
+            employeeId: entry.employeeId,
+            date: entry.date,
+            shiftStart: entry.shiftStart,
+            shiftEnd: entry.shiftEnd,
+            logs,
+            clockIn,
+            clockOut,
+            logId,
+        });
+
+        let status;
+        let lateMinutes;
+        let lateCoverMinutes;
+        let dayType = null;
+        let finalClockIn;
+        let finalClockOut;
+        let finalLogId;
+        let scheduledStart = entry.shiftStart;
+        let scheduledEnd = entry.shiftEnd;
+        let reqLeave = false;
+        let leaveRequestId = null;
+
+        if (leaveOutcome) {
+            status = leaveOutcome.status;
+            lateMinutes = leaveOutcome.lateMinutes;
+            lateCoverMinutes = leaveOutcome.lateCoverMinutes;
+            dayType = leaveOutcome.dayType;
+            finalClockIn = leaveOutcome.clockIn;
+            finalClockOut = leaveOutcome.clockOut;
+            finalLogId = leaveOutcome.logId;
+            scheduledStart = leaveOutcome.scheduledStart || entry.shiftStart;
+            scheduledEnd = leaveOutcome.scheduledEnd || entry.shiftEnd;
+            reqLeave = leaveOutcome.reqLeave;
+            leaveRequestId = leaveOutcome.leaveRequestId;
+        } else {
+            finalClockIn = clockIn;
+            finalClockOut = clockOut;
+            finalLogId = logId;
+            status = calculateStatus(clockIn, clockOut);
+            lateMinutes = calculateArrivalLateMinutes(entry.shiftStart, clockIn);
+            lateCoverMinutes = calculateLateCover(
+                entry.shiftStart, entry.shiftEnd, clockIn, clockOut
+            );
+        }
 
         if (isDiscrepancy(status, lateMinutes, lateCoverMinutes)) {
             discrepancies.push(buildDiscrepancy(
-                entry.employeeId, entry.date, status, lateMinutes, lateCoverMinutes
+                entry.employeeId, entry.date, status, lateMinutes, lateCoverMinutes, dayType
             ));
         }
 
         const attendanceRecord = await upsertAttendanceRecord({
             employeeId:      entry.employeeId,
             date:            entry.date,
-            clockIn,
-            clockOut,
-            scheduledStart:  entry.shiftStart,
-            scheduledEnd:    entry.shiftEnd,
+            clockIn:         finalClockIn,
+            clockOut:        finalClockOut,
+            scheduledStart,
+            scheduledEnd,
             status,
             lateMinutes,
             lateCoverMinutes,
+            dayType,
             rosterId,
-            logId,
+            logId:           finalLogId,
+            reqLeave,
+            leaveRequestId,
         });
 
         results.push(attendanceRecord);

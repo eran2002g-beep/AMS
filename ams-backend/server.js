@@ -162,6 +162,32 @@ sequelize.authenticate()
         ALTER TABLE attendance
         ADD COLUMN IF NOT EXISTS "dayType" "enum_attendance_dayType";
     `))
+    .then(() => sequelize.query(`
+        ALTER TABLE attendance
+        ADD COLUMN IF NOT EXISTS "reqLeave" BOOLEAN NOT NULL DEFAULT false;
+    `))
+    .then(() => sequelize.query(`
+        DO $$ BEGIN
+            CREATE TYPE "enum_leave_requests_duration" AS ENUM ('full_day', 'half_day');
+        EXCEPTION
+            WHEN duplicate_object THEN NULL;
+        END $$;
+    `))
+    .then(() => sequelize.query(`
+        DO $$ BEGIN
+            CREATE TYPE "enum_leave_requests_halfDayPeriod" AS ENUM ('morning', 'afternoon');
+        EXCEPTION
+            WHEN duplicate_object THEN NULL;
+        END $$;
+    `))
+    .then(() => sequelize.query(`
+        ALTER TABLE leave_requests
+        ADD COLUMN IF NOT EXISTS duration "enum_leave_requests_duration" NOT NULL DEFAULT 'full_day';
+    `))
+    .then(() => sequelize.query(`
+        ALTER TABLE leave_requests
+        ADD COLUMN IF NOT EXISTS "halfDayPeriod" "enum_leave_requests_halfDayPeriod";
+    `))
 
     // RBAC: employees.role enum previously only had 'admin' and 'employee'.
     // ALTER TYPE ... ADD VALUE cannot run inside the implicit sync transaction

@@ -38,6 +38,7 @@ const COLUMNS = [
   { id: "scheduled", label: "Scheduled" },
   { id: "dayType", label: "Day Type" },
   { id: "status", label: "Status" },
+  { id: "reqLeave", label: "Req Leave" },
   { id: "lateMinutes", label: "Late (min)" },
   { id: "lateCoverMinutes", label: "Cover owed (min)" },
   { id: "notes", label: "Notes" },
@@ -203,6 +204,18 @@ export default function AttendanceTable({
                         }}
                       />
                     </Tooltip>
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={record.reqLeave ? "Yes" : "No"}
+                      size="small"
+                      sx={{
+                        backgroundColor: record.reqLeave ? "#dcfce7" : "#f1f5f9",
+                        color: record.reqLeave ? "#15803d" : "#64748b",
+                        textTransform: "none",
+                        fontWeight: 600,
+                      }}
+                    />
                   </TableCell>
                   <TableCell sx={lateCellSx(lateMinutes)}>
                     {formatLateMinutes(lateMinutes)}

@@ -611,6 +611,8 @@ export type AttendanceRecord = {
   rosterId: number | null;
   attendanceLogId: number | null;
   leaveRequestId: number | null;
+  /** True when effective leave covers this day (approved or auto-accepted). */
+  reqLeave?: boolean;
   notes: string | null;
   isManual: boolean;
   createdAt?: string;
@@ -1056,6 +1058,8 @@ export const attendanceApi = {
 
 export type LeaveType = "annual" | "sick" | "casual" | "unpaid" | "other";
 export type LeaveStatus = "pending" | "approved" | "rejected" | "cancelled";
+export type LeaveDuration = "full_day" | "half_day";
+export type HalfDayPeriod = "morning" | "afternoon";
 
 export const LEAVE_TYPE_OPTIONS: Array<{ value: LeaveType; label: string }> = [
   { value: "annual", label: "Annual" },
@@ -1063,6 +1067,16 @@ export const LEAVE_TYPE_OPTIONS: Array<{ value: LeaveType; label: string }> = [
   { value: "casual", label: "Casual" },
   { value: "unpaid", label: "Unpaid" },
   { value: "other", label: "Other" },
+];
+
+export const LEAVE_DURATION_OPTIONS: Array<{ value: LeaveDuration; label: string }> = [
+  { value: "full_day", label: "Full day" },
+  { value: "half_day", label: "Half day" },
+];
+
+export const HALF_DAY_PERIOD_OPTIONS: Array<{ value: HalfDayPeriod; label: string }> = [
+  { value: "morning", label: "Morning" },
+  { value: "afternoon", label: "Afternoon" },
 ];
 
 export type LeaveRequestRecord = {
@@ -1073,6 +1087,8 @@ export type LeaveRequestRecord = {
   startDate: string;
   endDate: string;
   totalDays: number;
+  duration?: LeaveDuration;
+  halfDayPeriod?: HalfDayPeriod | null;
   reason: string;
   status: LeaveStatus;
   reviewedBy: string | null;
@@ -1098,6 +1114,8 @@ export type LeaveRequestSubmitPayload = {
   startDate: string;
   endDate: string;
   reason: string;
+  duration?: LeaveDuration;
+  halfDayPeriod?: HalfDayPeriod | null;
 };
 
 export type LeaveRequestSubmitResponse = {

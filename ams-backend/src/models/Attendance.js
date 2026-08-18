@@ -134,6 +134,15 @@ const Attendance = sequelize.define('Attendance', {
         allowNull: true, // null = no leave request linked
     },
 
+    // reqLeave - true when an effective leave request covers this day (approved, or
+    // pending auto-accepted during attendance processing). When true, absence does
+    // not reflect negatively on the employee; when false (rejected / no leave), it does.
+    reqLeave: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+    },
+
     // notes - optional admin notes for manual additions or corrections
     // used in Add/Edit Attendance Records (Epic 4)
     notes: {

@@ -149,6 +149,8 @@ const upsertAttendanceRecord = async ({
     dayType,
     rosterId,
     logId,
+    reqLeave = false,
+    leaveRequestId = null,
 }) => {
     const [year, month] = date.split('-').map(Number);
 
@@ -167,6 +169,8 @@ const upsertAttendanceRecord = async ({
         existing.dayType          = dayType ?? null;
         existing.rosterId         = rosterId;
         existing.attendanceLogId  = logId;
+        existing.reqLeave         = Boolean(reqLeave);
+        existing.leaveRequestId   = leaveRequestId ?? null;
         return existing.save();
     }
 
@@ -185,6 +189,8 @@ const upsertAttendanceRecord = async ({
         dayType: dayType ?? null,
         rosterId,
         attendanceLogId: logId,
+        reqLeave: Boolean(reqLeave),
+        leaveRequestId: leaveRequestId ?? null,
         isManual: false,
     });
 };
@@ -208,6 +214,7 @@ module.exports = {
     SHORT_LEAVE_MINUTES,
     HALF_DAY_MINUTES,
     isValidTimeString,
+    timeToMinutes,
     calculateArrivalLateMinutes,
     calculateLateCover,
     calculateStatus,
