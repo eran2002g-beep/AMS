@@ -1,4 +1,5 @@
 const leaveRequestService = require('../services/leaveRequestService');
+const AdminService = require('../services/adminService');
 
 const statusFromError = (err) => {
     if (err.status) return err.status;
@@ -102,11 +103,16 @@ const getLeaveRequestById = async (req, res) => {
 const reviewLeaveRequest = async (req, res) => {
     try {
         const decision = req.params.decision === 'approve' ? 'approved' : 'rejected';
-        const leaveRequest = await leaveRequestService.reviewLeaveRequest(
-            req.params.leaveRequestId,
-            { id: req.user.id, employeeId: req.user.employeeId },
-            { decision, reviewComments: req.body?.reviewComments },
-        );
+        const leaveRequestId = req.params.leaveRequestId;
+        const adminUser = { id: req.user.id, employeeId: req.user.employeeId };
+        const comments = req.body?.reviewComments;
+
+        let leaveRequest;
+        if (req.params.decision === 'approve') {
+            leaveRequest = await AdminService.approveLeaveRequest(leaveRequestId, adminUser, comments);
+        } else {
+            leaveRequest = await AdminService.rejectLeaveRequest(leaveRequestId, adminUser, comments);
+        }
 
         return res.status(200).json({
             status: 'success',
