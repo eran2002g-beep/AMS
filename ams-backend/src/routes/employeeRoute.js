@@ -74,7 +74,7 @@ router.get('/unauthorised-leaves', verifyToken, authorize(...CAN_VIEW_ATTENDANCE
     try {
         const { startDate, endDate, department, employeeId } = req.query;
 
-        const records = await employeeService.getUnauthorisedLeaveRecords({
+        const records = await employeeService.getUnauthorisedLeaveDetails({
             startDate,
             endDate,
             department,
@@ -95,8 +95,6 @@ router.get('/unauthorised-leaves', verifyToken, authorize(...CAN_VIEW_ATTENDANCE
 });
 
 // -----------------------------------------------------------------------
-// PUT /employee/:employeeId/hierarchy - Update Role and Reporting Structure
-// EMPLOYEE CRUD -> admin/super_admin only (via CAN_MANAGE_EMPLOYEES permissions)
 // GET /employee/me/leave-requests - retrieve the signed-in employee's leave history
 // Self-service endpoint for employees to track request status.
 // -----------------------------------------------------------------------
@@ -120,6 +118,7 @@ router.get(
 router.put('/:employeeId/hierarchy', verifyToken, authorize(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
     try {
         const { employeeId } = req.params;
+
         // hierarchyData payload: { role, hod, supervisor }
         const updatedEmployee = await employeeService.updateEmployeeHierarchy(
             employeeId,
@@ -142,7 +141,6 @@ router.put('/:employeeId/hierarchy', verifyToken, authorize(...CAN_MANAGE_EMPLOY
 // -----------------------------------------------------------------------
 // GET /employee/:managerId/subordinates - Get all direct reports for a manager
 // EMPLOYEE HIERARCHY READ -> restricted to super-admin and management roles
-// GET /employee/:managerId/subordinates - Get all direct reports
 // -----------------------------------------------------------------------
 router.get('/:managerId/subordinates', verifyToken, authorize(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
     try {
@@ -166,7 +164,6 @@ router.get('/:managerId/subordinates', verifyToken, authorize(...CAN_MANAGE_EMPL
 // -----------------------------------------------------------------------
 // GET /employee/:employeeId - Retrieve one active employee by ID
 // EMPLOYEE READ -> super-admin, admin, and admin-manager
-// GET /employee/:employeeId - Retrieve one employee
 // -----------------------------------------------------------------------
 router.get('/:employeeId', verifyToken, authorize(...CAN_VIEW_EMPLOYEES), async (req, res) => {
     try {
@@ -185,7 +182,8 @@ router.get('/:employeeId', verifyToken, authorize(...CAN_VIEW_EMPLOYEES), async 
 });
 
 // -----------------------------------------------------------------------
-// POST /employee/create
+// POST /employee/create - Create a new employee record
+// EMPLOYEE CRUD -> super_admin only (via CAN_MANAGE_EMPLOYEES permissions)
 // -----------------------------------------------------------------------
 router.post('/create', verifyToken, authorize(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
     try {
@@ -202,7 +200,6 @@ router.post('/create', verifyToken, authorize(...CAN_MANAGE_EMPLOYEES), async (r
 // -----------------------------------------------------------------------
 // DELETE /employee/:employeeId - Soft delete an employee record
 // EMPLOYEE CRUD -> super_admin only (via CAN_MANAGE_EMPLOYEES permissions)
-// DELETE /employee/:employeeId
 // -----------------------------------------------------------------------
 router.delete('/:employeeId', verifyToken, authorize(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
     try {
@@ -227,7 +224,6 @@ router.delete('/:employeeId', verifyToken, authorize(...CAN_MANAGE_EMPLOYEES), a
 // -----------------------------------------------------------------------
 // PATCH /employee/:employeeId - Update an existing employee record
 // EMPLOYEE CRUD -> super_admin only (via CAN_MANAGE_EMPLOYEES permissions)
-// PATCH /employee/:employeeId
 // -----------------------------------------------------------------------
 router.patch('/:employeeId', verifyToken, authorize(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
     try {
@@ -254,7 +250,6 @@ router.patch('/:employeeId', verifyToken, authorize(...CAN_MANAGE_EMPLOYEES), as
 // -----------------------------------------------------------------------
 // GET /employee/:employeeId/attendance-summary - Get calculated metrics
 // ATTENDANCE READ -> follows the view attendance permission (admin, admin_manager)
-// GET /employee/:employeeId/attendance-summary
 // -----------------------------------------------------------------------
 router.get('/:employeeId/attendance-summary', verifyToken, authorize(...CAN_VIEW_ATTENDANCE), async (req, res) => {
     try {

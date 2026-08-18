@@ -1,7 +1,7 @@
 // src/services/employeeService.js - handles business logic for employee operations
 // sits between the controller and the model - controller handles HTTP, service handles logic
 
-// Import the Employee and Attendance models to interact with the database
+// Import Employee and Attendance models
 const Employee = require('../models/Employee');
 const Attendance = require('../models/Attendance');
 const { validateEmployeePayload } = require('./employeeValidation');
@@ -20,6 +20,7 @@ const REPORTING_RELATIONSHIPS = [
     { model: Employee, as: 'supervisorEmployee' },
 ];
 
+// Validate if reporting managers (HOD/Supervisor) exist and prevent circular self-reporting
 const validateReportingRelationships = async ({ hod, supervisor }, currentEmployeeId) => {
     const reportingIds = [...new Set([hod, supervisor].filter((id) => id !== undefined && id !== null))];
 
@@ -46,9 +47,6 @@ const validateReportingRelationships = async ({ hod, supervisor }, currentEmploy
 
 // createEmployee - validates input and creates a new employee record
 const createEmployee = async (data) => {
-
-    // ---------------------------- Validation ----------------------------
-
     const validatedData = validateEmployeePayload(data, { requireAllFields: true });
     const {
         firstName: validatedFirstName,
@@ -63,9 +61,8 @@ const createEmployee = async (data) => {
         supervisor: validatedSupervisor,
     } = validatedData;
 
-    // Check if an employee with this email already exists
+    // Check if employee with email exists
     const existingEmployee = await Employee.findOne({ where: { email: validatedEmail } });
-
     if (existingEmployee) {
         throw new Error('An employee with this email already exists');
     }
@@ -74,8 +71,6 @@ const createEmployee = async (data) => {
         hod: validatedHod,
         supervisor: validatedSupervisor,
     });
-
-    // ---------------------------- Create Record ----------------------------
 
     const employee = await Employee.create({
         firstName: validatedFirstName,
@@ -92,17 +87,14 @@ const createEmployee = async (data) => {
     });
 
     await employee.reload({ include: REPORTING_RELATIONSHIPS });
-
     return employee;
 };
 
-// -----------------------------------------------------------------------
-//  searchEmployees - Fetches active employee records with optional filters
-// -----------------------------------------------------------------------
+// searchEmployees - Fetches active employee records with optional filters
 const searchEmployees = async (opts = {}) => {
     try {
         const {
-            q, // search text
+            q,
             department,
             role,
             page = 1,
@@ -143,8 +135,7 @@ const searchEmployees = async (opts = {}) => {
     }
 };
 
-// -----------------------------------------------------------------------
-
+// Retrieve active admin employees
 const getAdministrativeEmployees = async () => Employee.findAll({
     where: {
         isActive: true,
@@ -164,9 +155,7 @@ const getManagers = async () => Employee.findAll({
     order: [['lastName', 'ASC'], ['firstName', 'ASC']],
 });
 
-// -----------------------------------------------------------------------
-// updateEmployeeHierarchy - Role updates and HOD/Supervisor changes (NEW)
-// -----------------------------------------------------------------------
+// updateEmployeeHierarchy - Role updates and HOD/Supervisor changes
 const updateEmployeeHierarchy = async (employeeId, hierarchyData) => {
     const { role, hod, supervisor } = validateEmployeePayload(hierarchyData);
 
@@ -175,7 +164,6 @@ const updateEmployeeHierarchy = async (employeeId, hierarchyData) => {
         throw new Error(`Active employee with ID ${employeeId} not found.`);
     }
 
-    // Pass HOD & Supervisor to the existing validator along with the internal employee primary key ID
     await validateReportingRelationships({ hod, supervisor }, employee.id);
 
     const updateFields = {};
@@ -189,16 +177,13 @@ const updateEmployeeHierarchy = async (employeeId, hierarchyData) => {
     return updatedEmployee;
 };
 
-// -----------------------------------------------------------------------
-// getDirectReports - Fetch subordinates reporting to an HOD or Supervisor (NEW)
-// -----------------------------------------------------------------------
+// getDirectReports - Fetch subordinates reporting to an HOD or Supervisor
 const getDirectReports = async (managerEmployeeId) => {
     const manager = await Employee.findOne({ where: { employeeId: managerEmployeeId, isActive: true } });
     if (!manager) {
         throw new Error(`Active employee with management ID ${managerEmployeeId} not found.`);
     }
 
-    // Find any employee where their internal HOD id or Supervisor id matches this manager's primary key id
     return Employee.findAll({
         where: {
             isActive: true,
@@ -213,7 +198,6 @@ const getDirectReports = async (managerEmployeeId) => {
 };
 
 // Soft Delete Employee - Sets isActive to false using employeeId
-// -----------------------------------------------------------------------
 const deleteEmployeeById = async (employeeId) => {
     if (!employeeId) {
         throw new Error('Employee ID is required to perform deletion.');
@@ -227,7 +211,6 @@ const deleteEmployeeById = async (employeeId) => {
         throw new Error(`Active employee with ID ${employeeId} not found.`);
     }
 
-    // Hierarchy Guard: If this person is soft-deleted, clear out their references from subordinates
     await Employee.update({ hod: null }, { where: { hod: employee.id } });
     await Employee.update({ supervisor: null }, { where: { supervisor: employee.id } });
 
@@ -237,13 +220,9 @@ const deleteEmployeeById = async (employeeId) => {
     return employee;
 };
 
-// -----------------------------------------------------------------------
-// updates an existing employee record
-// -----------------------------------------------------------------------
+// Update existing employee record
 const updateEmployee = async (employeeId, updateData) => {
-
     const employee = await Employee.findOne({ where: { employeeId } });
-    
     if (!employee) {
         throw new Error(`Employee with ID ${employeeId} not found`);
     }
@@ -286,7 +265,6 @@ const updateEmployee = async (employeeId, updateData) => {
     if (updateData.supervisor !== undefined) updateFields.supervisor = validatedSupervisor;
     if (validatedPassword !== undefined) {
         updateFields.password = await hashPassword(validatedPassword);
-        // Admin-set / reset password is temporary until the employee changes it.
         updateFields.mustChangePassword = true;
     }
 
@@ -296,12 +274,13 @@ const updateEmployee = async (employeeId, updateData) => {
     return updatedEmployee;
 };
 
-// getAllEmployees - backward-compatible wrapper that returns only the list
+// getAllEmployees - backward-compatible wrapper
 const getAllEmployees = async () => {
     const result = await searchEmployees();
     return result.employees;
 };
 
+// Get single employee by public ID
 const getEmployeeById = async (employeeId) => {
     const employee = await Employee.findOne({
         where: { employeeId, isActive: true },
@@ -315,9 +294,7 @@ const getEmployeeById = async (employeeId) => {
     return employee;
 };
 
-// -----------------------------------------------------------------------
 // getEmployeeAttendance - fetch attendance records tied to an employee
-// -----------------------------------------------------------------------
 const getEmployeeAttendance = async (employeeId, filters = {}) => {
     if (!employeeId) {
         throw new Error('Employee ID is required to retrieve attendance.');
@@ -346,9 +323,7 @@ const getEmployeeAttendance = async (employeeId, filters = {}) => {
     });
 };
 
-// -----------------------------------------------------------------------
 // calculateAttendanceMetrics - Core math logic for summary dashboards
-// -----------------------------------------------------------------------
 const calculateAttendanceMetrics = async (employeeId, startDate, endDate, shiftStartTime = "09:00") => {
     if (!startDate || !endDate) {
         throw new Error('Both startDate and endDate are required for metric calculations.');
@@ -368,14 +343,12 @@ const calculateAttendanceMetrics = async (employeeId, startDate, endDate, shiftS
         if (record.checkOut) {
             const checkInTime = new Date(record.checkIn);
             const checkOutTime = new Date(record.checkOut);
-            
             const hoursWorked = (checkOutTime - checkInTime) / (1000 * 60 * 60);
             totalWorkingHours += parseFloat(hoursWorked.toFixed(2));
         }
 
         const actualCheckIn = new Date(record.checkIn);
         const [expectedHour, expectedMinute] = shiftStartTime.split(":").map(Number);
-        
         const expectedCheckInTimeToday = new Date(actualCheckIn);
         expectedCheckInTimeToday.setHours(expectedHour, expectedMinute, 0, 0);
 
@@ -397,6 +370,54 @@ const calculateAttendanceMetrics = async (employeeId, startDate, endDate, shiftS
 };
 
 // -----------------------------------------------------------------------
+// getUnauthorisedLeaveDetails - Retrieve detailed unauthorised leave records
+// Returns formatted records with date, attendance status, reason, and employee info
+// -----------------------------------------------------------------------
+const getUnauthorisedLeaveDetails = async (filters = {}) => {
+    const { startDate, endDate, department, employeeId } = filters;
+
+    const where = {
+        [Op.or]: [
+            { status: 'ABSENT' },
+            { status: 'absent' },
+            { status: 'UNAUTHORISED' },
+            { status: 'unauthorised' },
+            { status: 'UNEXCUSED' }
+        ]
+    };
+
+    if (employeeId) where.employeeId = employeeId;
+    if (startDate && endDate) {
+        where.date = { [Op.between]: [startDate, endDate] };
+    }
+
+    const employeeWhere = { isActive: true };
+    if (department) employeeWhere.department = department;
+
+    const records = await Attendance.findAll({
+        where,
+        include: [{
+            model: Employee,
+            where: employeeWhere,
+            attributes: ['id', 'employeeId', 'firstName', 'lastName', 'department', 'role']
+        }],
+        order: [['date', 'DESC']]
+    });
+
+    return records.map((record) => ({
+        date: record.date,
+        attendanceStatus: record.status,
+        reason: record.reason || 'Unauthorised Absence / No leave requested',
+        employee: {
+            employeeId: record.employee?.employeeId,
+            fullName: `${record.employee?.firstName || ''} ${record.employee?.lastName || ''}`.trim(),
+            department: record.employee?.department,
+            role: record.employee?.role
+        }
+    }));
+};
+
+// getEmployeeLeaveHistory - fetch leave requests tied to an employee
 // getEmployeeLeaveHistory - fetch leave requests tied to an employee (NEW)
 // Supports filtering by status (pending/approved/rejected), leaveType,
 // a specific year, or an explicit startDate/endDate range.
@@ -406,7 +427,6 @@ const getEmployeeLeaveHistory = async (employeeId, filters = {}) => {
         throw new Error('Employee ID is required to retrieve leave history.');
     }
 
-    // Lazy require to avoid circular deps in some import orders
     const LeaveRequest = require('../models/LeaveRequest');
 
     const employee = await Employee.findOne({ where: { employeeId, isActive: true } });
@@ -433,64 +453,9 @@ const getEmployeeLeaveHistory = async (employeeId, filters = {}) => {
 };
 
 // -----------------------------------------------------------------------
-// getUnauthorisedLeaveRecords - fetch attendance records with status
-// 'unauthorised' (NEW). Pass an employeeId to scope to one employee, or
-// omit it to pull the org-wide list (intended for manager/admin review),
-// in which case each record is annotated with basic employee info.
-// -----------------------------------------------------------------------
-const getUnauthorisedLeaveRecords = async (employeeId = null, filters = {}) => {
-    const where = { status: 'unauthorised' };
-
-    if (employeeId) {
-        const employee = await Employee.findOne({ where: { employeeId, isActive: true } });
-        if (!employee) {
-            throw new Error(`Active employee with ID ${employeeId} not found.`);
-        }
-        where.employeeId = employeeId;
-    }
-
-    if (filters.month) where.month = Number(filters.month);
-    if (filters.year) where.year = Number(filters.year);
-
-    if (filters.startDate && filters.endDate) {
-        where.date = { [Op.between]: [filters.startDate, filters.endDate] };
-    }
-
-    const records = await Attendance.findAll({
-        where,
-        order: [['date', 'DESC']],
-    });
-
-    if (employeeId) {
-        return records;
-    }
-
-    // Org-wide view: attach lightweight employee info to each record
-    const employeeIds = [...new Set(records.map((r) => r.employeeId))];
-    if (employeeIds.length === 0) return [];
-
-    const employees = await Employee.findAll({
-        where: { employeeId: { [Op.in]: employeeIds } },
-        attributes: ['id', 'employeeId', 'firstName', 'lastName', 'department', 'role'],
-        raw: true,
-    });
-    const employeeMap = new Map(employees.map((e) => [e.employeeId, e]));
-
-    return records.map((record) => ({
-        ...record.toJSON(),
-        employee: employeeMap.get(record.employeeId) || null,
-    }));
-};
-
-// -----------------------------------------------------------------------
 // ROLE MANAGEMENT - Methods to manage roles and permissions
 // -----------------------------------------------------------------------
 
-/**
- * validateUserCanManageEmployees - Verify if a user has permission to manage employees
- * @param {string} userRole - The role of the user attempting to manage employees
- * @returns {boolean} - True if user can manage employees, false otherwise
- */
 const validateUserCanManageEmployees = (userRole) => {
     if (!userRole || !CAN_MANAGE_EMPLOYEES.includes(userRole)) {
         throw new Error(`User role "${userRole}" does not have permission to manage employees. Only ${CAN_MANAGE_EMPLOYEES.join(', ')} roles can manage employees.`);
@@ -498,11 +463,6 @@ const validateUserCanManageEmployees = (userRole) => {
     return true;
 };
 
-/**
- * getRolePermissions - Get permission details for a specific role
- * @param {string} role - The role to get permissions for
- * @returns {object} - Object containing permission mappings for the role
- */
 const getRolePermissions = (role) => {
     if (!role) {
         throw new Error('Role is required to retrieve permissions.');
@@ -553,18 +513,13 @@ const getRolePermissions = (role) => {
     return permissionMap[role];
 };
 
-/**
- * getEmployeesByRole - Retrieve all active employees with a specific role
- * @param {string} role - The role to filter by
- * @returns {Promise<Array>} - Array of employees with the specified role
- */
 const getEmployeesByRole = async (role) => {
     if (!role) {
         throw new Error('Role is required to filter employees.');
     }
 
     try {
-        getRolePermissions(role); // Validate role exists
+        getRolePermissions(role);
     } catch (error) {
         throw error;
     }
@@ -579,20 +534,13 @@ const getEmployeesByRole = async (role) => {
     });
 };
 
-/**
- * validateRoleAssignment - Verify if a requester can assign a role to an employee
- * Only super-admin can assign roles (especially admin roles)
- * @param {string} requesterRole - The role of the person making the assignment
- * @param {string} targetRole - The role being assigned
- * @returns {boolean} - True if assignment is allowed
- */
 const validateRoleAssignment = (requesterRole, targetRole) => {
     if (!requesterRole || !targetRole) {
         throw new Error('Both requesterRole and targetRole are required.');
     }
 
     try {
-        getRolePermissions(targetRole); // Validate target role exists
+        getRolePermissions(targetRole);
     } catch (error) {
         throw error;
     }
@@ -604,11 +552,6 @@ const validateRoleAssignment = (requesterRole, targetRole) => {
     return true;
 };
 
-/**
- * getEmployeesByPermissionLevel - Get employees that have a specific permission
- * @param {string} permissionKey - The permission key (e.g., 'canManageEmployees')
- * @returns {Promise<Array>} - Array of employees with the specified permission
- */
 const getEmployeesByPermissionLevel = async (permissionKey) => {
     if (!permissionKey) {
         throw new Error('Permission key is required.');
@@ -641,21 +584,13 @@ const getEmployeesByPermissionLevel = async (permissionKey) => {
     });
 };
 
-// Export all service functions
-// -----------------------------------------------------------------------
 // resolveUnauthorisedAttendance - Convert an 'unauthorised' attendance into an approved leave
-// reviewerEmployeeId: public-facing employeeId of the manager/admin performing the resolution
-// reviewNotes: optional notes about why the unauthorised was resolved to leave
-// -----------------------------------------------------------------------
 const resolveUnauthorisedAttendance = async (attendanceId, reviewerEmployeeId, reviewNotes = null) => {
     if (!attendanceId) throw new Error('attendanceId is required');
     if (!reviewerEmployeeId) throw new Error('reviewerEmployeeId is required');
 
-    // Lazy require to avoid circular deps in some import orders
-    const Attendance = require('../models/Attendance');
     const LeaveRequest = require('../models/LeaveRequest');
 
-    // Fetch reviewer and validate permission
     const reviewer = await Employee.findOne({ where: { employeeId: reviewerEmployeeId, isActive: true } });
     if (!reviewer) throw new Error(`Active reviewer with ID ${reviewerEmployeeId} not found.`);
 
@@ -664,7 +599,6 @@ const resolveUnauthorisedAttendance = async (attendanceId, reviewerEmployeeId, r
         throw new Error('Reviewer does not have permission to resolve unauthorised attendance.');
     }
 
-    // Load attendance record
     const attendance = await Attendance.findOne({ where: { attendanceId } });
     if (!attendance) throw new Error(`Attendance record with ID ${attendanceId} not found.`);
 
@@ -672,7 +606,6 @@ const resolveUnauthorisedAttendance = async (attendanceId, reviewerEmployeeId, r
         throw new Error('Only attendance records with status "unauthorised" can be resolved to leave.');
     }
 
-    // Create an approved leave request covering this attendance day
     const leave = await LeaveRequest.create({
         employeeId: attendance.employeeId,
         leaveType: 'other',
@@ -688,7 +621,6 @@ const resolveUnauthorisedAttendance = async (attendanceId, reviewerEmployeeId, r
         supervisor: reviewer.supervisor ?? null,
     });
 
-    // Update attendance to link leave and set status to 'leave'
     attendance.leaveRequestId = leave.id;
     attendance.status = 'leave';
     await attendance.save();
@@ -696,7 +628,7 @@ const resolveUnauthorisedAttendance = async (attendanceId, reviewerEmployeeId, r
     return { attendance: await attendance.reload(), leave };
 };
 
-// Export all service functions - add new ones here as we build more features
+// Export all service functions
 module.exports = {
     createEmployee,
     getAllEmployees,
@@ -711,6 +643,7 @@ module.exports = {
     deleteEmployeeById,
     getEmployeeAttendance,
     calculateAttendanceMetrics,
+    getUnauthorisedLeaveDetails,
     getUnauthorisedLeaveRecords,
     getEmployeeLeaveHistory,
     validateUserCanManageEmployees,
