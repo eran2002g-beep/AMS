@@ -2,6 +2,7 @@
 // Delegates the core review logic to the underlying leaveRequestService.
 
 const leaveRequestService = require('./leaveRequestService');
+const unauthorisedRequestService = require('./unauthorisedRequestService');
 
 class AdminService {
     /**
@@ -33,6 +34,38 @@ class AdminService {
             leaveRequestId,
             adminUser,
             { decision: 'rejected', reviewComments: comments }
+        );
+    }
+
+    /**
+     * Approves a pending unauthorised attendance request.
+     *
+     * @param {string} unauthorisedRequestId - The public request ID (e.g., UNA001).
+     * @param {object} adminUser - The admin/manager performing the action.
+     * @param {string} [comments] - Optional review comments.
+     * @returns {Promise<object>} The updated unauthorised request record.
+     */
+    static async approveUnauthorisedRequest(unauthorisedRequestId, adminUser, comments) {
+        return unauthorisedRequestService.reviewUnauthorisedRequest(
+            unauthorisedRequestId,
+            adminUser,
+            { decision: 'approved', reviewComments: comments },
+        );
+    }
+
+    /**
+     * Rejects a pending unauthorised attendance request.
+     *
+     * @param {string} unauthorisedRequestId - The public request ID (e.g., UNA001).
+     * @param {object} adminUser - The admin/manager performing the action.
+     * @param {string} [comments] - Optional review comments.
+     * @returns {Promise<object>} The updated unauthorised request record.
+     */
+    static async rejectUnauthorisedRequest(unauthorisedRequestId, adminUser, comments) {
+        return unauthorisedRequestService.reviewUnauthorisedRequest(
+            unauthorisedRequestId,
+            adminUser,
+            { decision: 'rejected', reviewComments: comments },
         );
     }
 }
