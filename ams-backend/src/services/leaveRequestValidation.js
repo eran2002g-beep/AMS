@@ -4,6 +4,7 @@
 
 const { Op } = require('sequelize');
 const LeaveRequest = require('../models/LeaveRequest');
+const { BLOCKING_REQUEST_STATUSES } = require('./reviewChain');
 
 const VALID_LEAVE_TYPES = ['annual', 'sick', 'casual', 'unpaid', 'other'];
 const VALID_DURATIONS = ['full_day', 'half_day'];
@@ -127,7 +128,7 @@ const validateReason = (reason) => {
 const validateNoOverlappingLeave = async (employeeId, startDate, endDate, excludeId = null) => {
     const where = {
         employeeId,
-        status: { [Op.in]: ['pending', 'approved'] },
+        status: { [Op.in]: BLOCKING_REQUEST_STATUSES },
         startDate: { [Op.lte]: endDate },
         endDate: { [Op.gte]: startDate },
     };

@@ -1,5 +1,6 @@
 const unauthorisedRequestService = require('../services/unauthorisedRequestService');
 const AdminService = require('../services/adminService');
+const { reviewSuccessMessage } = require('../services/reviewChain');
 
 const statusFromError = (err) => {
     if (err.status) return err.status;
@@ -120,7 +121,7 @@ const reviewUnauthorisedRequest = async (req, res) => {
 
         return res.status(200).json({
             status: 'success',
-            message: `Unauthorised request ${decision} successfully.`,
+            message: reviewSuccessMessage('Unauthorised request', request.status),
             data: request,
         });
     } catch (err) {

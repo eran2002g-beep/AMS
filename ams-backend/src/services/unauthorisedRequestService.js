@@ -9,24 +9,25 @@ const {
     validateNoPendingForAttendance,
     resolveClaimedTimes,
 } = require('./unauthorisedRequestValidation');
+const {
+    isAssignedAdmin,
+    canAcceptRequest,
+    assertCanReview,
+    applyReviewDecision,
+    statusFilterWhere,
+} = require('./reviewChain');
 
 const notFoundError = (message) => Object.assign(new Error(message), { status: 404 });
-const forbiddenError = (message) => Object.assign(new Error(message), { status: 403 });
 
 const withCanAccept = (request, viewerId) => {
     const data = typeof request.toJSON === 'function'
         ? request.toJSON()
         : { ...request };
 
-    data.canAccept = data.status === 'pending'
-        && (data.hod === viewerId || data.supervisor === viewerId);
+    data.canAccept = canAcceptRequest(data, viewerId);
 
     return data;
 };
-
-const isAssignedAdmin = (request, viewerId) => (
-    request.hod === viewerId || request.supervisor === viewerId
-);
 
 // Attach reviewer display name + assigned HOD/supervisor names for hierarchy UI.
 const attachReviewerNames = async (records) => {
@@ -160,7 +161,8 @@ const getUnauthorisedRequestsByEmployee = async (employeeId, opts = {}) => {
 
     const { status, page = 1, limit = 50 } = opts;
     const where = { employeeId };
-    if (status) where.status = status;
+    const statusWhere = statusFilterWhere(status);
+    if (statusWhere !== undefined) where.status = statusWhere;
 
     const parsedLimit = parseInt(limit, 10) || 50;
     const parsedPage = Math.max(parseInt(page, 10) || 1, 1);
@@ -193,7 +195,8 @@ const getAllUnauthorisedRequests = async (opts = {}, viewerId) => {
         ],
     };
     if (employeeId) where.employeeId = employeeId;
-    if (status) where.status = status;
+    const statusWhere = statusFilterWhere(status);
+    if (statusWhere !== undefined) where.status = statusWhere;
 
     const parsedLimit = parseInt(limit, 10) || 50;
     const parsedPage = Math.max(parseInt(page, 10) || 1, 1);
@@ -229,8 +232,10 @@ const getUnauthorisedRequestById = async (unauthorisedRequestId, viewerId) => {
 };
 
 // -----------------------------------------------------------------------
-// reviewUnauthorisedRequest - approve or reject a pending request.
-// On approve: apply claimed clock times and clear unauthorised attendance status.
+// reviewUnauthorisedRequest - sequential chain: supervisor first, then HOD.
+// Supervisor accept → supervisor_approved (attendance stays unauthorised).
+// HOD accept → approved + apply claimed clock times / mark present.
+// Either step may reject (final); attendance stays unauthorised.
 // -----------------------------------------------------------------------
 const reviewUnauthorisedRequest = async (
     unauthorisedRequestId,
@@ -252,22 +257,13 @@ const reviewUnauthorisedRequest = async (
             `Unauthorised request with ID ${unauthorisedRequestId} not found.`,
         );
     }
-    if (!isAssignedAdmin(request, viewer.id)) {
-        throw forbiddenError('You are not assigned to review this unauthorised request.');
-    }
-    if (request.status !== 'pending') {
-        throw new Error(
-            `Only pending unauthorised requests can be reviewed (current: ${request.status}).`,
-        );
-    }
 
-    request.status = decision;
-    request.reviewedBy = viewer.employeeId;
-    request.reviewComments = reviewComments?.trim() || null;
-    request.reviewedAt = new Date();
+    assertCanReview(request, viewer.id, { kind: 'unauthorised request' });
+
+    const nextStatus = applyReviewDecision(request, viewer, decision, reviewComments);
     await request.save();
 
-    if (decision === 'approved') {
+    if (nextStatus === 'approved') {
         const attendance = await Attendance.findByPk(request.attendanceId);
         if (attendance && attendance.status === 'unauthorised') {
             if (request.clockIn) attendance.clockIn = request.clockIn;

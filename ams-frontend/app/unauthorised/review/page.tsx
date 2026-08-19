@@ -17,9 +17,13 @@ import { useAuth } from "@/lib/auth";
 import { canManageLeave } from "@/lib/roles";
 import { useRouter } from "next/navigation";
 
-const STATUS_OPTIONS: Array<{ value: "" | UnauthorisedRequestStatus; label: string }> = [
+type UnauthorisedQueueStatusFilter = UnauthorisedRequestStatus | "awaiting";
+
+const STATUS_OPTIONS: Array<{ value: "" | UnauthorisedQueueStatusFilter; label: string }> = [
+  { value: "awaiting", label: "Needs review" },
   { value: "", label: "All statuses" },
   { value: "pending", label: "Pending" },
+  { value: "supervisor_approved", label: "Awaiting HOD" },
   { value: "approved", label: "Approved" },
   { value: "rejected", label: "Rejected" },
   { value: "cancelled", label: "Cancelled" },
@@ -30,7 +34,7 @@ export default function UnauthorisedReviewPage() {
   const { user } = useAuth();
   const manageLeave = canManageLeave(user?.role);
 
-  const [statusFilter, setStatusFilter] = useState<"" | UnauthorisedRequestStatus>("pending");
+  const [statusFilter, setStatusFilter] = useState<"" | UnauthorisedQueueStatusFilter>("awaiting");
   const [records, setRecords] = useState<UnauthorisedRequestRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -79,9 +83,11 @@ export default function UnauthorisedReviewPage() {
     try {
       const payload = reviewComments ? { reviewComments } : {};
       if (decision === "approve") {
-        await unauthorisedApi.approve(reviewTarget.unauthorisedRequestId, payload);
+        const updated = await unauthorisedApi.approve(reviewTarget.unauthorisedRequestId, payload);
         setSuccess(
-          `Approved ${reviewTarget.unauthorisedRequestId} for ${reviewTarget.employeeId}.`,
+          updated.status === "supervisor_approved"
+            ? `Supervisor accepted ${reviewTarget.unauthorisedRequestId}. Waiting for HOD.`
+            : `Approved ${reviewTarget.unauthorisedRequestId} for ${reviewTarget.employeeId}.`,
         );
       } else {
         await unauthorisedApi.reject(reviewTarget.unauthorisedRequestId, payload);
@@ -124,7 +130,7 @@ export default function UnauthorisedReviewPage() {
               Review Unauthorised Requests
             </Typography>
             <Typography variant="body2" sx={{ color: "#64748b" }}>
-              Approve or reject unauthorised attendance explanations assigned to you. Decisions record your name.
+              Approve or reject unauthorised attendance explanations in sequence: supervisor first, then HOD. Decisions record your name.
             </Typography>
           </Box>
 
@@ -135,7 +141,7 @@ export default function UnauthorisedReviewPage() {
               label="Status"
               value={statusFilter}
               onChange={(e: SelectChangeEvent) => {
-                setStatusFilter(e.target.value as "" | UnauthorisedRequestStatus);
+                setStatusFilter(e.target.value as "" | UnauthorisedQueueStatusFilter);
               }}
             >
               {STATUS_OPTIONS.map((opt) => (
@@ -173,7 +179,9 @@ export default function UnauthorisedReviewPage() {
         decision={decision}
         title={
           decision === "approve"
-            ? "Approve unauthorised request"
+            ? reviewTarget?.status === "supervisor_approved"
+              ? "Approve unauthorised request as HOD"
+              : "Accept unauthorised request"
             : "Reject unauthorised request"
         }
         subtitle={

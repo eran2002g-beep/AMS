@@ -197,6 +197,11 @@ sequelize.authenticate()
     .then(() => sequelize.query(`ALTER TYPE "enum_employees_role" ADD VALUE IF NOT EXISTS 'manager';`).catch(() => {}))
     .then(() => sequelize.query(`ALTER TYPE "enum_employees_role" ADD VALUE IF NOT EXISTS 'admin-manager';`).catch(() => {}))
 
+    // Sequential review chain: supervisor accepts first, then HOD.
+    .then(() => sequelize.query(`ALTER TYPE "enum_leave_requests_status" ADD VALUE IF NOT EXISTS 'cancelled';`).catch(() => {}))
+    .then(() => sequelize.query(`ALTER TYPE "enum_leave_requests_status" ADD VALUE IF NOT EXISTS 'supervisor_approved';`).catch(() => {}))
+    .then(() => sequelize.query(`ALTER TYPE "enum_unauthorised_requests_status" ADD VALUE IF NOT EXISTS 'supervisor_approved';`).catch(() => {}))
+
     // Step 5 - start the server only after the database is ready
     .then(() => {
         console.log('-------------------------------------------------------');

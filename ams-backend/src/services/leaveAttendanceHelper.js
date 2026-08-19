@@ -8,6 +8,7 @@
 const { Op } = require('sequelize');
 const LeaveRequest = require('../models/LeaveRequest');
 const Attendance = require('../models/Attendance');
+const { EFFECTIVE_LEAVE_STATUSES, IN_FLIGHT_STATUSES } = require('./reviewChain');
 const {
     matchLogsToShift,
     calculateArrivalLateMinutes,
@@ -46,7 +47,7 @@ const findEffectiveLeaveForDate = async (employeeId, date) => {
     const rows = await LeaveRequest.findAll({
         where: {
             employeeId,
-            status: { [Op.in]: ['pending', 'approved'] },
+            status: { [Op.in]: EFFECTIVE_LEAVE_STATUSES },
             startDate: { [Op.lte]: date },
             endDate: { [Op.gte]: date },
         },
@@ -59,7 +60,7 @@ const findEffectiveLeaveForDate = async (employeeId, date) => {
 
 // Spec: if admin never accepts/rejects, system treats the leave as accepted.
 const autoAcceptPendingLeave = async (leaveRequest) => {
-    if (!leaveRequest || leaveRequest.status !== 'pending') {
+    if (!leaveRequest || !IN_FLIGHT_STATUSES.includes(leaveRequest.status)) {
         return leaveRequest;
     }
 

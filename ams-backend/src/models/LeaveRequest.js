@@ -79,13 +79,20 @@ const LeaveRequest = sequelize.define('LeaveRequest', {
         allowNull: false,
     },
 
-    // status - current state of the request in the approval workflow
-    // pending  = awaiting manager/admin-manager decision (default on submission)
-    // approved = accepted, expected to be linked to Attendance in the approval story
-    // rejected = declined by manager/admin-manager
-    // cancelled = withdrawn by the employee before a decision was made
+    // status - sequential supervisor → HOD approval workflow
+    // pending              = awaiting supervisor (or the only assigned reviewer)
+    // supervisor_approved  = supervisor accepted, awaiting HOD
+    // approved             = HOD accepted (or single-step reviewer accepted)
+    // rejected             = declined at the current review step
+    // cancelled            = withdrawn by the employee before a final decision
     status: {
-        type: DataTypes.ENUM('pending', 'approved', 'rejected', 'cancelled'),
+        type: DataTypes.ENUM(
+            'pending',
+            'supervisor_approved',
+            'approved',
+            'rejected',
+            'cancelled',
+        ),
         allowNull: false,
         defaultValue: 'pending',
     },

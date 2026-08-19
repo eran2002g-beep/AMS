@@ -257,7 +257,7 @@ test('does not add a status filter when status is not supplied', async (t) => {
 // getLeaveRequestsByEmployee - all status values are accepted
 // ---------------------------------------------------------------------------
 
-test('accepts all four valid status values as filters', async (t) => {
+test('accepts all valid status values as filters', async (t) => {
     const originalFindOneEmployee     = Employee.findOne;
     const originalFindAndCountAllLeave = LeaveRequest.findAndCountAll;
 
@@ -266,7 +266,7 @@ test('accepts all four valid status values as filters', async (t) => {
         LeaveRequest.findAndCountAll  = originalFindAndCountAllLeave;
     });
 
-    const statuses = ['pending', 'approved', 'rejected', 'cancelled'];
+    const statuses = ['pending', 'supervisor_approved', 'approved', 'rejected', 'cancelled'];
 
     for (const status of statuses) {
         let capturedWhere;

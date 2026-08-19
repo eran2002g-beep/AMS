@@ -10,29 +10,27 @@ const {
     validateLeaveRequestPayload,
     validateNoOverlappingLeave,
 } = require('./leaveRequestValidation');
+const leaveAttendanceHelper = require('./leaveAttendanceHelper');
 const {
-    applyApprovedLeaveToAttendance,
-    applyRejectedLeaveToAttendance,
-} = require('./leaveAttendanceHelper');
+    isAssignedAdmin,
+    canAcceptRequest,
+    assertCanReview,
+    applyReviewDecision,
+    statusFilterWhere,
+} = require('./reviewChain');
 
 const notFoundError = (message) => Object.assign(new Error(message), { status: 404 });
-const forbiddenError = (message) => Object.assign(new Error(message), { status: 403 });
 
-// canAccept - true when the viewer is this leave's HOD or supervisor and status is still pending
+// canAccept - true when it is this viewer's turn in the supervisor → HOD chain
 const withCanAccept = (leaveRequest, viewerId) => {
     const data = typeof leaveRequest.toJSON === 'function'
         ? leaveRequest.toJSON()
         : { ...leaveRequest };
 
-    data.canAccept = data.status === 'pending'
-        && (data.hod === viewerId || data.supervisor === viewerId);
+    data.canAccept = canAcceptRequest(data, viewerId);
 
     return data;
 };
-
-const isAssignedAdmin = (leaveRequest, viewerId) => (
-    leaveRequest.hod === viewerId || leaveRequest.supervisor === viewerId
-);
 
 // Attach reviewer display name + assigned HOD/supervisor names for hierarchy UI.
 const enrichRequestRecords = async (records) => {
@@ -146,7 +144,8 @@ const getLeaveRequestsByEmployee = async (employeeId, opts = {}) => {
 
     const { status, page = 1, limit = 50 } = opts;
     const where = { employeeId };
-    if (status) where.status = status;
+    const statusWhere = statusFilterWhere(status);
+    if (statusWhere !== undefined) where.status = statusWhere;
 
     const parsedLimit = parseInt(limit, 10) || 50;
     const parsedPage = Math.max(parseInt(page, 10) || 1, 1);
@@ -184,7 +183,8 @@ const getAllLeaveRequests = async (opts = {}, viewerId) => {
         ],
     };
     if (employeeId) where.employeeId = employeeId;
-    if (status) where.status = status;
+    const statusWhere = statusFilterWhere(status);
+    if (statusWhere !== undefined) where.status = statusWhere;
 
     const parsedLimit = parseInt(limit, 10) || 50;
     const parsedPage = Math.max(parseInt(page, 10) || 1, 1);
@@ -220,10 +220,10 @@ const getLeaveRequestById = async (leaveRequestId, viewerId) => {
 };
 
 // -----------------------------------------------------------------------
-// reviewLeaveRequest - approve or reject a pending leave request.
-// Only the assigned HOD/supervisor may review. On approve, sets reqLeave=true
-// on overlapping attendance (full-day → status leave). On reject, clears
-// reqLeave so absence can reflect.
+// reviewLeaveRequest - sequential chain: supervisor first, then HOD.
+// Supervisor accept → supervisor_approved (attendance unchanged).
+// HOD accept → approved + apply leave to attendance.
+// Either step may reject (final) and clear leave from attendance.
 // -----------------------------------------------------------------------
 const reviewLeaveRequest = async (leaveRequestId, viewer, { decision, reviewComments } = {}) => {
     if (!viewer?.id || !viewer?.employeeId) {
@@ -237,25 +237,16 @@ const reviewLeaveRequest = async (leaveRequestId, viewer, { decision, reviewComm
     if (!leaveRequest) {
         throw notFoundError(`Leave request with ID ${leaveRequestId} not found.`);
     }
-    if (!isAssignedAdmin(leaveRequest, viewer.id)) {
-        throw forbiddenError('You are not assigned to review this leave request.');
-    }
-    if (leaveRequest.status !== 'pending') {
-        throw new Error(
-            `Only pending leave requests can be reviewed (current: ${leaveRequest.status}).`,
-        );
-    }
 
-    leaveRequest.status = decision;
-    leaveRequest.reviewedBy = viewer.employeeId;
-    leaveRequest.reviewComments = reviewComments?.trim() || null;
-    leaveRequest.reviewedAt = new Date();
+    assertCanReview(leaveRequest, viewer.id, { kind: 'leave request' });
+
+    const nextStatus = applyReviewDecision(leaveRequest, viewer, decision, reviewComments);
     await leaveRequest.save();
 
-    if (decision === 'approved') {
-        await applyApprovedLeaveToAttendance(leaveRequest);
-    } else {
-        await applyRejectedLeaveToAttendance(leaveRequest);
+    if (nextStatus === 'approved') {
+        await leaveAttendanceHelper.applyApprovedLeaveToAttendance(leaveRequest);
+    } else if (nextStatus === 'rejected') {
+        await leaveAttendanceHelper.applyRejectedLeaveToAttendance(leaveRequest);
     }
 
     const [enriched] = await enrichRequestRecords([leaveRequest]);

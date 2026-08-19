@@ -1057,7 +1057,13 @@ export const attendanceApi = {
 // ------------------------------- Leave request types -------------------------------
 
 export type LeaveType = "annual" | "sick" | "casual" | "unpaid" | "other";
-export type LeaveStatus = "pending" | "approved" | "rejected" | "cancelled";
+export type LeaveStatus =
+  | "pending"
+  | "supervisor_approved"
+  | "approved"
+  | "rejected"
+  | "cancelled";
+export type LeaveQueueStatusFilter = LeaveStatus | "awaiting";
 export type LeaveDuration = "full_day" | "half_day";
 export type HalfDayPeriod = "morning" | "afternoon";
 
@@ -1078,6 +1084,39 @@ export const HALF_DAY_PERIOD_OPTIONS: Array<{ value: HalfDayPeriod; label: strin
   { value: "morning", label: "Morning" },
   { value: "afternoon", label: "Afternoon" },
 ];
+
+export function requestStatusLabel(status: LeaveStatus): string {
+  switch (status) {
+    case "pending":
+      return "Pending";
+    case "supervisor_approved":
+      return "Awaiting HOD";
+    case "approved":
+      return "Approved";
+    case "rejected":
+      return "Rejected";
+    case "cancelled":
+      return "Cancelled";
+    default:
+      return status;
+  }
+}
+
+export function requestStatusChipSx(status: LeaveStatus) {
+  switch (status) {
+    case "approved":
+      return { backgroundColor: "#dcfce7", color: "#15803d" };
+    case "supervisor_approved":
+      return { backgroundColor: "#dbeafe", color: "#1d4ed8" };
+    case "rejected":
+      return { backgroundColor: "#fee2e2", color: "#b91c1c" };
+    case "cancelled":
+      return { backgroundColor: "#f1f5f9", color: "#64748b" };
+    case "pending":
+    default:
+      return { backgroundColor: "#fef3c7", color: "#b45309" };
+  }
+}
 
 export type LeaveRequestRecord = {
   id: number;
@@ -1125,7 +1164,7 @@ export type LeaveRequestSubmitResponse = {
 };
 
 export type LeaveRequestListFilters = {
-  status?: LeaveStatus;
+  status?: LeaveStatus | "awaiting";
   employeeId?: string;
   page?: number;
   limit?: number;
@@ -1232,7 +1271,12 @@ export const leaveApi = {
 
 // ------------------------------- Unauthorised request API -------------------------------
 
-export type UnauthorisedRequestStatus = "pending" | "approved" | "rejected" | "cancelled";
+export type UnauthorisedRequestStatus =
+  | "pending"
+  | "supervisor_approved"
+  | "approved"
+  | "rejected"
+  | "cancelled";
 
 export type UnauthorisedRequestRecord = {
   id: number;
@@ -1287,7 +1331,7 @@ export type UnauthorisedRequestListResponse = {
 };
 
 export type UnauthorisedRequestListFilters = {
-  status?: UnauthorisedRequestStatus;
+  status?: UnauthorisedRequestStatus | "awaiting";
   employeeId?: string;
   page?: number;
   limit?: number;

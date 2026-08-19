@@ -5,7 +5,11 @@ import {
   TableBody, TableContainer, Paper, Chip, Tooltip, Button, Stack, IconButton,
 } from "@mui/material";
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
-import type { UnauthorisedRequestRecord, UnauthorisedRequestStatus } from "@/lib/api";
+import {
+  requestStatusChipSx,
+  requestStatusLabel,
+  type UnauthorisedRequestRecord,
+} from "@/lib/api";
 import RequestDetailDialog from "@/components/RequestDetailDialog";
 
 function formatDate(value: string) {
@@ -29,24 +33,6 @@ function formatDateTime(value: string | null | undefined) {
 
 function sliceTime(value: string | null) {
   return value ? value.slice(0, 5) : "—";
-}
-
-function statusChipSx(status: UnauthorisedRequestStatus) {
-  switch (status) {
-    case "approved":
-      return { backgroundColor: "#dcfce7", color: "#15803d" };
-    case "rejected":
-      return { backgroundColor: "#fee2e2", color: "#b91c1c" };
-    case "cancelled":
-      return { backgroundColor: "#f1f5f9", color: "#64748b" };
-    case "pending":
-    default:
-      return { backgroundColor: "#fef3c7", color: "#b45309" };
-  }
-}
-
-function statusLabel(status: UnauthorisedRequestStatus) {
-  return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
 function reviewerLabel(record: UnauthorisedRequestRecord) {
@@ -152,13 +138,13 @@ export default function UnauthorisedRequestTable({
                   </TableCell>
                   <TableCell>
                     <Tooltip
-                      title={record.status !== "pending" && record.reviewComments ? record.reviewComments : ""}
-                      disableHoverListener={record.status === "pending" || !record.reviewComments}
+                      title={record.reviewComments ? record.reviewComments : ""}
+                      disableHoverListener={!record.reviewComments}
                     >
                       <Chip
-                        label={statusLabel(record.status)}
+                        label={requestStatusLabel(record.status)}
                         size="small"
-                        sx={{ ...statusChipSx(record.status), textTransform: "none", fontWeight: 600 }}
+                        sx={{ ...requestStatusChipSx(record.status), textTransform: "none", fontWeight: 600 }}
                       />
                     </Tooltip>
                   </TableCell>

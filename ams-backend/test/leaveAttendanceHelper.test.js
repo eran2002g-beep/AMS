@@ -92,6 +92,37 @@ test('pending leave is auto-accepted during processing', async (t) => {
     assert.equal(result.status, 'leave');
 });
 
+test('supervisor_approved leave is auto-accepted during processing', async (t) => {
+    const original = LeaveRequest.findAll;
+    t.after(() => { LeaveRequest.findAll = original; });
+
+    const leave = {
+        id: 14,
+        status: 'supervisor_approved',
+        duration: 'full_day',
+        halfDayPeriod: null,
+        reviewComments: null,
+        reviewedBy: 'EMP010',
+        reviewedAt: new Date(),
+        save: async function save() { return this; },
+    };
+
+    LeaveRequest.findAll = async () => [leave];
+
+    const result = await resolveLeaveForAttendance({
+        employeeId: 'EMP001',
+        date: '2026-07-21',
+        shiftStart: '08:30',
+        shiftEnd: '17:00',
+        logs: [],
+    });
+
+    assert.equal(leave.status, 'approved');
+    assert.equal(leave.reviewedBy, SYSTEM_REVIEWER_ID);
+    assert.equal(result.reqLeave, true);
+    assert.equal(result.status, 'leave');
+});
+
 test('half-day morning leave checks afternoon punches; missing out → unauthorised', async (t) => {
     const original = LeaveRequest.findAll;
     t.after(() => { LeaveRequest.findAll = original; });

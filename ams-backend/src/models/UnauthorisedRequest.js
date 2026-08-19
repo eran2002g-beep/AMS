@@ -70,8 +70,15 @@ const UnauthorisedRequest = sequelize.define('UnauthorisedRequest', {
         allowNull: false,
     },
 
+    // pending → supervisor_approved → approved (or rejected at either step)
     status: {
-        type: DataTypes.ENUM('pending', 'approved', 'rejected', 'cancelled'),
+        type: DataTypes.ENUM(
+            'pending',
+            'supervisor_approved',
+            'approved',
+            'rejected',
+            'cancelled',
+        ),
         allowNull: false,
         defaultValue: 'pending',
     },

@@ -98,7 +98,7 @@ export default function EmployeeAttendancePage() {
     }
     try {
       const result = await unauthorisedApi.getForEmployee(employeeId, {
-        status: "pending",
+        status: "awaiting",
         limit: 100,
       });
       setPendingUnauthorisedAttendanceIds(result.data.map((r) => r.attendanceId));

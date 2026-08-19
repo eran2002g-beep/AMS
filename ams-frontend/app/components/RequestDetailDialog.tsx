@@ -6,6 +6,8 @@ import {
 } from "@mui/material";
 import {
   LEAVE_TYPE_OPTIONS,
+  requestStatusChipSx,
+  requestStatusLabel,
   type LeaveRequestRecord,
   type LeaveStatus,
   type UnauthorisedRequestRecord,
@@ -37,21 +39,11 @@ function sliceTime(value: string | null | undefined) {
 }
 
 function statusChipSx(status: LeaveStatus | UnauthorisedRequestStatus) {
-  switch (status) {
-    case "approved":
-      return { backgroundColor: "#dcfce7", color: "#15803d" };
-    case "rejected":
-      return { backgroundColor: "#fee2e2", color: "#b91c1c" };
-    case "cancelled":
-      return { backgroundColor: "#f1f5f9", color: "#64748b" };
-    case "pending":
-    default:
-      return { backgroundColor: "#fef3c7", color: "#b45309" };
-  }
+  return requestStatusChipSx(status);
 }
 
-function statusLabel(status: string) {
-  return status.charAt(0).toUpperCase() + status.slice(1);
+function statusLabel(status: LeaveStatus | UnauthorisedRequestStatus) {
+  return requestStatusLabel(status);
 }
 
 function leaveTypeLabel(value: LeaveRequestRecord["leaveType"]) {
@@ -76,14 +68,31 @@ function hierarchyStatus(
 
   if (!assigned) return "Not assigned";
 
-  if (record.status === "pending") return "Pending review";
+  if (record.status === "pending") {
+    if (role === "supervisor") return "Pending review";
+    if (record.supervisorName || record.supervisorEmployeeId || record.supervisor) {
+      return "Waiting for supervisor";
+    }
+    return "Pending review";
+  }
+
+  if (record.status === "supervisor_approved") {
+    if (role === "supervisor") return "Accepted";
+    return "Pending review";
+  }
 
   if (record.reviewedByRole === role) {
     if (record.status === "approved") return "Accepted";
     if (record.status === "rejected") return "Rejected";
   }
 
-  if (record.status === "approved" || record.status === "rejected") {
+  if (record.status === "approved") {
+    return "Accepted";
+  }
+
+  if (record.status === "rejected") {
+    if (role === "supervisor" && record.reviewedByRole === "hod") return "Accepted";
+    if (role === "hod" && record.reviewedByRole === "supervisor") return "Not reached";
     return "Decision made by other assigned admin";
   }
 
@@ -127,7 +136,15 @@ type UnauthProps = {
 type Props = LeaveProps | UnauthProps;
 
 function reviewerDisplay(record: LeaveRequestRecord | UnauthorisedRequestRecord) {
-  if (record.status === "pending") return "Awaiting HOD or supervisor";
+  if (record.status === "pending") {
+    const hasSupervisor = Boolean(
+      record.supervisorName || record.supervisorEmployeeId || record.supervisor,
+    );
+    return hasSupervisor ? "Awaiting supervisor" : "Awaiting HOD";
+  }
+  if (record.status === "supervisor_approved") {
+    return "Supervisor accepted · awaiting HOD";
+  }
   if (record.reviewedBy === "SYSTEM") return "System (auto-accept)";
   const role =
     record.reviewedByRole === "hod"
@@ -144,6 +161,7 @@ function reviewerDisplay(record: LeaveRequestRecord | UnauthorisedRequestRecord)
 
 function decisionLabel(status: string) {
   if (status === "approved") return "Accepted / approved";
+  if (status === "supervisor_approved") return "Supervisor accepted · awaiting HOD";
   if (status === "rejected") return "Rejected";
   if (status === "cancelled") return "Cancelled";
   return "Pending decision";
@@ -238,7 +256,7 @@ export default function RequestDetailDialog(props: Props) {
         <DetailRow label="Reviewed by">{reviewerDisplay(record)}</DetailRow>
         <DetailRow label="Reviewed at">{formatDateTime(record.reviewedAt)}</DetailRow>
         <DetailRow label="Comments">
-          {record.reviewComments?.trim() || (record.status === "pending" ? "No comments yet" : "—")}
+          {record.reviewComments?.trim() || (record.status === "pending" || record.status === "supervisor_approved" ? "No comments yet" : "—")}
         </DetailRow>
       </DialogContent>
       <DialogActions sx={{ px: 3, py: 1.5 }}>

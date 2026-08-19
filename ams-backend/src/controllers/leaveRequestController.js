@@ -1,5 +1,6 @@
 const leaveRequestService = require('../services/leaveRequestService');
 const AdminService = require('../services/adminService');
+const { reviewSuccessMessage } = require('../services/reviewChain');
 
 const statusFromError = (err) => {
     if (err.status) return err.status;
@@ -116,7 +117,7 @@ const reviewLeaveRequest = async (req, res) => {
 
         return res.status(200).json({
             status: 'success',
-            message: `Leave request ${decision} successfully.`,
+            message: reviewSuccessMessage('Leave request', leaveRequest.status),
             data: leaveRequest,
         });
     } catch (err) {

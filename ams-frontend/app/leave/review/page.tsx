@@ -11,15 +11,17 @@ import {
   leaveApi,
   getErrorMessage,
   type LeaveRequestRecord,
-  type LeaveStatus,
+  type LeaveQueueStatusFilter,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canManageLeave } from "@/lib/roles";
 import { useRouter } from "next/navigation";
 
-const STATUS_OPTIONS: Array<{ value: "" | LeaveStatus; label: string }> = [
+const STATUS_OPTIONS: Array<{ value: "" | LeaveQueueStatusFilter; label: string }> = [
+  { value: "awaiting", label: "Needs review" },
   { value: "", label: "All statuses" },
   { value: "pending", label: "Pending" },
+  { value: "supervisor_approved", label: "Awaiting HOD" },
   { value: "approved", label: "Approved" },
   { value: "rejected", label: "Rejected" },
   { value: "cancelled", label: "Cancelled" },
@@ -30,7 +32,7 @@ export default function LeaveReviewPage() {
   const { user } = useAuth();
   const manageLeave = canManageLeave(user?.role);
 
-  const [statusFilter, setStatusFilter] = useState<"" | LeaveStatus>("pending");
+  const [statusFilter, setStatusFilter] = useState<"" | LeaveQueueStatusFilter>("awaiting");
   const [records, setRecords] = useState<LeaveRequestRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -79,8 +81,12 @@ export default function LeaveReviewPage() {
     try {
       const payload = reviewComments ? { reviewComments } : {};
       if (decision === "approve") {
-        await leaveApi.approve(reviewTarget.leaveRequestId, payload);
-        setSuccess(`Approved ${reviewTarget.leaveRequestId} for ${reviewTarget.employeeId}.`);
+        const updated = await leaveApi.approve(reviewTarget.leaveRequestId, payload);
+        setSuccess(
+          updated.status === "supervisor_approved"
+            ? `Supervisor accepted ${reviewTarget.leaveRequestId}. Waiting for HOD.`
+            : `Approved ${reviewTarget.leaveRequestId} for ${reviewTarget.employeeId}.`,
+        );
       } else {
         await leaveApi.reject(reviewTarget.leaveRequestId, payload);
         setSuccess(`Rejected ${reviewTarget.leaveRequestId} for ${reviewTarget.employeeId}.`);
@@ -120,7 +126,7 @@ export default function LeaveReviewPage() {
               Review Leave Requests
             </Typography>
             <Typography variant="body2" sx={{ color: "#64748b" }}>
-              Approve or reject leave assigned to you as HOD or supervisor. Decisions record your name.
+              Approve or reject leave in sequence: supervisor first, then HOD. Decisions record your name.
             </Typography>
           </Box>
 
@@ -130,7 +136,7 @@ export default function LeaveReviewPage() {
               labelId="leave-status-filter"
               label="Status"
               value={statusFilter}
-              onChange={(e: SelectChangeEvent) => setStatusFilter(e.target.value as "" | LeaveStatus)}
+              onChange={(e: SelectChangeEvent) => setStatusFilter(e.target.value as "" | LeaveQueueStatusFilter)}
             >
               {STATUS_OPTIONS.map((opt) => (
                 <MenuItem key={opt.value || "all"} value={opt.value}>{opt.label}</MenuItem>
@@ -165,7 +171,13 @@ export default function LeaveReviewPage() {
       <RequestReviewDialog
         open={Boolean(reviewTarget && decision)}
         decision={decision}
-        title={decision === "approve" ? "Approve leave request" : "Reject leave request"}
+        title={
+          decision === "approve"
+            ? reviewTarget?.status === "supervisor_approved"
+              ? "Approve leave request as HOD"
+              : "Accept leave request"
+            : "Reject leave request"
+        }
         subtitle={
           reviewTarget
             ? `${reviewTarget.leaveRequestId} · ${reviewTarget.employeeId}`

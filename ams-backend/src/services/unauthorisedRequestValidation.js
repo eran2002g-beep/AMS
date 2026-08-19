@@ -2,6 +2,7 @@
 
 const { Op } = require('sequelize');
 const UnauthorisedRequest = require('../models/UnauthorisedRequest');
+const { BLOCKING_REQUEST_STATUSES } = require('./reviewChain');
 const {
     validateTimeString,
     validateClockInBeforeClockOut,
@@ -77,7 +78,7 @@ const validateAttendanceId = (attendanceId) => {
 const validateNoPendingForAttendance = async (attendanceInternalId, excludeId = null) => {
     const where = {
         attendanceId: attendanceInternalId,
-        status: { [Op.in]: ['pending', 'approved'] },
+        status: { [Op.in]: BLOCKING_REQUEST_STATUSES },
     };
 
     if (excludeId) {

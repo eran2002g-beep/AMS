@@ -5,7 +5,12 @@ import {
   TableBody, TableContainer, Paper, Chip, Tooltip, Button, Stack, IconButton,
 } from "@mui/material";
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
-import { LEAVE_TYPE_OPTIONS, type LeaveRequestRecord, type LeaveStatus } from "@/lib/api";
+import {
+  LEAVE_TYPE_OPTIONS,
+  requestStatusChipSx,
+  requestStatusLabel,
+  type LeaveRequestRecord,
+} from "@/lib/api";
 import RequestDetailDialog from "@/components/RequestDetailDialog";
 
 function formatDate(value: string) {
@@ -37,24 +42,6 @@ function durationLabel(record: LeaveRequestRecord) {
     return `Half (${period})`;
   }
   return String(record.totalDays);
-}
-
-function statusChipSx(status: LeaveStatus) {
-  switch (status) {
-    case "approved":
-      return { backgroundColor: "#dcfce7", color: "#15803d" };
-    case "rejected":
-      return { backgroundColor: "#fee2e2", color: "#b91c1c" };
-    case "cancelled":
-      return { backgroundColor: "#f1f5f9", color: "#64748b" };
-    case "pending":
-    default:
-      return { backgroundColor: "#fef3c7", color: "#b45309" };
-  }
-}
-
-function statusLabel(status: LeaveStatus) {
-  return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
 function reviewerLabel(record: LeaveRequestRecord) {
@@ -151,13 +138,13 @@ export default function LeaveRequestTable({
                   </TableCell>
                   <TableCell>
                     <Tooltip
-                      title={record.status !== "pending" && record.reviewComments ? record.reviewComments : ""}
-                      disableHoverListener={record.status === "pending" || !record.reviewComments}
+                      title={record.reviewComments ? record.reviewComments : ""}
+                      disableHoverListener={!record.reviewComments}
                     >
                       <Chip
-                        label={statusLabel(record.status)}
+                        label={requestStatusLabel(record.status)}
                         size="small"
-                        sx={{ ...statusChipSx(record.status), textTransform: "none", fontWeight: 600 }}
+                        sx={{ ...requestStatusChipSx(record.status), textTransform: "none", fontWeight: 600 }}
                       />
                     </Tooltip>
                   </TableCell>
