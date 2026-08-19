@@ -33,6 +33,11 @@ const CAN_VIEW_ATTENDANCE  = [ROLES.ADMIN, ROLES.ADMIN_MANAGER];
 // a leave request itself is self-service and open to any authenticated role.
 const CAN_MANAGE_LEAVE     = [ROLES.MANAGER, ROLES.ADMIN_MANAGER];
 
+// Org-wide leave list (not limited to assigned HOD/supervisor).
+const CAN_VIEW_ALL_LEAVE   = [ROLES.ADMIN, ROLES.ADMIN_MANAGER, ROLES.SUPER_ADMIN];
+// Final accept/reject of any in-flight leave request (skips remaining chain).
+const CAN_REVIEW_ANY_LEAVE = [ROLES.ADMIN, ROLES.SUPER_ADMIN];
+
 module.exports = {
     ROLES,
     ALL_ROLES,
@@ -42,4 +47,6 @@ module.exports = {
     CAN_EDIT_ATTENDANCE,
     CAN_VIEW_ATTENDANCE,
     CAN_MANAGE_LEAVE,
+    CAN_VIEW_ALL_LEAVE,
+    CAN_REVIEW_ANY_LEAVE,
 };

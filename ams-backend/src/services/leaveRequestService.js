@@ -14,6 +14,7 @@ const leaveAttendanceHelper = require('./leaveAttendanceHelper');
 const {
     isAssignedAdmin,
     canAcceptRequest,
+    canViewAnyRequest,
     assertCanReview,
     applyReviewDecision,
     statusFilterWhere,
@@ -21,13 +22,14 @@ const {
 
 const notFoundError = (message) => Object.assign(new Error(message), { status: 404 });
 
-// canAccept - true when it is this viewer's turn in the supervisor → HOD chain
-const withCanAccept = (leaveRequest, viewerId) => {
+// canAccept - true when it is this viewer's turn in the supervisor → HOD chain,
+// or when the viewer is admin/super-admin (org-wide final review).
+const withCanAccept = (leaveRequest, viewerId, employeeRole) => {
     const data = typeof leaveRequest.toJSON === 'function'
         ? leaveRequest.toJSON()
         : { ...leaveRequest };
 
-    data.canAccept = canAcceptRequest(data, viewerId);
+    data.canAccept = canAcceptRequest(data, viewerId, employeeRole);
 
     return data;
 };
@@ -164,24 +166,9 @@ const getLeaveRequestsByEmployee = async (employeeId, opts = {}) => {
     };
 };
 
-// -----------------------------------------------------------------------
-// getAllLeaveRequests - leave requests assigned to the viewing manager/admin-manager
-// Only returns rows where the viewer is the leave's hod or supervisor.
-// Supports optional employeeId, status, and pagination filters.
-// -----------------------------------------------------------------------
-const getAllLeaveRequests = async (opts = {}, viewerId) => {
-    if (!viewerId) {
-        throw new Error('viewerId is required to list assigned leave requests.');
-    }
-
+const paginatedLeaveWhere = (opts = {}) => {
     const { employeeId, status, page = 1, limit = 50 } = opts;
-
-    const where = {
-        [Op.or]: [
-            { hod: viewerId },
-            { supervisor: viewerId },
-        ],
-    };
+    const where = {};
     if (employeeId) where.employeeId = employeeId;
     const statusWhere = statusFilterWhere(status);
     if (statusWhere !== undefined) where.status = statusWhere;
@@ -189,6 +176,25 @@ const getAllLeaveRequests = async (opts = {}, viewerId) => {
     const parsedLimit = parseInt(limit, 10) || 50;
     const parsedPage = Math.max(parseInt(page, 10) || 1, 1);
     const offset = (parsedPage - 1) * parsedLimit;
+
+    return { where, parsedLimit, parsedPage, offset };
+};
+
+// -----------------------------------------------------------------------
+// getAllLeaveRequests - leave requests assigned to the viewing manager/admin-manager
+// Only returns rows where the viewer is the leave's hod or supervisor.
+// Supports optional employeeId, status, and pagination filters.
+// -----------------------------------------------------------------------
+const getAllLeaveRequests = async (opts = {}, viewerId, employeeRole) => {
+    if (!viewerId) {
+        throw new Error('viewerId is required to list assigned leave requests.');
+    }
+
+    const { where, parsedLimit, parsedPage, offset } = paginatedLeaveWhere(opts);
+    where[Op.or] = [
+        { hod: viewerId },
+        { supervisor: viewerId },
+    ];
 
     const { rows: records, count: total } = await LeaveRequest.findAndCountAll({
         where,
@@ -199,24 +205,53 @@ const getAllLeaveRequests = async (opts = {}, viewerId) => {
 
     const withNames = await enrichRequestRecords(records);
     return {
-        records: withNames.map((row) => withCanAccept(row, viewerId)),
+        records: withNames.map((row) => withCanAccept(row, viewerId, employeeRole)),
+        meta: { total, page: parsedPage, limit: parsedLimit },
+    };
+};
+
+// -----------------------------------------------------------------------
+// getAdminLeaveRequests - every leave request in the system (admin overview)
+// Not filtered by assigned HOD/supervisor. Supports the same query filters
+// as getAllLeaveRequests (employeeId, status, page, limit).
+// -----------------------------------------------------------------------
+const getAdminLeaveRequests = async (opts = {}, viewerId, employeeRole) => {
+    if (!viewerId) {
+        throw new Error('viewerId is required to list leave requests.');
+    }
+
+    const { where, parsedLimit, parsedPage, offset } = paginatedLeaveWhere(opts);
+
+    const { rows: records, count: total } = await LeaveRequest.findAndCountAll({
+        where,
+        limit: parsedLimit,
+        offset,
+        order: [['createdAt', 'DESC']],
+    });
+
+    const withNames = await enrichRequestRecords(records);
+    return {
+        records: withNames.map((row) => withCanAccept(row, viewerId, employeeRole)),
         meta: { total, page: parsedPage, limit: parsedLimit },
     };
 };
 
 // -----------------------------------------------------------------------
 // getLeaveRequestById - fetch a single leave request by its public ID
-// Viewer must be the leave's assigned hod or supervisor.
+// Assigned HOD/supervisor, or admin-tier roles that may view any request.
 // -----------------------------------------------------------------------
-const getLeaveRequestById = async (leaveRequestId, viewerId) => {
+const getLeaveRequestById = async (leaveRequestId, viewerId, employeeRole) => {
     const leaveRequest = await LeaveRequest.findOne({ where: { leaveRequestId } });
 
-    if (!leaveRequest || !isAssignedAdmin(leaveRequest, viewerId)) {
+    if (
+        !leaveRequest
+        || (!isAssignedAdmin(leaveRequest, viewerId) && !canViewAnyRequest(employeeRole))
+    ) {
         throw notFoundError(`Leave request with ID ${leaveRequestId} not found.`);
     }
 
     const [enriched] = await enrichRequestRecords([leaveRequest]);
-    return withCanAccept(enriched, viewerId);
+    return withCanAccept(enriched, viewerId, employeeRole);
 };
 
 // -----------------------------------------------------------------------
@@ -238,7 +273,10 @@ const reviewLeaveRequest = async (leaveRequestId, viewer, { decision, reviewComm
         throw notFoundError(`Leave request with ID ${leaveRequestId} not found.`);
     }
 
-    assertCanReview(leaveRequest, viewer.id, { kind: 'leave request' });
+    assertCanReview(leaveRequest, viewer.id, {
+        kind: 'leave request',
+        employeeRole: viewer.role,
+    });
 
     const nextStatus = applyReviewDecision(leaveRequest, viewer, decision, reviewComments);
     await leaveRequest.save();
@@ -250,13 +288,14 @@ const reviewLeaveRequest = async (leaveRequestId, viewer, { decision, reviewComm
     }
 
     const [enriched] = await enrichRequestRecords([leaveRequest]);
-    return withCanAccept(enriched, viewer.id);
+    return withCanAccept(enriched, viewer.id, viewer.role);
 };
 
 module.exports = {
     submitLeaveRequest,
     getLeaveRequestsByEmployee,
     getAllLeaveRequests,
+    getAdminLeaveRequests,
     getLeaveRequestById,
     reviewLeaveRequest,
 };

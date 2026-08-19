@@ -66,6 +66,48 @@ test('leave: supervisor accept does not apply attendance; HOD approve does', asy
     assert.equal(afterHod.reviewedBy, HOD.employeeId);
 });
 
+test('leave: admin approve finalizes immediately and applies attendance', async (t) => {
+    const originalFindOne = LeaveRequest.findOne;
+    const originalApplyApproved = leaveAttendanceHelper.applyApprovedLeaveToAttendance;
+    const originalFindAllEmployee = Employee.findAll;
+
+    t.after(() => {
+        LeaveRequest.findOne = originalFindOne;
+        leaveAttendanceHelper.applyApprovedLeaveToAttendance = originalApplyApproved;
+        Employee.findAll = originalFindAllEmployee;
+    });
+
+    Employee.findAll = stubFindAllEmpty();
+
+    const leave = {
+        leaveRequestId: 'LVR010',
+        status: 'pending',
+        supervisor: SUPERVISOR.id,
+        hod: HOD.id,
+        reviewedBy: null,
+        reviewComments: null,
+        reviewedAt: null,
+        save: async function save() { return this; },
+        toJSON() { return { ...this, save: undefined, toJSON: undefined }; },
+    };
+
+    LeaveRequest.findOne = async () => leave;
+
+    let applied = false;
+    leaveAttendanceHelper.applyApprovedLeaveToAttendance = async () => { applied = true; };
+
+    const afterAdmin = await leaveRequestService.reviewLeaveRequest(
+        'LVR010',
+        { id: 99, employeeId: 'EMP099', role: 'admin' },
+        { decision: 'approved', reviewComments: 'Admin accepted' },
+    );
+
+    assert.equal(afterAdmin.status, 'approved');
+    assert.equal(applied, true);
+    assert.equal(afterAdmin.reviewedBy, 'EMP099');
+    assert.equal(afterAdmin.canAccept, false);
+});
+
 test('leave: HOD cannot skip the supervisor step', async (t) => {
     const originalFindOne = LeaveRequest.findOne;
     t.after(() => { LeaveRequest.findOne = originalFindOne; });

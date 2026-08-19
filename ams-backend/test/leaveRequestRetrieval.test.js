@@ -9,11 +9,14 @@
 
 const test   = require('node:test');
 const assert = require('node:assert/strict');
+const { Op } = require('sequelize');
 
 const Employee     = require('../src/models/Employee');
 const LeaveRequest = require('../src/models/LeaveRequest');
 const {
     getLeaveRequestsByEmployee,
+    getAllLeaveRequests,
+    getAdminLeaveRequests,
 } = require('../src/services/leaveRequestService');
 
 // ---------------------------------------------------------------------------
@@ -282,4 +285,84 @@ test('accepts all valid status values as filters', async (t) => {
         assert.equal(capturedWhere.status, status,
             `Expected status filter to be "${status}"`);
     }
+});
+
+// ---------------------------------------------------------------------------
+// getAllLeaveRequests - assigned HOD/supervisor queue
+// ---------------------------------------------------------------------------
+
+test('assigned queue filters leave requests by viewer hod or supervisor', async (t) => {
+    const originalFindAndCountAllLeave = LeaveRequest.findAndCountAll;
+    const originalFindAllEmployee = Employee.findAll;
+
+    t.after(() => {
+        LeaveRequest.findAndCountAll = originalFindAndCountAllLeave;
+        Employee.findAll = originalFindAllEmployee;
+    });
+
+    let capturedWhere;
+    LeaveRequest.findAndCountAll = async ({ where }) => {
+        capturedWhere = where;
+        return { rows: [], count: 0 };
+    };
+    Employee.findAll = async () => [];
+
+    await getAllLeaveRequests({}, 10, 'manager');
+
+    assert.ok(capturedWhere[Op.or]);
+    assert.deepEqual(capturedWhere[Op.or], [
+        { hod: 10 },
+        { supervisor: 10 },
+    ]);
+});
+
+// ---------------------------------------------------------------------------
+// getAdminLeaveRequests - org-wide admin list
+// ---------------------------------------------------------------------------
+
+test('admin list returns all leave requests without hod/supervisor filter', async (t) => {
+    const originalFindAndCountAllLeave = LeaveRequest.findAndCountAll;
+    const originalFindAllEmployee = Employee.findAll;
+
+    t.after(() => {
+        LeaveRequest.findAndCountAll = originalFindAndCountAllLeave;
+        Employee.findAll = originalFindAllEmployee;
+    });
+
+    let capturedWhere;
+    LeaveRequest.findAndCountAll = async ({ where }) => {
+        capturedWhere = where;
+        return { rows: [makeLeaveRequest()], count: 1 };
+    };
+    Employee.findAll = async () => [];
+
+    const result = await getAdminLeaveRequests({ status: 'pending' }, 99, 'admin');
+
+    assert.equal(capturedWhere.status, 'pending');
+    assert.equal(capturedWhere[Op.or], undefined);
+    assert.equal(result.records.length, 1);
+    assert.equal(result.records[0].canAccept, true);
+});
+
+test('admin list applies employeeId and pagination filters', async (t) => {
+    const originalFindAndCountAllLeave = LeaveRequest.findAndCountAll;
+    const originalFindAllEmployee = Employee.findAll;
+
+    t.after(() => {
+        LeaveRequest.findAndCountAll = originalFindAndCountAllLeave;
+        Employee.findAll = originalFindAllEmployee;
+    });
+
+    let capturedOptions;
+    LeaveRequest.findAndCountAll = async (options) => {
+        capturedOptions = options;
+        return { rows: [], count: 0 };
+    };
+    Employee.findAll = async () => [];
+
+    await getAdminLeaveRequests({ employeeId: 'EMP001', page: 2, limit: 10 }, 99, 'admin');
+
+    assert.equal(capturedOptions.where.employeeId, 'EMP001');
+    assert.equal(capturedOptions.limit, 10);
+    assert.equal(capturedOptions.offset, 10);
 });

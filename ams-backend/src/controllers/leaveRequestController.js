@@ -69,7 +69,31 @@ const getMyLeaveRequests = async (req, res) => {
 // manager/admin-manager; each row includes canAccept and reviewedByName
 const getAllLeaveRequests = async (req, res) => {
     try {
-        const result = await leaveRequestService.getAllLeaveRequests(req.query, req.user.id);
+        const result = await leaveRequestService.getAllLeaveRequests(
+            req.query,
+            req.user.id,
+            req.user.role,
+        );
+
+        return res.status(200).json({
+            status: 'success',
+            count: result.records.length,
+            meta: result.meta,
+            data: result.records,
+        });
+    } catch (err) {
+        return res.status(statusFromError(err)).json({ status: 'error', error: err.message });
+    }
+};
+
+// GET /leave/all - every leave request for admin / admin-manager / super-admin
+const getAdminLeaveRequests = async (req, res) => {
+    try {
+        const result = await leaveRequestService.getAdminLeaveRequests(
+            req.query,
+            req.user.id,
+            req.user.role,
+        );
 
         return res.status(200).json({
             status: 'success',
@@ -83,12 +107,12 @@ const getAllLeaveRequests = async (req, res) => {
 };
 
 // GET /leave/:leaveRequestId - a single leave request by its public ID
-// Only if the signed-in user is assigned as hod or supervisor on that request
 const getLeaveRequestById = async (req, res) => {
     try {
         const leaveRequest = await leaveRequestService.getLeaveRequestById(
             req.params.leaveRequestId,
             req.user.id,
+            req.user.role,
         );
 
         return res.status(200).json({
@@ -103,9 +127,12 @@ const getLeaveRequestById = async (req, res) => {
 // POST /leave/:leaveRequestId/approve|reject
 const reviewLeaveRequest = async (req, res) => {
     try {
-        const decision = req.params.decision === 'approve' ? 'approved' : 'rejected';
         const leaveRequestId = req.params.leaveRequestId;
-        const adminUser = { id: req.user.id, employeeId: req.user.employeeId };
+        const adminUser = {
+            id: req.user.id,
+            employeeId: req.user.employeeId,
+            role: req.user.role,
+        };
         const comments = req.body?.reviewComments;
 
         let leaveRequest;
@@ -130,6 +157,7 @@ module.exports = {
     getEmployeeLeaveRequests,
     getMyLeaveRequests,
     getAllLeaveRequests,
+    getAdminLeaveRequests,
     getLeaveRequestById,
     reviewLeaveRequest,
 };

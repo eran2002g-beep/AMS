@@ -4,8 +4,10 @@
 // Either reviewer may reject at their step (final).
 // If only one of HOD/supervisor is assigned, or they are the same person,
 // that person completes the chain in a single step.
+// Admin / super-admin may finalize any in-flight request (skip remaining steps).
 
 const { Op } = require('sequelize');
+const { CAN_VIEW_ALL_LEAVE, CAN_REVIEW_ANY_LEAVE } = require('../../config/roles');
 
 const IN_FLIGHT_STATUSES = ['pending', 'supervisor_approved'];
 const EFFECTIVE_LEAVE_STATUSES = ['pending', 'supervisor_approved', 'approved'];
@@ -17,6 +19,9 @@ const isAssignedAdmin = (request, viewerId) => (
     request.hod === viewerId || request.supervisor === viewerId
 );
 
+const canOverrideReview = (employeeRole) => CAN_REVIEW_ANY_LEAVE.includes(employeeRole);
+const canViewAnyRequest = (employeeRole) => CAN_VIEW_ALL_LEAVE.includes(employeeRole);
+
 const hasSupervisor = (request) => request.supervisor != null;
 const hasHod = (request) => request.hod != null;
 const isSamePerson = (request) => (
@@ -27,7 +32,7 @@ const requiresSupervisorFirst = (request) => (
     hasSupervisor(request) && hasHod(request) && !isSamePerson(request)
 );
 
-const viewerRole = (request, viewerId) => {
+const chainRole = (request, viewerId) => {
     const asHod = request.hod === viewerId;
     const asSupervisor = request.supervisor === viewerId;
     if (asHod && asSupervisor) return 'both';
@@ -36,9 +41,11 @@ const viewerRole = (request, viewerId) => {
     return null;
 };
 
-const canAcceptRequest = (request, viewerId) => {
+const canAcceptRequest = (request, viewerId, employeeRole) => {
     if (!IN_FLIGHT_STATUSES.includes(request.status)) return false;
-    const role = viewerRole(request, viewerId);
+    if (canOverrideReview(employeeRole)) return true;
+
+    const role = chainRole(request, viewerId);
     if (!role) return false;
 
     if (requiresSupervisorFirst(request)) {
@@ -50,7 +57,16 @@ const canAcceptRequest = (request, viewerId) => {
     return request.status === 'pending';
 };
 
-const assertCanReview = (request, viewerId, { kind = 'request' } = {}) => {
+const assertCanReview = (request, viewerId, { kind = 'request', employeeRole } = {}) => {
+    if (canOverrideReview(employeeRole)) {
+        if (!IN_FLIGHT_STATUSES.includes(request.status)) {
+            throw new Error(
+                `Only pending ${kind}s can be reviewed (current: ${request.status}).`,
+            );
+        }
+        return;
+    }
+
     if (!isAssignedAdmin(request, viewerId)) {
         throw forbiddenError(`You are not assigned to review this ${kind}.`);
     }
@@ -61,9 +77,9 @@ const assertCanReview = (request, viewerId, { kind = 'request' } = {}) => {
         );
     }
 
-    if (canAcceptRequest(request, viewerId)) return;
+    if (canAcceptRequest(request, viewerId, employeeRole)) return;
 
-    const role = viewerRole(request, viewerId);
+    const role = chainRole(request, viewerId);
 
     if (requiresSupervisorFirst(request) && request.status === 'pending' && role === 'hod') {
         throw forbiddenError(
@@ -84,10 +100,11 @@ const assertCanReview = (request, viewerId, { kind = 'request' } = {}) => {
     throw new Error(`You cannot review this ${kind} at the current step.`);
 };
 
-const resolveReviewStatus = (request, viewerId, decision) => {
+const resolveReviewStatus = (request, viewerId, decision, employeeRole) => {
     if (decision === 'rejected') return 'rejected';
+    if (canOverrideReview(employeeRole)) return 'approved';
 
-    const role = viewerRole(request, viewerId);
+    const role = chainRole(request, viewerId);
     if (
         requiresSupervisorFirst(request)
         && request.status === 'pending'
@@ -100,7 +117,7 @@ const resolveReviewStatus = (request, viewerId, decision) => {
 };
 
 const applyReviewDecision = (request, viewer, decision, reviewComments) => {
-    const nextStatus = resolveReviewStatus(request, viewer.id, decision);
+    const nextStatus = resolveReviewStatus(request, viewer.id, decision, viewer.role);
     request.status = nextStatus;
     request.reviewedBy = viewer.employeeId;
     request.reviewComments = reviewComments?.trim() || null;
@@ -129,6 +146,8 @@ module.exports = {
     EFFECTIVE_LEAVE_STATUSES,
     BLOCKING_REQUEST_STATUSES,
     isAssignedAdmin,
+    canOverrideReview,
+    canViewAnyRequest,
     canAcceptRequest,
     assertCanReview,
     resolveReviewStatus,

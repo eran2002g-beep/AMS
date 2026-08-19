@@ -111,3 +111,34 @@ test('reviewSuccessMessage describes the supervisor step', () => {
         'Leave request approved successfully.',
     );
 });
+
+test('admin can finalize a pending two-step request without waiting for supervisor', () => {
+    const request = bothAssigned();
+    assert.equal(canAcceptRequest(request, 99, 'admin'), true);
+    assert.equal(resolveReviewStatus(request, 99, 'approved', 'admin'), 'approved');
+    assert.equal(resolveReviewStatus(request, 99, 'rejected', 'admin'), 'rejected');
+});
+
+test('super-admin override completes the chain in one step', () => {
+    const request = bothAssigned();
+    const next = applyReviewDecision(
+        request,
+        { id: 99, employeeId: 'EMP099', role: 'super-admin' },
+        'approved',
+        'Admin override',
+    );
+    assert.equal(next, 'approved');
+    assert.equal(request.status, 'approved');
+    assert.equal(request.reviewedBy, 'EMP099');
+});
+
+test('manager cannot override the sequential chain', () => {
+    assert.equal(canAcceptRequest(bothAssigned(), 99, 'manager'), false);
+    try {
+        assertCanReview(bothAssigned(), 99, { kind: 'leave request', employeeRole: 'manager' });
+        assert.fail('expected assertCanReview to throw');
+    } catch (err) {
+        assert.equal(err.status, 403);
+        assert.match(err.message, /not assigned to review/);
+    }
+});
