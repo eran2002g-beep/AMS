@@ -417,6 +417,48 @@ const getUnauthorisedLeaveDetails = async (filters = {}) => {
     }));
 };
 
+// Fetch unauthorised attendance records for one employee or the whole organisation.
+const getUnauthorisedLeaveRecords = async (employeeId = null, filters = {}) => {
+    const where = { status: 'unauthorised' };
+
+    if (employeeId) {
+        const employee = await Employee.findOne({ where: { employeeId, isActive: true } });
+        if (!employee) {
+            throw new Error(`Active employee with ID ${employeeId} not found.`);
+        }
+        where.employeeId = employeeId;
+    }
+
+    if (filters.month) where.month = Number(filters.month);
+    if (filters.year) where.year = Number(filters.year);
+
+    if (filters.startDate && filters.endDate) {
+        where.date = { [Op.between]: [filters.startDate, filters.endDate] };
+    }
+
+    const records = await Attendance.findAll({
+        where,
+        order: [['date', 'DESC']],
+    });
+
+    if (employeeId) return records;
+
+    const employeeIds = [...new Set(records.map((record) => record.employeeId))];
+    if (employeeIds.length === 0) return [];
+
+    const employees = await Employee.findAll({
+        where: { employeeId: { [Op.in]: employeeIds } },
+        attributes: ['id', 'employeeId', 'firstName', 'lastName', 'department', 'role'],
+        raw: true,
+    });
+    const employeeMap = new Map(employees.map((employee) => [employee.employeeId, employee]));
+
+    return records.map((record) => ({
+        ...record.toJSON(),
+        employee: employeeMap.get(record.employeeId) || null,
+    }));
+};
+
 // getEmployeeLeaveHistory - fetch leave requests tied to an employee
 // getEmployeeLeaveHistory - fetch leave requests tied to an employee (NEW)
 // Supports filtering by status (pending/approved/rejected), leaveType,

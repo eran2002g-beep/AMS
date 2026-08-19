@@ -1,4 +1,5 @@
 const unauthorisedRequestService = require('../services/unauthorisedRequestService');
+const AdminService = require('../services/adminService');
 
 const statusFromError = (err) => {
     if (err.status) return err.status;
@@ -104,11 +105,18 @@ const getUnauthorisedRequestById = async (req, res) => {
 const reviewUnauthorisedRequest = async (req, res) => {
     try {
         const decision = req.params.decision === 'approve' ? 'approved' : 'rejected';
-        const request = await unauthorisedRequestService.reviewUnauthorisedRequest(
-            req.params.unauthorisedRequestId,
-            { id: req.user.id, employeeId: req.user.employeeId },
-            { decision, reviewComments: req.body?.reviewComments },
-        );
+        const adminUser = { id: req.user.id, employeeId: req.user.employeeId };
+        const request = decision === 'approved'
+            ? await AdminService.approveUnauthorisedRequest(
+                req.params.unauthorisedRequestId,
+                adminUser,
+                req.body?.reviewComments,
+            )
+            : await AdminService.rejectUnauthorisedRequest(
+                req.params.unauthorisedRequestId,
+                adminUser,
+                req.body?.reviewComments,
+            );
 
         return res.status(200).json({
             status: 'success',
