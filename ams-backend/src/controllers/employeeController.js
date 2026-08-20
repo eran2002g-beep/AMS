@@ -120,10 +120,40 @@ const resolveUnauthorisedAttendance = async (req, res) => {
     }
 };
 
+// Retrieve unauthorised leave resolution requests with optional filtering
+const getUnauthorisedLeaveResolutionRequests = async (req, res) => {
+    try {
+        const { status, department, startDate, endDate, employeeId, page, limit } = req.query;
+
+        const requests = await employeeService.getUnauthorisedLeaveResolutionRequests({
+            status,
+            department,
+            startDate,
+            endDate,
+            employeeId,
+            page: parseInt(page, 10) || 1,
+            limit: parseInt(limit, 10) || 10,
+        });
+
+        return res.status(200).json({
+            success: true,
+            count: requests.data ? requests.data.length : requests.length,
+            meta: requests.meta || null,
+            data: requests.data || requests,
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: error.message,
+        });
+    }
+};
+
 module.exports = {
     getEmployeeLeaveHistory,
     getMyLeaveHistory,
     getUnauthorisedLeaveForEmployee,
     getAllUnauthorisedLeave,
     resolveUnauthorisedAttendance,
+    getUnauthorisedLeaveResolutionRequests,
 };
