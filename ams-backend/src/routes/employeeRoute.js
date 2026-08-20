@@ -112,6 +112,18 @@ router.get(
 );
 
 // -----------------------------------------------------------------------
+// POST /employee/attendance/:attendanceId/resolve-unauthorised
+// Convert an 'unauthorised' attendance record into an approved leave
+// ATTENDANCE / LEAVE EDIT -> restricted to Manager, Admin-Manager, Super Admin
+// -----------------------------------------------------------------------
+router.post(
+    '/attendance/:attendanceId/resolve-unauthorised',
+    verifyToken,
+    authorize(...CAN_MANAGE_LEAVE),
+    employeeController.resolveUnauthorisedAttendance
+);
+
+// -----------------------------------------------------------------------
 // PUT /employee/:employeeId/hierarchy - Update Role and Reporting Structure
 // EMPLOYEE CRUD -> admin/super_admin only
 // -----------------------------------------------------------------------
@@ -119,7 +131,6 @@ router.put('/:employeeId/hierarchy', verifyToken, authorize(...CAN_MANAGE_EMPLOY
     try {
         const { employeeId } = req.params;
 
-        // hierarchyData payload: { role, hod, supervisor }
         const updatedEmployee = await employeeService.updateEmployeeHierarchy(
             employeeId,
             req.body
