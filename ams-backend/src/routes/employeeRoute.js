@@ -222,7 +222,7 @@ router.post('/create', verifyToken, authorize(...CAN_MANAGE_EMPLOYEES), async (r
 
 // -----------------------------------------------------------------------
 // DELETE /employee/:employeeId - Soft delete an employee record
-// EMPLOYEE CRUD -> super_admin only (via CAN_MANAGE_EMPLOYEES permissions)
+// EMPLOYEE CRUD -> super_admin only ( CAN_MANAGE_EMPLOYEES permissions)
 // -----------------------------------------------------------------------
 router.delete('/:employeeId', verifyToken, authorize(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
     try {
