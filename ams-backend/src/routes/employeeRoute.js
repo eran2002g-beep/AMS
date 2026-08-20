@@ -95,6 +95,18 @@ router.get('/unauthorised-leaves', verifyToken, authorize(...CAN_VIEW_ATTENDANCE
 });
 
 // -----------------------------------------------------------------------
+// GET /employee/unauthorised-leaves/resolutions
+// Retrieve pending/processed unauthorised leave resolution requests
+// ATTENDANCE READ -> restricted to roles with view attendance permissions
+// -----------------------------------------------------------------------
+router.get(
+    '/unauthorised-leaves/resolutions',
+    verifyToken,
+    authorize(...CAN_VIEW_ATTENDANCE),
+    employeeController.getUnauthorisedLeaveResolutionRequests
+);
+
+// -----------------------------------------------------------------------
 // GET /employee/me/leave-requests - retrieve the signed-in employee's leave history
 // Self-service endpoint for employees to track request status.
 // -----------------------------------------------------------------------
