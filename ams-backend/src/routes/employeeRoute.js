@@ -246,7 +246,7 @@ router.delete('/:employeeId', verifyToken, authorize(...CAN_MANAGE_EMPLOYEES), a
 
 // -----------------------------------------------------------------------
 // PATCH /employee/:employeeId - Update an existing employee record
-// EMPLOYEE CRUD -> super_admin only (via CAN_MANAGE_EMPLOYEES permissions)
+// EMPLOYEE CRUD -> super_admin only ( CAN_MANAGE_EMPLOYEES permissions)
 // -----------------------------------------------------------------------
 router.patch('/:employeeId', verifyToken, authorize(...CAN_MANAGE_EMPLOYEES), async (req, res) => {
     try {
@@ -271,7 +271,7 @@ router.patch('/:employeeId', verifyToken, authorize(...CAN_MANAGE_EMPLOYEES), as
 });
 
 // -----------------------------------------------------------------------
-// GET /employee/:employeeId/attendance-summary - Get calculated metrics
+// GET /employee/:employeeId/attendance-summary  Get calculated metrics
 // ATTENDANCE READ -> follows the view attendance permission (admin, admin_manager)
 // -----------------------------------------------------------------------
 router.get('/:employeeId/attendance-summary', verifyToken, authorize(...CAN_VIEW_ATTENDANCE), async (req, res) => {
