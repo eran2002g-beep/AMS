@@ -119,19 +119,26 @@ function DetailRow({ label, children }: { label: string; children: ReactNode }) 
   );
 }
 
+type ReviewActions = {
+  canReview?: boolean;
+  reviewing?: boolean;
+  onApprove?: () => void;
+  onReject?: () => void;
+};
+
 type LeaveProps = {
   kind: "leave";
   open: boolean;
   record: LeaveRequestRecord | null;
   onClose: () => void;
-};
+} & ReviewActions;
 
 type UnauthProps = {
   kind: "unauthorised";
   open: boolean;
   record: UnauthorisedRequestRecord | null;
   onClose: () => void;
-};
+} & ReviewActions;
 
 type Props = LeaveProps | UnauthProps;
 
@@ -168,13 +175,19 @@ function decisionLabel(status: string) {
 }
 
 export default function RequestDetailDialog(props: Props) {
-  const { open, onClose, kind, record } = props;
+  const { open, onClose, kind, record, canReview, reviewing, onApprove, onReject } = props;
   if (!record) return null;
 
   const requestId =
     kind === "leave"
       ? (record as LeaveRequestRecord).leaveRequestId
       : (record as UnauthorisedRequestRecord).unauthorisedRequestId;
+
+  const unauthRecord = kind === "unauthorised" ? (record as UnauthorisedRequestRecord) : null;
+  const employeeLabel = unauthRecord?.employeeName
+    ? `${unauthRecord.employeeName} (${record.employeeId})`
+    : record.employeeId;
+  const acceptLabel = record.status === "supervisor_approved" ? "Approve" : "Accept";
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
@@ -201,7 +214,7 @@ export default function RequestDetailDialog(props: Props) {
         <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0f172a", mb: 0.5 }}>
           Request
         </Typography>
-        <DetailRow label="Employee">{record.employeeId}</DetailRow>
+        <DetailRow label="Employee">{employeeLabel}</DetailRow>
         {kind === "leave" ? (
           <>
             <DetailRow label="Type">
@@ -231,6 +244,11 @@ export default function RequestDetailDialog(props: Props) {
             <DetailRow label="Description">
               {(record as UnauthorisedRequestRecord).description}
             </DetailRow>
+            {(record as UnauthorisedRequestRecord).employeeDepartment ? (
+              <DetailRow label="Department">
+                {(record as UnauthorisedRequestRecord).employeeDepartment}
+              </DetailRow>
+            ) : null}
           </>
         )}
         <DetailRow label="Submitted">{formatDateTime(record.createdAt)}</DetailRow>
@@ -259,10 +277,35 @@ export default function RequestDetailDialog(props: Props) {
           {record.reviewComments?.trim() || (record.status === "pending" || record.status === "supervisor_approved" ? "No comments yet" : "—")}
         </DetailRow>
       </DialogContent>
-      <DialogActions sx={{ px: 3, py: 1.5 }}>
-        <Button onClick={onClose} variant="contained" sx={{ backgroundColor: "#1e293b" }}>
+      <DialogActions sx={{ px: 3, py: 1.5, gap: 1 }}>
+        <Button
+          onClick={onClose}
+          disabled={reviewing}
+          variant={canReview ? "text" : "contained"}
+          sx={canReview ? { mr: "auto" } : { backgroundColor: "#1e293b" }}
+        >
           Close
         </Button>
+        {canReview && (
+          <>
+            <Button
+              variant="outlined"
+              color="error"
+              disabled={reviewing}
+              onClick={onReject}
+            >
+              Reject
+            </Button>
+            <Button
+              variant="contained"
+              disabled={reviewing}
+              onClick={onApprove}
+              sx={{ backgroundColor: "#16a34a", "&:hover": { backgroundColor: "#15803d" } }}
+            >
+              {acceptLabel}
+            </Button>
+          </>
+        )}
       </DialogActions>
     </Dialog>
   );

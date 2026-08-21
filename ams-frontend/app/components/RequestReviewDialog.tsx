@@ -12,6 +12,7 @@ type Props = {
   decision: Decision | null;
   title: string;
   subtitle?: string;
+  confirmLabel?: string;
   submitting?: boolean;
   onClose: () => void;
   onConfirm: (reviewComments: string) => Promise<void> | void;
@@ -22,6 +23,7 @@ export default function RequestReviewDialog({
   decision,
   title,
   subtitle,
+  confirmLabel: confirmLabelProp,
   submitting,
   onClose,
   onConfirm,
@@ -32,7 +34,9 @@ export default function RequestReviewDialog({
     if (open) setComments("");
   }, [open, decision]);
 
-  const confirmLabel = decision === "approve" ? "Approve" : "Reject";
+  const confirmLabel =
+    confirmLabelProp
+    ?? (decision === "approve" ? "Approve" : "Reject");
   const confirmColor = decision === "approve" ? "success" : "error";
 
   return (

@@ -36,11 +36,12 @@ const attachReviewerNames = async (records) => {
     ));
 
     const reviewerPublicIds = [...new Set(list.map((r) => r.reviewedBy).filter(Boolean))];
+    const employeePublicIds = [...new Set(list.map((r) => r.employeeId).filter(Boolean))];
     const hierarchyInternalIds = [
         ...new Set(list.flatMap((r) => [r.hod, r.supervisor].filter(Boolean))),
     ];
 
-    const [reviewers, hierarchyEmployees] = await Promise.all([
+    const [reviewers, hierarchyEmployees, requestEmployees] = await Promise.all([
         reviewerPublicIds.length
             ? Employee.findAll({
                 where: { employeeId: { [Op.in]: reviewerPublicIds } },
@@ -53,6 +54,12 @@ const attachReviewerNames = async (records) => {
                 attributes: ['id', 'employeeId', 'firstName', 'lastName'],
             })
             : Promise.resolve([]),
+        employeePublicIds.length
+            ? Employee.findAll({
+                where: { employeeId: { [Op.in]: employeePublicIds } },
+                attributes: ['employeeId', 'firstName', 'lastName', 'department'],
+            })
+            : Promise.resolve([]),
     ]);
 
     const reviewerNameByPublicId = Object.fromEntries(
@@ -61,10 +68,14 @@ const attachReviewerNames = async (records) => {
     const hierarchyByInternalId = Object.fromEntries(
         hierarchyEmployees.map((e) => [e.id, e]),
     );
+    const employeeByPublicId = Object.fromEntries(
+        requestEmployees.map((e) => [e.employeeId, e]),
+    );
 
     return list.map((r) => {
         const hod = r.hod != null ? hierarchyByInternalId[r.hod] : null;
         const supervisor = r.supervisor != null ? hierarchyByInternalId[r.supervisor] : null;
+        const employee = r.employeeId ? employeeByPublicId[r.employeeId] : null;
 
         let reviewedByRole = null;
         if (r.reviewedBy && hod && r.reviewedBy === hod.employeeId) reviewedByRole = 'hod';
@@ -74,6 +85,8 @@ const attachReviewerNames = async (records) => {
 
         return {
             ...r,
+            employeeName: employee ? `${employee.firstName} ${employee.lastName}` : null,
+            employeeDepartment: employee?.department ?? null,
             reviewedByName: r.reviewedBy
                 ? (reviewerNameByPublicId[r.reviewedBy] ?? r.reviewedBy)
                 : null,

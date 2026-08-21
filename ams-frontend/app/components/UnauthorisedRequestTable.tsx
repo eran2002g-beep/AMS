@@ -102,7 +102,16 @@ export default function UnauthorisedRequestTable({
               records.map((record) => (
                 <TableRow key={record.id} hover>
                   {showEmployee && (
-                    <TableCell sx={{ fontWeight: 600 }}>{record.employeeId}</TableCell>
+                    <TableCell>
+                      <span style={{ fontWeight: 600, display: "block" }}>
+                        {record.employeeName || record.employeeId}
+                      </span>
+                      {record.employeeName ? (
+                        <span style={{ fontSize: "0.75rem", color: "#94a3b8" }}>
+                          {record.employeeId}
+                        </span>
+                      ) : null}
+                    </TableCell>
                   )}
                   <TableCell>{formatDate(record.happenDate)}</TableCell>
                   <TableCell>
@@ -181,7 +190,7 @@ export default function UnauthorisedRequestTable({
                             onClick={() => onApprove?.(record)}
                             sx={{ backgroundColor: "#16a34a", "&:hover": { backgroundColor: "#15803d" } }}
                           >
-                            Approve
+                            {record.status === "supervisor_approved" ? "Approve" : "Accept"}
                           </Button>
                           <Button
                             size="small"
@@ -208,6 +217,18 @@ export default function UnauthorisedRequestTable({
         open={Boolean(detailRecord)}
         record={detailRecord}
         onClose={() => setDetailRecord(null)}
+        canReview={Boolean(showReviewActions && detailRecord?.canAccept)}
+        reviewing={reviewingId === detailRecord?.unauthorisedRequestId}
+        onApprove={() => {
+          if (!detailRecord) return;
+          onApprove?.(detailRecord);
+          setDetailRecord(null);
+        }}
+        onReject={() => {
+          if (!detailRecord) return;
+          onReject?.(detailRecord);
+          setDetailRecord(null);
+        }}
       />
     </>
   );

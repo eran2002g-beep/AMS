@@ -130,7 +130,8 @@ export default function UnauthorisedReviewPage() {
               Review Unauthorised Requests
             </Typography>
             <Typography variant="body2" sx={{ color: "#64748b" }}>
-              Approve or reject unauthorised attendance explanations in sequence: supervisor first, then HOD. Decisions record your name.
+              Unauthorised attendance requests assigned to you as supervisor or HOD.
+              Open a row to see full details, then accept or reject when it is your turn.
             </Typography>
           </Box>
 
@@ -186,8 +187,15 @@ export default function UnauthorisedReviewPage() {
         }
         subtitle={
           reviewTarget
-            ? `${reviewTarget.unauthorisedRequestId} · ${reviewTarget.employeeId} · ${reviewTarget.happenDate}`
+            ? `${reviewTarget.unauthorisedRequestId} · ${reviewTarget.employeeName || reviewTarget.employeeId} · ${reviewTarget.happenDate}`
             : undefined
+        }
+        confirmLabel={
+          decision === "approve"
+            ? reviewTarget?.status === "supervisor_approved"
+              ? "Approve"
+              : "Accept"
+            : "Reject"
         }
         submitting={submitting}
         onClose={() => {

@@ -1282,6 +1282,8 @@ export type UnauthorisedRequestRecord = {
   id: number;
   unauthorisedRequestId: string;
   employeeId: string;
+  employeeName?: string | null;
+  employeeDepartment?: string | null;
   attendanceId: number;
   happenDate: string;
   clockIn: string | null;
