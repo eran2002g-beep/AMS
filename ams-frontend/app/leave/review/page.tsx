@@ -11,7 +11,7 @@ import {
   leaveApi,
   getErrorMessage,
   type LeaveRequestRecord,
-  type LeaveQueueStatusFilter,
+  type LeaveQueueStatusFilter, 
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canManageLeave } from "@/lib/roles";
@@ -35,8 +35,8 @@ export default function LeaveReviewPage() {
   const [statusFilter, setStatusFilter] = useState<"" | LeaveQueueStatusFilter>("awaiting");
   const [records, setRecords] = useState<LeaveRequestRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [error, setError] = useState(""); 
+  const [success, setSuccess] = useState(""); 
 
   const [reviewTarget, setReviewTarget] = useState<LeaveRequestRecord | null>(null);
   const [decision, setDecision] = useState<"approve" | "reject" | null>(null);

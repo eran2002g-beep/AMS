@@ -1,8 +1,9 @@
 // app/leave/page.tsx - AC: employee submits leave and tracks leave + unauthorised request status
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Box, Button, Typography, Paper, Alert, CircularProgress, Tabs, Tab,
+  FormControl, InputLabel, Select, MenuItem, type SelectChangeEvent,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import LeaveRequestTable from "@/components/LeaveRequestTable";
@@ -15,13 +16,24 @@ import {
   type LeaveRequestRecord,
   type LeaveRequestSubmitPayload,
   type UnauthorisedRequestRecord,
+  type LeaveQueueStatusFilter,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+
+const STATUS_OPTIONS: Array<{ value: "" | LeaveQueueStatusFilter; label: string }> = [
+  { value: "", label: "All statuses" },
+  { value: "pending", label: "Pending" },
+  { value: "supervisor_approved", label: "Awaiting HOD" },
+  { value: "approved", label: "Approved" },
+  { value: "rejected", label: "Rejected" },
+  { value: "cancelled", label: "Cancelled" },
+];
 
 export default function LeaveRequestPage() {
   const { user } = useAuth();
 
   const [tab, setTab] = useState(0);
+  const [statusFilter, setStatusFilter] = useState<"" | LeaveQueueStatusFilter>("");
   const [leaveRecords, setLeaveRecords] = useState<LeaveRequestRecord[]>([]);
   const [unauthRecords, setUnauthRecords] = useState<UnauthorisedRequestRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,6 +63,12 @@ export default function LeaveRequestPage() {
   }, [user?.employeeId]);
 
   useEffect(() => { loadRequests(); }, [loadRequests]);
+
+  // Client-side filter so we don't have to assume getForEmployee supports a status param.
+  const filteredLeaveRecords = useMemo(() => {
+    if (!statusFilter) return leaveRecords;
+    return leaveRecords.filter((record) => record.status === statusFilter);
+  }, [leaveRecords, statusFilter]);
 
   const handleSubmit = async (data: LeaveRequestSubmitPayload) => {
     setSubmitting(true);
@@ -90,14 +108,32 @@ export default function LeaveRequestPage() {
             </Typography>
           </Box>
 
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => setFormOpen(true)}
-            sx={{ backgroundColor: "#16a34a", "&:hover": { backgroundColor: "#15803d" } }}
-          >
-            Request Leave
-          </Button>
+          <Box sx={{ display: "flex", gap: 2, alignItems: "center", flexWrap: "wrap" }}>
+            {tab === 0 && (
+              <FormControl size="small" sx={{ minWidth: 180 }}>
+                <InputLabel id="my-leave-status-filter">Status</InputLabel>
+                <Select
+                  labelId="my-leave-status-filter"
+                  label="Status"
+                  value={statusFilter}
+                  onChange={(e: SelectChangeEvent) => setStatusFilter(e.target.value as "" | LeaveQueueStatusFilter)}
+                >
+                  {STATUS_OPTIONS.map((opt) => (
+                    <MenuItem key={opt.value || "all"} value={opt.value}>{opt.label}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => setFormOpen(true)}
+              sx={{ backgroundColor: "#16a34a", "&:hover": { backgroundColor: "#15803d" } }}
+            >
+              Request Leave
+            </Button>
+          </Box>
         </Box>
       </Paper>
 
@@ -124,7 +160,14 @@ export default function LeaveRequestPage() {
           <CircularProgress />
         </Box>
       ) : tab === 0 ? (
-        <LeaveRequestTable records={leaveRecords} />
+        <LeaveRequestTable
+          records={filteredLeaveRecords}
+          emptyMessage={
+            statusFilter
+              ? "No leave requests match this status."
+              : "You haven't submitted any leave requests yet."
+          }
+        />
       ) : (
         <UnauthorisedRequestTable
           records={unauthRecords}
