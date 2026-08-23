@@ -131,8 +131,9 @@ export function canAccessPath(
     return canManageRoster(user.role);
   }
 
+  // Self-service punch card — every authenticated employee can record their own punch.
   if (pathname.startsWith("/mock/punch")) {
-    return canEditAttendance(user.role);
+    return true;
   }
 
   // Unknown path — not a known app route (Next.js will render not-found).
